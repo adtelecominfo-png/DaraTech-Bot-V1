@@ -97,7 +97,7 @@ async function muslimAiCommand(sock, chatId, message) {
         if (!data?.success) throw new Error(data?.message || 'No response');
         const answer = data.result?.answer || (typeof data.result === 'string' ? data.result : 'No answer returned.');
         await sock.sendMessage(chatId, {
-            text: `☪️ *Muslim AI* · Daratech\n\n${answer.trim()}\n\n_Powered by GiftedTech · Daratech_ ⚡`,
+            text: `☪️ *Muslim AI* · Daratech\n\n${answer.trim()}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
         await react(sock, message, '✅');
     } catch (err) {
