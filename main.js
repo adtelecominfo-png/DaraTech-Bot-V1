@@ -2314,7 +2314,7 @@ case userMessage.startsWith('.bssensi'):
                 commandExecuted = true;
                 break;
 
-            case userMessage === '.animenew' || userMessage === '.animelates':
+            case userMessage === '.newanime':
                 await animenewCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
