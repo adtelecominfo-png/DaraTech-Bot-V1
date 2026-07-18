@@ -335,14 +335,15 @@ User: ${userMessage}
 
 ALASTOR-XD:`;
 
-        const apiKey = require('../settings').runflixApiKey;
-        const apiUrl = `https://api.runflix.name.ng/ai/ai?${new URLSearchParams({ q: prompt, apikey: apiKey })}`;
+        const apiUrl = `https://text.pollinations.ai/${encodeURIComponent(prompt)}`;
         const response = await fetch(apiUrl, { timeout: 20000 });
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
 
-        const data = await response.json();
+        // Pollinations returns plain text
+        const raw  = await response.text();
+        const data = { result: raw };
         
         if (!data || (!data.result && !data.data && !data.response)) {
             throw new Error("Invalid API response");
