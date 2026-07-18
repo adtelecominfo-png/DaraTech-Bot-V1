@@ -251,8 +251,11 @@ async function menuCommand(sock, chatId, message, catArg) {
         const sub   = parts[0].toLowerCase();
         const rest  = parts.slice(1).join(' ').trim();
 
-        if (sub === 'search')  return sendSearchMenu(sock, chatId, message, rest);
-        if (sub === 'details') return sendDetailsMenu(sock, chatId, message, rest);
+        // 'search' and 'details' are reserved sub-commands only when a query follows.
+        // If no query is given (.menu search  /  .menu details) treat it as a
+        // category lookup so the user sees the Search / Details category listing.
+        if (sub === 'search'  && rest) return sendSearchMenu(sock, chatId, message, rest);
+        if (sub === 'details' && rest) return sendDetailsMenu(sock, chatId, message, rest);
         return sendCategoryMenu(sock, chatId, message, arg);
     }
     return sendOverview(sock, chatId, message);
