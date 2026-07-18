@@ -19,10 +19,24 @@ const axios = require('axios');
 
 const MANGA_BASE = 'https://runflix-api-v-3263--trumpmax.replit.app/api/v3/manga';
 
-async function mangaFetch(path, { retries = 2 } = {}) {
+// Cloudflare codes that mean the origin (Replit) is sleeping / starting up
+const SLEEP_CODES = new Set([520, 521, 522, 523, 524]);
+
+/**
+ * mangaFetch — fetch from the Replit-hosted manga API.
+ * @param {string} path          - API path, e.g. '/search/boruto'
+ * @param {object} [opts]
+ * @param {Function} [opts.onSleep] - called once when a sleep code is detected,
+ *                                    so the caller can notify the user to wait.
+ */
+async function mangaFetch(path, { onSleep } = {}) {
     const url = `${MANGA_BASE}${path}`;
     let lastErr;
-    for (let attempt = 0; attempt <= retries; attempt++) {
+    let wakeNotified = false;
+
+    // Up to 4 retries — Replit repls can take 20-30 s to wake from sleep
+    const MAX_ATTEMPTS = 5;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         try {
             const { data } = await axios.get(url, {
                 headers: {
@@ -30,23 +44,33 @@ async function mangaFetch(path, { retries = 2 } = {}) {
                     'Accept-Language': 'en-US,en;q=0.9',
                     'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 },
-                timeout: 25000,
+                timeout: 30000,
                 maxRedirects: 5,
             });
             return data;
         } catch (err) {
             lastErr = err;
-            // Only retry on timeout or 5xx — not on 4xx (client errors like 404)
             const status = err.response?.status;
-            const isRetryable = !status || status >= 500 || err.code === 'ECONNABORTED';
-            if (!isRetryable || attempt === retries) break;
-            // Brief pause before retry
-            await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+            const isSleeping = SLEEP_CODES.has(status);
+            const isRetryable = isSleeping || !status || status >= 500 || err.code === 'ECONNABORTED';
+
+            if (!isRetryable) break; // 4xx — no point retrying
+
+            if (isSleeping && !wakeNotified) {
+                wakeNotified = true;
+                try { onSleep && await onSleep(); } catch { /* non-fatal */ }
+            }
+
+            if (attempt < MAX_ATTEMPTS - 1) {
+                // Sleep codes need a long wait (repl cold-start); other 5xx use short wait
+                const delay = isSleeping ? 10000 : 2000 * (attempt + 1);
+                await new Promise(r => setTimeout(r, delay));
+            }
         }
     }
     const status = lastErr.response?.status;
-    if (status === 521 || status === 520 || status === 522 || status === 523 || status === 524) {
-        throw new Error('Manga service is temporarily down (server offline). Please try again in a few minutes.');
+    if (SLEEP_CODES.has(status)) {
+        throw new Error('Manga service is still waking up — please try again in a moment.');
     }
     if (status === 503 || status === 502) {
         throw new Error('Manga service is temporarily unavailable. Please try again shortly.');
@@ -83,7 +107,9 @@ function truncate(str, max = 300) {
 
 async function handleSearch(sock, chatId, message, query) {
     await sock.sendMessage(chatId, { text: `🔍 Searching manga for: *${query}*…` }, { quoted: message });
-    const data = await mangaFetch(`/search?q=${encodeURIComponent(query)}`);
+    const data = await mangaFetch(`/search?q=${encodeURIComponent(query)}`, {
+        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
+    });
 
     const results = data?.results || data?.data || [];
     if (!results.length) {
@@ -113,7 +139,9 @@ async function handleSearch(sock, chatId, message, query) {
 
 async function handleDetails(sock, chatId, message, slug) {
     await sock.sendMessage(chatId, { text: `📖 Loading manga details for: \`${slug}\`…` }, { quoted: message });
-    const data = await mangaFetch(`/details/${encodeURIComponent(slug)}`);
+    const data = await mangaFetch(`/details/${encodeURIComponent(slug)}`, {
+        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
+    });
 
     // API may return the manga under any of these keys
     const m = data?.result || data?.results || data?.data || data;
@@ -178,7 +206,9 @@ async function handleDetails(sock, chatId, message, slug) {
 // only displays the top 10 — so every chapter is reachable by number.
 
 async function resolveChapterSlug(mangaSlug, chapterNum) {
-    const data = await mangaFetch(`/details/${encodeURIComponent(mangaSlug)}`);
+    const data = await mangaFetch(`/details/${encodeURIComponent(mangaSlug)}`, {
+        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
+    });
     const m = data?.result || data?.results || data?.data || data;
     const chapters = Array.isArray(m?.chapters) ? m.chapters : [];
     if (!chapters.length) throw new Error(`No chapters found for \`${mangaSlug}\`. Check the manga slug.`);
@@ -246,7 +276,9 @@ async function downloadConcurrent(urls, limit = 5) {
 
 async function handleRead(sock, chatId, message, chapterSlug) {
     await sock.sendMessage(chatId, { text: `📖 Loading chapter: \`${chapterSlug}\`…` }, { quoted: message });
-    const data = await mangaFetch(`/chapter/${encodeURIComponent(chapterSlug)}`);
+    const data = await mangaFetch(`/chapter/${encodeURIComponent(chapterSlug)}`, {
+        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
+    });
 
     // API returns: data.results.images[] (array of URL strings)
     const pages = data?.results?.images || data?.results?.pages || data?.pages || data?.images || data?.data || [];
@@ -402,7 +434,9 @@ async function handleRangeDownload(sock, chatId, message, slug, from, to) {
 
 async function handlePopular(sock, chatId, message, page = 1) {
     await sock.sendMessage(chatId, { text: `🔥 Loading popular manga (page ${page})…` }, { quoted: message });
-    const data = await mangaFetch(`/popular?page=${page}`);
+    const data = await mangaFetch(`/popular?page=${page}`, {
+        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
+    });
 
     const results = data?.results?.results || data?.results || data?.data || [];
     if (!results.length) {
@@ -431,7 +465,9 @@ async function handlePopular(sock, chatId, message, page = 1) {
 
 async function handleLatest(sock, chatId, message, page = 1) {
     await sock.sendMessage(chatId, { text: `🆕 Loading latest manga (page ${page})…` }, { quoted: message });
-    const data = await mangaFetch(`/latest?page=${page}`);
+    const data = await mangaFetch(`/latest?page=${page}`, {
+        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
+    });
 
     const results = data?.results?.results || data?.results || data?.data || [];
     if (!results.length) {
@@ -459,7 +495,9 @@ async function handleLatest(sock, chatId, message, page = 1) {
 // ─── Genres ───────────────────────────────────────────────────────────────────
 
 async function handleGenres(sock, chatId, message) {
-    const data = await mangaFetch('/genres');
+    const data = await mangaFetch('/genres', {
+        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
+    });
     const list = data?.genres || data?.data || data?.results || [];
 
     if (!list.length) {
@@ -486,7 +524,9 @@ async function handleGenres(sock, chatId, message) {
 
 async function handleGenreBrowse(sock, chatId, message, slug, page = 1) {
     await sock.sendMessage(chatId, { text: `🏷️ Loading *${slug}* manga (page ${page})…` }, { quoted: message });
-    const data = await mangaFetch(`/genre/${encodeURIComponent(slug)}?page=${page}`);
+    const data = await mangaFetch(`/genre/${encodeURIComponent(slug)}?page=${page}`, {
+        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
+    });
 
     const results = data?.results || data?.data || [];
     if (!results.length) {
@@ -514,7 +554,9 @@ async function handleGenreBrowse(sock, chatId, message, slug, page = 1) {
 
 async function handleHome(sock, chatId, message) {
     await sock.sendMessage(chatId, { text: `🏠 Loading manga homepage…` }, { quoted: message });
-    const data = await mangaFetch('/home');
+    const data = await mangaFetch('/home', {
+        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
+    });
 
     const popularToday  = data?.results?.popularToday  || data?.popularToday  || data?.popular_today  || [];
     const latestUpdates = data?.results?.latestUpdates || data?.latestUpdates || data?.latest_updates || data?.latest || [];
@@ -577,7 +619,9 @@ async function handleBrowse(sock, chatId, message, args) {
         text: `🔎 Browsing manga${qs ? ` (${qs})` : ''}…`
     }, { quoted: message });
 
-    const data = await mangaFetch(path);
+    const data = await mangaFetch(path, {
+        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
+    });
     const results = data?.results || data?.data || [];
 
     if (!results.length) {
