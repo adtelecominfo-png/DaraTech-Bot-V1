@@ -1,0 +1,352 @@
+'use strict';
+/**
+ * gifted-tools.js — Gifted API Tools commands
+ * Base: https://api.gifted.co.ke/api/tools/<endpoint>
+ *
+ * Confirmed working endpoints:
+ *   ttp       → image_url (text to picture)
+ *   canvas    → binary PNG (Spotify-style card)
+ *   topdf     → binary PDF (text or URL → PDF document)
+ *   web2zip   → result.download_url (archive a website as ZIP)
+ *   proxy     → results[] (fresh working proxy list)
+ *   encrypt   → encrypted_code (JS code obfuscator)
+ *   dns-check → result.records[] (DNS records lookup)
+ *   http-headers → result string (raw HTTP response headers)
+ *   server-check → result.status / result.http_code (server uptime)
+ *   ssphone   → binary JPEG (mobile-viewport screenshot)
+ *   sstab     → binary JPEG (tablet-viewport screenshot)
+ *   sspc      → binary JPEG (desktop-viewport screenshot)
+ */
+
+const { toolsGet, toolsBuf } = require('../lib/gifted');
+
+// ─── Shared helpers ──────────────────────────────────────────────────────────
+
+function getQ(message) {
+    const raw = message.message?.conversation ||
+                message.message?.extendedTextMessage?.text || '';
+    return raw.trim().split(/\s+/).slice(1).join(' ').trim();
+}
+
+async function react(sock, message, emoji) {
+    try {
+        await sock.sendMessage(message.key.remoteJid, { react: { text: emoji, key: message.key } });
+    } catch (_) {}
+}
+
+// ─── Image Tools ─────────────────────────────────────────────────────────────
+
+/** .ttp <text> — text to picture image */
+async function ttpCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q) return sock.sendMessage(chatId, { text: '🖼️ Usage: .ttp <text>\nExample: .ttp Hello World' }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('ttp', { query: q });
+        if (!data?.success || !data?.image_url) throw new Error(data?.message || 'No image returned');
+        await sock.sendMessage(chatId, {
+            image: { url: data.image_url },
+            caption: `🖼️ *TEXT TO IMAGE*\n"${q}"\n\n_Daratech_ ⚡`,
+        }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:ttp]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Text to image failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+/** .canvas <title> — Spotify-style canvas card image */
+async function canvasCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q) return sock.sendMessage(chatId, {
+        text: '🎵 Usage: .canvas <song title>\nExample: .canvas Blinding Lights - The Weeknd',
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const buf = await toolsBuf('canvas', { title: q, type: 'spotify', text: 'Now Playing', watermark: 'Daratech' });
+        if (buf.length < 200) throw new Error('Canvas generation failed');
+        await sock.sendMessage(chatId, {
+            image: buf,
+            caption: `🎵 *CANVAS CARD*\n${q}\n\n_Daratech_ ⚡`,
+        }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:canvas]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Canvas card failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+// ─── Document Tools ──────────────────────────────────────────────────────────
+
+/** .topdf <text or url> — generate a PDF document */
+async function topdfCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q) return sock.sendMessage(chatId, {
+        text: '📄 Usage: .topdf <text or URL>\nExample: .topdf https://example.com\nExample: .topdf This is my document content',
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const buf = await toolsBuf('topdf', { query: q });
+        if (buf.length < 100) throw new Error('PDF generation failed — try a different input');
+        const label = q.startsWith('http') ? q : (q.slice(0, 50) + (q.length > 50 ? '…' : ''));
+        await sock.sendMessage(chatId, {
+            document: buf,
+            mimetype: 'application/pdf',
+            fileName: 'daratech-document.pdf',
+            caption: `📄 *PDF GENERATED*\n${label}\n\n_Daratech_ ⚡`,
+        }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:topdf]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ PDF generation failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+// ─── Web Tools ────────────────────────────────────────────────────────────────
+
+/** .web2zip <url> — download a website as a ZIP archive */
+async function web2zipCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
+        text: '🗜️ Usage: .web2zip <url>\nExample: .web2zip https://example.com',
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('web2zip', { url: q }, 60000);
+        if (!data?.success || !data?.result?.download_url) throw new Error(data?.message || 'Failed to archive website');
+        const r = data.result;
+        const txt =
+            `🗜️ *WEBSITE → ZIP*\n\n` +
+            `▸ 🔗 *Site:* ${r.siteUrl}\n` +
+            `▸ 📁 *Files Copied:* ${r.copiedFilesAmount || 1}\n\n` +
+            `📥 *Download Link:*\n${r.download_url}\n\n` +
+            `_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:web2zip]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Website archiving failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+/** .proxy — get a fresh list of working proxies */
+async function proxyCommand(sock, chatId, message) {
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('proxy', {});
+        if (!data?.success || !data?.results?.length) throw new Error('No proxies returned');
+        const list = data.results.slice(0, 12).map((p, i) => {
+            const lock = p.https === 'yes' ? ' 🔒' : '';
+            return `${i + 1}. \`${p.ip}:${p.port}\` — ${p.country} [${p.anonymity}]${lock}`;
+        }).join('\n');
+        const txt = `🌐 *FRESH PROXY LIST*\n\n${list}\n\n_Last checked: a few seconds ago_\n\n_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:proxy]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Proxy fetch failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+// ─── Developer Tools ──────────────────────────────────────────────────────────
+
+/** .obfuscate <js code> — obfuscate / encrypt JavaScript code */
+async function obfuscateCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q) return sock.sendMessage(chatId, {
+        text: '🔐 Usage: .obfuscate <JavaScript code>\nExample: .obfuscate console.log("hello")',
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('encrypt', { code: q });
+        if (!data?.success || !data?.encrypted_code) throw new Error(data?.message || 'Obfuscation failed');
+        const result = data.encrypted_code;
+        const txt = `🔐 *JS OBFUSCATOR*\n\n\`\`\`\n${result.slice(0, 3000)}${result.length > 3000 ? '\n…(truncated)' : ''}\n\`\`\`\n\n_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:obfuscate]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Obfuscation failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+// ─── Network / Lookup Tools ───────────────────────────────────────────────────
+
+/** .dns <domain> — DNS records lookup */
+async function dnsCommand(sock, chatId, message) {
+    const q = getQ(message).replace(/^https?:\/\//, '').split('/')[0].trim();
+    if (!q) return sock.sendMessage(chatId, {
+        text: '🔍 Usage: .dns <domain>\nExample: .dns google.com',
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('dns-check', { domain: q });
+        if (!data?.success || !data?.result) throw new Error(data?.message || 'DNS lookup failed');
+        const records = data.result.records || [];
+        const grouped = {};
+        for (const r of records) {
+            if (!grouped[r.type]) grouped[r.type] = [];
+            grouped[r.type].push(r.ip || r.target || r.value || '-');
+        }
+        const lines = Object.entries(grouped).map(([type, vals]) =>
+            `▸ *${type}:* ${vals.slice(0, 3).join(', ')}`
+        ).join('\n');
+        const txt = `🔍 *DNS RECORDS — ${q}*\n\n${lines || 'No records found.'}\n\n_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:dns]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ DNS lookup failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+/** .headers <url> — HTTP response headers of a server */
+async function headersCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
+        text: '📡 Usage: .headers <url>\nExample: .headers https://google.com',
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('http-headers', { url: q });
+        if (!data?.success || !data?.result) throw new Error(data?.message || 'Headers fetch failed');
+        const raw = typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2);
+        const txt = `📡 *HTTP HEADERS — ${q}*\n\n\`\`\`\n${raw.slice(0, 3000)}${raw.length > 3000 ? '\n…' : ''}\n\`\`\`\n\n_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:headers]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Headers fetch failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+/** .servercheck <url> — check if a server / website is online */
+async function servercheckCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
+        text: '🖥️ Usage: .servercheck <url>\nExample: .servercheck https://google.com',
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('server-check', { url: q });
+        if (!data?.success || !data?.result) throw new Error(data?.message || 'Server check failed');
+        const r = data.result;
+        const isUp = r.http_code >= 200 && r.http_code < 400;
+        const statusIcon = isUp ? '🟢' : '🔴';
+        const txt =
+            `🖥️ *SERVER CHECK*\n\n` +
+            `▸ 🔗 *URL:* ${r.link || q}\n` +
+            `▸ ${statusIcon} *Status:* ${r.status || (isUp ? 'Online' : 'Offline')}\n` +
+            `▸ 📊 *HTTP Code:* ${r.http_code}\n\n` +
+            `_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:servercheck]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Server check failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+// ─── Screenshot Viewports ─────────────────────────────────────────────────────
+
+async function _screenshotViewport(sock, chatId, message, endpoint, label) {
+    const q = getQ(message);
+    if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
+        text: `📸 Usage: .${endpoint} <url>\nExample: .${endpoint} https://google.com`,
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const buf = await toolsBuf(endpoint, { url: q });
+        if (buf.length < 500) throw new Error('Screenshot failed or empty response');
+        await sock.sendMessage(chatId, {
+            image: buf,
+            caption: `📸 *SCREENSHOT (${label})*\n🔗 ${q}\n\n_Daratech_ ⚡`,
+        }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error(`[gifted-tools:${endpoint}]`, err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Screenshot failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+/** .ssphone <url> — screenshot in mobile (phone) viewport */
+async function ssphoneCommand(sock, chatId, message) {
+    return _screenshotViewport(sock, chatId, message, 'ssphone', 'Mobile');
+}
+
+/** .sstab <url> — screenshot in tablet viewport */
+async function sstabCommand(sock, chatId, message) {
+    return _screenshotViewport(sock, chatId, message, 'sstab', 'Tablet');
+}
+
+/** .sspc <url> — screenshot in desktop/PC viewport */
+async function sspcCommand(sock, chatId, message) {
+    return _screenshotViewport(sock, chatId, message, 'sspc', 'Desktop');
+}
+
+// ─── Fancy Text ───────────────────────────────────────────────────────────────
+
+/** .fantext <text> — show 8 different fancy Unicode text styles at once */
+async function fantextCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q) return sock.sendMessage(chatId, { text: '✨ Usage: .fantext <text>\nExample: .fantext Hello World' }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('fancy', { text: q });
+        if (!data?.success || !Array.isArray(data?.results)) throw new Error(data?.message || 'No styles returned');
+        const lines = data.results.slice(0, 10).map(s => `▸ *${s.name}:* ${s.result}`).join('\n');
+        const txt = `✨ *FANCY TEXT — "${q}"*\n\n${lines}\n\n_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:fantext]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Fancy text failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+/** .fantext2 <text> — show a different set of fancy Unicode text styles */
+async function fantext2Command(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q) return sock.sendMessage(chatId, { text: '✨ Usage: .fantext2 <text>\nExample: .fantext2 Hello World' }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('fancyv2', { text: q });
+        if (!data?.success || !Array.isArray(data?.results)) throw new Error(data?.message || 'No styles returned');
+        const lines = data.results.slice(0, 10).map(s => `▸ *${s.name}:* ${s.result}`).join('\n');
+        const txt = `✨ *FANCY TEXT V2 — "${q}"*\n\n${lines}\n\n_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:fantext2]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Fancy text v2 failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+module.exports = {
+    ttpCommand,
+    canvasCommand,
+    topdfCommand,
+    web2zipCommand,
+    proxyCommand,
+    obfuscateCommand,
+    dnsCommand,
+    headersCommand,
+    servercheckCommand,
+    ssphoneCommand,
+    sstabCommand,
+    sspcCommand,
+    fantextCommand,
+    fantext2Command,
+};

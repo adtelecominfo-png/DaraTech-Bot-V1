@@ -234,6 +234,7 @@ const { quranCommand, dailyAyahCommand }  = require('./commands/quran');
 const { poemCommand, animequoteCommand, kanyeCommand } = require('./commands/poetry');
 const { bmiCommand, ageCommand, celsiusCommand, fahrenheitCommand, kmtomilesCommand, milestokmCommand, kgtolbsCommand, lbstokg } = require('./commands/converter');
 const { fancyCommand, boldtextCommand, italicCommand, bolditalicCommand, scriptCommand, frakturCommand, doubleCommand, sansCommand, monoCommand, wideCommand, smallcapsCommand, bubbleCommand, flipCommand, mirrorCommand } = require('./commands/fonts');
+const { ttpCommand, canvasCommand, topdfCommand, web2zipCommand, proxyCommand, obfuscateCommand, dnsCommand, headersCommand, servercheckCommand, ssphoneCommand, sstabCommand, sspcCommand, fantextCommand, fantext2Command } = require('./commands/gifted-tools');
 const { loremCommand, fakenameCommand, genemailCommand, randomnumCommand, coinflipCommand, dicerollCommand } = require('./commands/generators');
 const economyCommand = require('./commands/economy');
 // Global settings
@@ -1268,7 +1269,19 @@ case userMessage.startsWith('.bssensi'):
                 const commandLength = userMessage.startsWith('.translate') ? 10 : 4;
                 await handleTranslateCommand(sock, chatId, message, userMessage.slice(commandLength));
                 return;
-            case userMessage.startsWith('.ss') || userMessage.startsWith('.ssweb') || userMessage.startsWith('.screenshot'):
+            case userMessage.startsWith('.ssphone'):
+                await ssphoneCommand(sock, chatId, message);
+                break;
+
+            case userMessage.startsWith('.sstab'):
+                await sstabCommand(sock, chatId, message);
+                break;
+
+            case userMessage.startsWith('.sspc'):
+                await sspcCommand(sock, chatId, message);
+                break;
+
+            case (userMessage.startsWith('.ss') && !userMessage.startsWith('.ssphone') && !userMessage.startsWith('.sstab') && !userMessage.startsWith('.sspc')) || userMessage.startsWith('.ssweb') || userMessage.startsWith('.screenshot'):
                 const ssCommandLength = userMessage.startsWith('.screenshot') ? 11 : (userMessage.startsWith('.ssweb') ? 6 : 3);
                 await handleSsCommand(sock, chatId, message, userMessage.slice(ssCommandLength).trim());
                 break;
@@ -1290,6 +1303,16 @@ case userMessage.startsWith('.bssensi'):
             case userMessage === '.rizz' || userMessage === '.pickupline' || userMessage === '.pickup':
                 await rizzCommand(sock, chatId, message);
                 break;
+            case userMessage.startsWith('.ttp ') || userMessage === '.ttp':
+                await ttpCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.canvas ') || userMessage === '.canvas':
+                await canvasCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
             case userMessage.startsWith('.suno') || userMessage.startsWith('.songgen') || userMessage.startsWith('.aisong'):
                 await sunoCommand(sock, chatId, message, userMessage.split(' ').slice(1));
                 break;
@@ -1793,6 +1816,21 @@ case userMessage.startsWith('.bssensi'):
                 commandExecuted = true;
                 break;
 
+            case userMessage.startsWith('.dns ') || userMessage === '.dns':
+                await dnsCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.headers ') || userMessage === '.headers':
+                await headersCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.servercheck') || userMessage.startsWith('.pingserver') || userMessage.startsWith('.checkserver'):
+                await servercheckCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
             // ── Search commands ─────────────────────────────────────────────
             case userMessage.startsWith('.yts ') || userMessage === '.yts' ||
                  userMessage.startsWith('.ytsearch') || userMessage.startsWith('.ytvideo'):
@@ -2068,6 +2106,26 @@ case userMessage.startsWith('.bssensi'):
                 commandExecuted = true;
                 break;
 
+            case userMessage.startsWith('.obfuscate') || userMessage.startsWith('.jsobfus'):
+                await obfuscateCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.topdf'):
+                await topdfCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.web2zip'):
+                await web2zipCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.proxy' || userMessage.startsWith('.proxy '):
+                await proxyCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
             // ── Number Facts ──────────────────────────────────────────────
             case userMessage.startsWith('.numfact'):
                 await numfactCommand(sock, chatId, message);
@@ -2238,6 +2296,16 @@ case userMessage.startsWith('.bssensi'):
 
             case userMessage.startsWith('.italic'):
                 await italicCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.fantext2'):
+                await fantext2Command(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.fantext'):
+                await fantextCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
 
