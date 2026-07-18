@@ -121,8 +121,9 @@ async function sendOverview(sock, chatId, message) {
     const userName = message.pushName || 'User';
     const ver      = settings.version || '1.0.0';
 
+    const realCmds = cmds => cmds.filter(c => c.startsWith('.'));
     let total = 0;
-    for (const cat of CATEGORIES) total += cat.cmds.length;
+    for (const cat of CATEGORIES) total += realCmds(cat.cmds).length;
 
     const lines = [
         `╔════════════════════════════════════╗`,
@@ -140,12 +141,13 @@ async function sendOverview(sock, chatId, message) {
     ];
 
     for (const cat of CATEGORIES) {
-        if (!cat.cmds.length) continue;
+        const cmdCount = realCmds(cat.cmds).length;
+        if (!cmdCount) continue;
         // If a category has alt slugs, show them alongside the primary slug
         const slugLabel = cat.altSlugs?.length
             ? `${cat.slug} / ${cat.altSlugs.join(' / ')}`
             : cat.slug;
-        lines.push(`${cat.emoji} *.menu ${slugLabel.padEnd(16)}* — ${cat.cmds.length} cmds`);
+        lines.push(`${cat.emoji} *.menu ${slugLabel.padEnd(16)}* — ${cmdCount} cmds`);
     }
 
     lines.push(``, `─`.repeat(34));
