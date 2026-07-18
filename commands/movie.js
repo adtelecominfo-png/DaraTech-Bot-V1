@@ -19,6 +19,9 @@ const axios = require('axios');
 
 const MOVIE_BASE = 'https://runflix-api-v-3263--trumpmax.replit.app/api/v3';
 
+// Per-chat search result cache so users can pick by number (e.g. .movie dl 1)
+const lastSearches = new Map();
+
 async function apiFetch(path) {
     const url = `${MOVIE_BASE}${path}`;
     try {

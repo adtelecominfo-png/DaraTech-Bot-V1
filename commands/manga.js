@@ -45,7 +45,13 @@ async function mangaFetch(path, { retries = 2 } = {}) {
         }
     }
     const status = lastErr.response?.status;
-    const msg    = lastErr.response?.data?.message || lastErr.message || `HTTP ${status || 'timeout'}`;
+    if (status === 521 || status === 520 || status === 522 || status === 523 || status === 524) {
+        throw new Error('Manga service is temporarily down (server offline). Please try again in a few minutes.');
+    }
+    if (status === 503 || status === 502) {
+        throw new Error('Manga service is temporarily unavailable. Please try again shortly.');
+    }
+    const msg = lastErr.response?.data?.message || lastErr.message || `HTTP ${status || 'timeout'}`;
     throw new Error(msg);
 }
 
