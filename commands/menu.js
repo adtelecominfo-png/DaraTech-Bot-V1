@@ -150,6 +150,8 @@ async function sendOverview(sock, chatId, message) {
     lines.push(`💬 *.menu sports*   — sports & scores`);
     lines.push(`📖 *.help <cat>*    — full descriptions`);
     lines.push(`─`.repeat(34));
+    lines.push(`🔍 *.menu search <command>*  — find commands`);
+    lines.push(`📋 *.menu details <command>* — command usage`);
 
     const text = lines.join('\n');
 
