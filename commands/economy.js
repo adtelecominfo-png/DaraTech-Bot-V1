@@ -13,6 +13,9 @@ const path = require('path');
 const DB_PATH   = path.join(__dirname, '../data/economy.json');
 const OWNER_NUM = '2348152077346';
 
+// Runtime JID of the connected bot session — set by seedEconomyOwner on connect
+let connectorJid = null;
+
 // ─── Store catalogue ──────────────────────────────────────────────────────────
 const STORE = {
     // ── Weapons tier 1 (starter) ──────────────────────────────────────────
@@ -92,7 +95,14 @@ function getUser(db, jid) {
 }
 
 function isOwner(jid) {
-    return jid.replace(/[^0-9]/g, '').includes(OWNER_NUM);
+    const digits = jid.replace(/[^0-9]/g, '');
+    if (digits.includes(OWNER_NUM)) return true;
+    // Also treat the live connector JID as owner
+    if (connectorJid) {
+        const connDigits = connectorJid.replace(/[^0-9]/g, '');
+        if (connDigits && digits.includes(connDigits)) return true;
+    }
+    return false;
 }
 
 function ownerBoost(db, jid) {
@@ -965,9 +975,39 @@ async function resetUserCommand(sock, chatId, message) {
     await sock.sendMessage(chatId, { text: `✅ Economy data reset for ${mention(mentioned)}`, mentions: [mentioned] }, { quoted: message });
 }
 
+async function boostUserCommand(sock, chatId, message) {
+    const uid = senderJid(message);
+    if (!isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Owner only!` }, { quoted: message });
+    const db        = loadDB();
+    const mentioned = resolveTarget(message);
+    if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Usage: *.boostuser @user* or reply to a message` }, { quoted: message });
+    const u = getUser(db, mentioned);
+    // Max all upgrades
+    u.upgrades = u.upgrades || {};
+    Object.keys(STORE).filter(k => !STORE[k].consumable).forEach(k => {
+        u.upgrades[k] = MAX_UPGRADE;
+    });
+    // Max wallet + bank + XP
+    u.wallet = 1e84;
+    u.bank   = 1e84;
+    u.xp     = 1e84;
+    saveDB(db);
+    const st = getStats(u);
+    await sock.sendMessage(chatId, {
+        text:
+            `✅ *BOOSTED!* ${mention(mentioned)}\n\n` +
+            `All gear upgraded to *+${MAX_UPGRADE}* and stats maxed!\n` +
+            `⚔️ ATK: ${st.atk}  |  🛡️ DEF: ${st.def}  |  🍀 Luck: ${st.luck}\n\n` +
+            `_Have them use .equip to switch gear — upgrades apply to all items._`,
+        mentions: [mentioned],
+    }, { quoted: message });
+}
+
 // ─── Auto-seed owner/connector on startup ─────────────────────────────────────
 function seedEconomyOwner(ownerJid) {
     if (!ownerJid) return;
+    // Remember the live connector JID so isOwner() recognises it as owner
+    connectorJid = ownerJid;
     try {
         const db = loadDB();
         // Build inventory: all non-consumable items + 5 of each consumable
@@ -1052,6 +1092,7 @@ async function economyCommand(sock, chatId, message, userMessage) {
         case 'addcoins':                                 return addCoinsCommand(sock, chatId, message, q);
         case 'removecoins': case 'deductcoins':          return removeCoinsCommand(sock, chatId, message, q);
         case 'resetuser':                                return resetUserCommand(sock, chatId, message);
+        case 'boostuser': case 'boost':                  return boostUserCommand(sock, chatId, message);
         default:
             await sock.sendMessage(chatId, { text: `❌ Unknown economy command. Use *.menu economy* to see all.` }, { quoted: message });
     }

@@ -2134,7 +2134,8 @@ case userMessage.startsWith('.bssensi'):
                  userMessage.startsWith('.removecoins') || userMessage.startsWith('.deductcoins') ||
                  userMessage.startsWith('.resetuser') ||
                  userMessage.startsWith('.leaderboard') || userMessage.startsWith('.richlist') ||
-                 userMessage.startsWith('.richest') || userMessage.startsWith('.lb'):
+                 userMessage.startsWith('.richest') || userMessage.startsWith('.lb') ||
+                 userMessage.startsWith('.boostuser') || userMessage.startsWith('.boost'):
                 await economyCommand(sock, chatId, message, userMessage);
                 commandExecuted = true;
                 break;
