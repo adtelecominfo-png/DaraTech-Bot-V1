@@ -129,6 +129,8 @@ function senderJid(message) {
 function numFromJid(jid) { return jid.replace(/:[^@]*/, '').split('@')[0]; }
 function mention(jid)    { return `@${numFromJid(jid)}`; }
 function fmt(n)          {
+    if (n >= 1e30) return 'MAX';
+    if (n >= 1e27) return (n / 1e27).toFixed(1) + 'Oct';
     if (n >= 1e24) return (n / 1e24).toFixed(1) + 'Sp';
     if (n >= 1e21) return (n / 1e21).toFixed(1) + 'Sx';
     if (n >= 1e18) return (n / 1e18).toFixed(1) + 'Qi';
