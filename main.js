@@ -121,7 +121,7 @@ const { setGroupDescription, setGroupName, setGroupPhoto } = require('./commands
 const instagramCommand = require('./commands/instagram');
 const facebookCommand = require('./commands/facebook');
 const spotifyCommand = require('./commands/spotify');
-const playCommand = require('./commands/play');
+const { playCommand, play2Command, playDocCommand, playChCommand } = require('./commands/play');
 const tiktokCommand = require('./commands/tiktok');
 const songCommand = require('./commands/song');
 const aiCommand = require('./commands/ai');
@@ -133,7 +133,12 @@ const { goodnightCommand } = require('./commands/goodnight');
 const { shayariCommand } = require('./commands/shayari');
 const { rosedayCommand } = require('./commands/roseday');
 const imagineCommand = require('./commands/imagine');
-const videoCommand = require('./commands/video');
+const { videoCommand, video2Command, videoDocCommand } = require('./commands/video');
+const {
+    twitterDlCommand, igdlCommand, pinterestDlCommand, douyinCommand,
+    snackVideoCommand, soundcloudCommand, mediafireCommand, gdriveCommand,
+    videyCommand, webDlCommand, aioCommand,
+} = require('./commands/downloaders');
 const sudoCommand = require('./commands/sudo');
 const { miscCommand, handleHeart } = require('./commands/misc');
 const { animeCommand } = require('./commands/anime');
@@ -1149,7 +1154,7 @@ case userMessage.startsWith('.bssensi'):
             case userMessage.startsWith('.setgpp'):
                 await setGroupPhoto(sock, chatId, senderId, message);
                 break;
-            case userMessage.startsWith('.instagram') || (userMessage.startsWith('.insta') && !userMessage.startsWith('.instastalk')) || (userMessage === '.ig' || userMessage.startsWith('.ig ')):
+            case userMessage.startsWith('.instagram') || (userMessage.startsWith('.insta') && !userMessage.startsWith('.instastalk')) || (userMessage === '.ig' || userMessage.startsWith('.ig ')) || userMessage.startsWith('.igdl'):
                 await instagramCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('.igsc'):
@@ -1158,7 +1163,7 @@ case userMessage.startsWith('.bssensi'):
             case userMessage.startsWith('.igs') && !userMessage.startsWith('.igstalk') && !userMessage.startsWith('.igsc'):
                 await igsCommand(sock, chatId, message, false);
                 break;
-            case userMessage.startsWith('.fb') || userMessage.startsWith('.facebook'):
+            case userMessage.startsWith('.fb') || userMessage.startsWith('.facebook') || userMessage.startsWith('.fbdl'):
                 await facebookCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('.music'):
@@ -1167,8 +1172,32 @@ case userMessage.startsWith('.bssensi'):
             case userMessage.startsWith('.spotify'):
                 await spotifyCommand(sock, chatId, message);
                 break;
+            case userMessage === '.playch' || userMessage.startsWith('.playch '):
+                await playChCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.play2' || userMessage.startsWith('.play2 ')):
+                await play2Command(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.playdoc' || userMessage.startsWith('.playdoc ')):
+                await playDocCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
             case userMessage.startsWith('.play') || userMessage.startsWith('.mp3') || userMessage.startsWith('.ytmp3') || (userMessage.startsWith('.song') && !userMessage.startsWith('.songgen')):
                 await songCommand(sock, chatId, message);
+                break;
+            case (userMessage === '.videodoc' || userMessage.startsWith('.videodoc ')):
+                await videoDocCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.video2' || userMessage.startsWith('.video2 ')):
+                await video2Command(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.savetube' || userMessage.startsWith('.savetube ')):
+                await video2Command(sock, chatId, message);
+                commandExecuted = true;
                 break;
             case userMessage.startsWith('.video') || userMessage.startsWith('.ytmp4'):
                 await videoCommand(sock, chatId, message);
@@ -1626,6 +1655,48 @@ case userMessage.startsWith('.bssensi'):
                 break;
 
             // ── Download commands (GiftedTech API) ─────────────────────────
+            // ── Platform-specific downloaders ────────────────────────────────
+            case (userMessage === '.twitter' || userMessage.startsWith('.twitter ') ||
+                  userMessage === '.twdl'    || userMessage.startsWith('.twdl ')):
+                await twitterDlCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.pinterestdl' || userMessage.startsWith('.pinterestdl ')):
+                await pinterestDlCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.douyin' || userMessage.startsWith('.douyin ')):
+                await douyinCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.snackvideo' || userMessage.startsWith('.snackvideo ')):
+                await snackVideoCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.soundcloud' || userMessage.startsWith('.soundcloud ')):
+                await soundcloudCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.mediafire' || userMessage.startsWith('.mediafire ')):
+                await mediafireCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.gdrive' || userMessage.startsWith('.gdrive ')):
+                await gdriveCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.videy' || userMessage.startsWith('.videy ')):
+                await videyCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.webdl' || userMessage.startsWith('.webdl ')):
+                await webDlCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case (userMessage === '.aio' || userMessage.startsWith('.aio ')):
+                await aioCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
             case userMessage.startsWith('.apk ') || userMessage === '.apk':
                 await apkCommand(sock, chatId, message);
                 commandExecuted = true;
