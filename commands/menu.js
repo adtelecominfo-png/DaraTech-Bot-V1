@@ -1,0 +1,198 @@
+'use strict';
+const settings   = require('../settings');
+const { CATEGORIES, findCategory } = require('../lib/categories');
+const { davidGet } = require('../lib/gifted');
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function nowStr() {
+    return new Date().toLocaleString('en-NG', {
+        timeZone: 'Africa/Lagos',
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true,
+    });
+}
+function uptimeStr() {
+    const t = process.uptime();
+    return `${Math.floor(t / 3600)}h ${Math.floor((t % 3600) / 60)}m ${Math.floor(t % 60)}s`;
+}
+
+// ─── Category → wallpaper search keyword ─────────────────────────────────────
+
+const CAT_WALLPAPER = {
+    start:      'technology bot digital',
+    ai:         'artificial intelligence robot future',
+    movies:     'cinema movie night popcorn',
+    download:   'music headphones beats',
+    fun:        'party games fun colorful',
+    gaming:     'gaming controller esports neon',
+    stickers:   'art colorful abstract creative',
+    tools:      'tools gadgets workshop',
+    search:     'search explore discover',
+    sports:     'sports stadium crowd energy',
+    anime:      'anime girl wallpaper',
+    manga:      'manga comic book panel art',
+    stalk:      'social media network connect',
+    crypto:     'bitcoin cryptocurrency digital gold',
+    groups:     'team people community',
+    owner:      'settings control dashboard',
+    tempgen:    'email inbox message',
+    language:   'books library reading knowledge',
+    country:    'world map globe travel',
+    animals:    'cute animals wildlife nature',
+    food:       'food delicious restaurant cooking',
+    space:      'galaxy stars universe nebula cosmos',
+    texttools:  'code programming terminal hacker',
+    fonts:      'typography font design letters art',
+    generators: 'dice random generator creative fun',
+    bible:      'church cross spiritual sunset sky',
+    converters: 'calculator math measurement science',
+};
+
+// ─── Fetch a random image for overview ───────────────────────────────────────
+
+const OVERVIEW_KEYWORDS = [
+    'anime girl wallpaper',
+    'digital art futuristic neon',
+    'beautiful scenery nature landscape',
+    'cyberpunk city night lights',
+    'anime aesthetic wallpaper',
+];
+
+async function fetchOverviewImage() {
+    // Use the same wallpaper endpoint that works for categories
+    const query = OVERVIEW_KEYWORDS[Math.floor(Math.random() * OVERVIEW_KEYWORDS.length)];
+    try {
+        const data = await davidGet(`/search/wallpaper?text=${encodeURIComponent(query)}`);
+        const list = data?.result || data?.results || data?.data || [];
+        if (Array.isArray(list) && list.length) {
+            const pick = list[Math.floor(Math.random() * Math.min(list.length, 5))];
+            const url  = pick?.url || pick?.image || pick?.src || pick;
+            if (typeof url === 'string' && url.startsWith('http')) return url;
+        }
+        const direct = data?.result?.url || data?.url;
+        if (typeof direct === 'string' && direct.startsWith('http')) return direct;
+    } catch { /* ignore */ }
+    return null;
+}
+
+// ─── Fetch a thematic wallpaper for a category ───────────────────────────────
+
+async function fetchCategoryImage(slug) {
+    const query = CAT_WALLPAPER[slug] || 'wallpaper';
+    try {
+        const data = await davidGet(`/search/wallpaper?text=${encodeURIComponent(query)}`);
+        // API returns { result: [ { url: '...' }, ... ] } or similar
+        const list = data?.result || data?.results || data?.data || [];
+        if (Array.isArray(list) && list.length) {
+            const pick = list[Math.floor(Math.random() * Math.min(list.length, 5))];
+            const url  = pick?.url || pick?.image || pick?.src || pick;
+            if (typeof url === 'string' && url.startsWith('http')) return url;
+        }
+        // Some endpoints return a single result directly
+        const direct = data?.result?.url || data?.url;
+        if (typeof direct === 'string' && direct.startsWith('http')) return direct;
+    } catch { /* ignore */ }
+    return null;
+}
+
+// ─── Send helper — image if available, text otherwise ────────────────────────
+
+async function sendWithImage(sock, chatId, message, text, imageUrl) {
+    try {
+        if (imageUrl) {
+            await sock.sendMessage(chatId, {
+                image: { url: imageUrl },
+                caption: text,
+                mimetype: 'image/jpeg',
+            }, { quoted: message });
+            return;
+        }
+    } catch { /* fall through */ }
+    await sock.sendMessage(chatId, { text }, { quoted: message });
+}
+
+// ─── Overview (no args) ───────────────────────────────────────────────────────
+
+async function sendOverview(sock, chatId, message) {
+    const userName = message.pushName || 'User';
+    const ver      = settings.version || '1.0.0';
+
+    let total = 0;
+    for (const cat of CATEGORIES) total += cat.cmds.length;
+
+    const lines = [
+        `╔════════════════════════════════════╗`,
+        `║  ⚡  *D A R A  S T U D I O  B O T*  ⚡ ║`,
+        `╚════════════════════════════════════╝`,
+        ``,
+        `╭──🌟 *SESSION INFO*`,
+        `│ 👤 *${userName}*   •   🕐 ${nowStr()}`,
+        `│ ⏱ Uptime: *${uptimeStr()}*   •   v${ver}`,
+        `│ 📋 Total: *${total}+ commands*`,
+        `╰${'─'.repeat(34)}`,
+        ``,
+        `*📂 CATEGORIES — tap a name to explore:*`,
+        ``,
+    ];
+
+    for (const cat of CATEGORIES) {
+        if (!cat.cmds.length) continue;
+        lines.push(`${cat.emoji} *.menu ${cat.slug.padEnd(10)}* — ${cat.cmds.length} cmds`);
+    }
+
+    lines.push(``, `─`.repeat(34));
+    lines.push(`💬 *.menu movies*   — movie commands`);
+    lines.push(`💬 *.menu manga*    — manga & manhwa`);
+    lines.push(`💬 *.menu ai*       — AI commands`);
+    lines.push(`💬 *.menu sports*   — sports & scores`);
+    lines.push(`📖 *.help <cat>*    — full descriptions`);
+    lines.push(`─`.repeat(34));
+
+    const text = lines.join('\n');
+
+    // Fetch random waifu image in parallel with building text
+    const imageUrl = await fetchOverviewImage();
+    await sendWithImage(sock, chatId, message, text, imageUrl);
+}
+
+// ─── Category detail (args = slug) ────────────────────────────────────────────
+
+async function sendCategoryMenu(sock, chatId, message, input) {
+    const cat = findCategory(input);
+    if (!cat) {
+        const slugList = CATEGORIES.map(c => `*.menu ${c.slug}*`).join('  ');
+        return sock.sendMessage(chatId, {
+            text: `❌ Category "*${input}*" not found.\n\nAvailable:\n${slugList}`
+        }, { quoted: message });
+    }
+
+    const rows = cat.cmds.map(c => `│ ${c.startsWith('.') ? c : '.' + c}`).join('\n');
+
+    const text = [
+        `╭──${cat.emoji} *${cat.title}*`,
+        rows,
+        `╰${'─'.repeat(32)}`,
+        ``,
+        `📖 *.help ${cat.slug}* — full descriptions`,
+        `🏠 *.menu* — back to categories`,
+        `\n_Daratech_ ⚡`,
+    ].join('\n');
+
+    // Fetch category-themed image in parallel with building text
+    const imageUrl = await fetchCategoryImage(cat.slug);
+    await sendWithImage(sock, chatId, message, text, imageUrl);
+}
+
+// ─── Main export ──────────────────────────────────────────────────────────────
+
+async function menuCommand(sock, chatId, message, catArg) {
+    if (catArg && catArg.trim()) {
+        return sendCategoryMenu(sock, chatId, message, catArg.trim());
+    }
+    return sendOverview(sock, chatId, message);
+}
+
+module.exports = menuCommand;
+module.exports.menuCommand     = menuCommand;
+module.exports.menuFullCommand = menuCommand;
