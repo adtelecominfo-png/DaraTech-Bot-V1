@@ -118,14 +118,21 @@ function ownerBoost(db, jid) {
     });
 }
 
+// Strip device suffix e.g. 234815:5@s.whatsapp.net → 234815@s.whatsapp.net
+function normalizeJid(jid) { return jid ? jid.replace(/:\d+(?=@)/, '') : jid; }
+
 function senderJid(message) {
     // fromMe = sent from the connected bot/owner device — treat as connector
     if (message.key?.fromMe && connectorJid) return connectorJid;
-    return message.key?.participant || message.key?.remoteJid || '';
+    return normalizeJid(message.key?.participant || message.key?.remoteJid || '');
 }
 function numFromJid(jid) { return jid.replace(/:[^@]*/, '').split('@')[0]; }
 function mention(jid)    { return `@${numFromJid(jid)}`; }
 function fmt(n)          {
+    if (n >= 1e24) return (n / 1e24).toFixed(1) + 'Sp';
+    if (n >= 1e21) return (n / 1e21).toFixed(1) + 'Sx';
+    if (n >= 1e18) return (n / 1e18).toFixed(1) + 'Qi';
+    if (n >= 1e15) return (n / 1e15).toFixed(1) + 'Qa';
     if (n >= 1e12) return (n / 1e12).toFixed(1) + 'T';
     if (n >= 1e9)  return (n / 1e9).toFixed(1)  + 'B';
     if (n >= 1e6)  return (n / 1e6).toFixed(1)  + 'M';
@@ -180,15 +187,15 @@ function badge(jid, u) {
     return '🌱 *Rookie*';
 }
 
-// Resolve the target JID from a mention or a reply
+// Resolve the target JID from a mention or a reply (always normalized)
 function resolveTarget(message) {
     // 1. Explicit @mention
     const mentioned = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-    if (mentioned) return mentioned;
+    if (mentioned) return normalizeJid(mentioned);
     // 2. Reply to a message — use the quoted sender
     const ctx = message.message?.extendedTextMessage?.contextInfo;
-    if (ctx?.participant) return ctx.participant;
-    if (ctx?.remoteJid && !ctx.remoteJid.endsWith('@g.us')) return ctx.remoteJid;
+    if (ctx?.participant) return normalizeJid(ctx.participant);
+    if (ctx?.remoteJid && !ctx.remoteJid.endsWith('@g.us')) return normalizeJid(ctx.remoteJid);
     return null;
 }
 
