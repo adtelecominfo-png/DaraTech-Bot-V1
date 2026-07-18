@@ -3,9 +3,12 @@ const axios = require('axios');
 
 async function adviceCommand(sock, chatId, message) {
     try {
-        const { data } = await axios.get('https://api.adviceslip.com/advice', { timeout: 8000 });
+        const { funGet } = require('../lib/gifted');
+        const data = await funGet('advice');
+        const text = data?.result;
+        if (!text || typeof text !== 'string') throw new Error('Empty');
         await sock.sendMessage(chatId, {
-            text: `💡 *ADVICE*\n\n"${data.slip?.advice}"\n\n_Daratech_ ⚡`
+            text: `💡 *ADVICE*\n\n"${text}"\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch { await sock.sendMessage(chatId, { text: '❌ Could not fetch advice.' }, { quoted: message }); }
 }

@@ -16,13 +16,15 @@ async function poemCommand(sock, chatId, message) {
 
 async function animequoteCommand(sock, chatId, message) {
     try {
-        const { data } = await axios.get('https://animechan.io/api/v1/quotes/random', { timeout: 10000 });
-        const q = data?.data || data;
-        const quote = q?.content || q?.quote || 'Unknown';
-        const character = q?.character?.name || q?.character || 'Unknown';
-        const anime = q?.anime?.name || q?.anime || 'Unknown';
+        const { animeGet } = require('../lib/gifted');
+        const data = await animeGet('quotes');
+        const q = data?.result;
+        if (!q) throw new Error('Empty');
+        const quote     = q?.quote     || '...';
+        const character = q?.character || 'Unknown';
+        const show      = q?.show      || 'Unknown';
         await sock.sendMessage(chatId, {
-            text: `🎌 *ANIME QUOTE*\n\n"${quote}"\n\n— *${character}* from _${anime}_\n\n_Daratech_ ⚡`
+            text: `🎌 *ANIME QUOTE*\n\n"${quote}"\n\n— *${character}* from _${show}_\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch { await sock.sendMessage(chatId, { text: '❌ Could not fetch anime quote.' }, { quoted: message }); }
 }

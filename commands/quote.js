@@ -1,14 +1,13 @@
 'use strict';
-const { davidGet } = require('../lib/gifted');
+const { funGet } = require('../lib/gifted');
 
 module.exports = async function quoteCommand(sock, chatId, message) {
     try {
-        const data = await davidGet('/random/quotes');
-        const q = data?.quote || data?.result || data;
-        const text  = q?.text || q?.quote || (typeof q === 'string' ? q : '...');
-        const author = q?.author || '';
+        const data = await funGet('quotes');
+        const text = data?.result;
+        if (!text || typeof text !== 'string') throw new Error('Empty response');
         await sock.sendMessage(chatId, {
-            text: `╭━═『 *DAILY WISDOM* 』━╮\n${author ? `┃ 👤 *Author:* ${author}\n` : ''}╰━━━━━━━━━━━━━━━╯\n\n"${text}"\n\n🚀 *Daratech Bot*`
+            text: `╭━═『 *DAILY WISDOM* 』━╮\n╰━━━━━━━━━━━━━━━╯\n\n"${text}"\n\n_Daratech_ ⚡`,
         }, { quoted: message });
     } catch (e) {
         console.error('[quote]', e.message);

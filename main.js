@@ -235,6 +235,8 @@ const { poemCommand, animequoteCommand, kanyeCommand } = require('./commands/poe
 const { bmiCommand, ageCommand, celsiusCommand, fahrenheitCommand, kmtomilesCommand, milestokmCommand, kgtolbsCommand, lbstokg } = require('./commands/converter');
 const { fancyCommand, boldtextCommand, italicCommand, bolditalicCommand, scriptCommand, frakturCommand, doubleCommand, sansCommand, monoCommand, wideCommand, smallcapsCommand, bubbleCommand, flipCommand, mirrorCommand } = require('./commands/fonts');
 const { ttpCommand, canvasCommand, topdfCommand, web2zipCommand, proxyCommand, obfuscateCommand, dnsCommand, headersCommand, servercheckCommand, ssphoneCommand, sstabCommand, sspcCommand, fantextCommand, fantext2Command } = require('./commands/gifted-tools');
+const { konachanCommand, kusonimeCommand, animenewCommand } = require('./commands/gifted-anime');
+const { friendshipCommand, lovetextCommand, heartbreakCommand, gratitudeCommand, thankyouCommand, newyearCommand, xmasCommand, halloweenCommand, valentinesCommand, mothersdayCommand, fathersdayCommand, bfdayCommand, gfdayCommand } = require('./commands/gifted-fun');
 const { loremCommand, fakenameCommand, genemailCommand, randomnumCommand, coinflipCommand, dicerollCommand } = require('./commands/generators');
 const economyCommand = require('./commands/economy');
 // Global settings
@@ -1291,6 +1293,71 @@ case userMessage.startsWith('.bssensi'):
             case userMessage.startsWith('.sudo'):
                 await sudoCommand(sock, chatId, message);
                 break;
+            case userMessage === '.friendship' || userMessage === '.friendquote':
+                await friendshipCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.lovetext' || userMessage === '.lovequote':
+                await lovetextCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.heartbreak':
+                await heartbreakCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.gratitude':
+                await gratitudeCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.thankyou' || userMessage === '.thanks':
+                await thankyouCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.newyear':
+                await newyearCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.christmas' || userMessage === '.xmas':
+                await xmasCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.halloween':
+                await halloweenCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.valentines' || userMessage === '.valentine':
+                await valentinesCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.mothersday' || userMessage === '.mday':
+                await mothersdayCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.fathersday' || userMessage === '.fday':
+                await fathersdayCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.bfday' || userMessage === '.boyfriendsday':
+                await bfdayCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.gfday' || userMessage === '.girlfriendsday':
+                await gfdayCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
             case userMessage === '.goodnight' || userMessage === '.lovenight' || userMessage === '.gn':
                 await goodnightCommand(sock, chatId, message);
                 break;
@@ -2234,6 +2301,21 @@ case userMessage.startsWith('.bssensi'):
 
             case userMessage === '.animequote':
                 await animequoteCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.konachan':
+                await konachanCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.kusonime'):
+                await kusonimeCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.animenew' || userMessage === '.animelates':
+                await animenewCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
 

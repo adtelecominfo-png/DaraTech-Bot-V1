@@ -1,11 +1,12 @@
 'use strict';
-const { get } = require('../lib/gifted');
+const { funGet } = require('../lib/gifted');
 
 async function goodnightCommand(sock, chatId, message) {
     try {
-        const data = await get('/fun/goodnight');
-        const text = data.result || data.message || data.text || '...';
-        await sock.sendMessage(chatId, { text: `🌙 *GOODNIGHT*\n\n${text}` }, { quoted: message });
+        const data = await funGet('goodnight');
+        const text = data?.result;
+        if (!text || typeof text !== 'string') throw new Error('Empty response');
+        await sock.sendMessage(chatId, { text: `🌙 *GOODNIGHT*\n\n${text}\n\n_Daratech_ ⚡` }, { quoted: message });
     } catch (e) {
         console.error('[goodnight]', e.message);
         await sock.sendMessage(chatId, { text: '❌ Failed to get goodnight message. Try again!' }, { quoted: message });

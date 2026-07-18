@@ -1,12 +1,20 @@
 'use strict';
-const { get } = require('../lib/gifted');
+const { funGet } = require('../lib/gifted');
 
 async function jokeCommand(sock, chatId, message) {
     try {
-        const data = await get('/fun/joke');
-        const joke = data?.result || data?.joke || '...';
+        const data = await funGet('jokes');
+        const r = data?.result;
+        let text;
+        if (r && typeof r === 'object' && r.setup) {
+            text = `${r.setup}\n\n${r.punchline}`;
+        } else if (typeof r === 'string') {
+            text = r;
+        } else {
+            throw new Error('Unexpected response');
+        }
         await sock.sendMessage(chatId, {
-            text: `😂 *JOKE OF THE DAY*\n\n${joke}\n\n_Daratech_ ⚡`,
+            text: `😂 *JOKE OF THE DAY*\n\n${text}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
     } catch (err) {
         console.error('[joke]', err.message);

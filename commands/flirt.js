@@ -1,10 +1,11 @@
 'use strict';
-const { get } = require('../lib/gifted');
+const { funGet } = require('../lib/gifted');
 
 async function flirtCommand(sock, chatId, message) {
     try {
-        const data = await get('/fun/pickupline');
-        const text = data?.result || '...';
+        const data = await funGet('flirt');
+        const text = data?.result;
+        if (!text || typeof text !== 'string') throw new Error('Empty response');
         await sock.sendMessage(chatId, {
             text: `💘 *FLIRT LINE*\n\n${text}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
