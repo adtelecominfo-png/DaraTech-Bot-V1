@@ -196,7 +196,7 @@ const unblockCommand = require('./commands/unblock');
 // ── New commands (GiftedTech API + HANS-MD integrations) ─────────────────────
 const apkCommand = require('./commands/apk');
 const gitcloneCommand = require('./commands/gitclone');
-const { ttstalkCommand, ghstalkCommand, igstalkCommand, twstalkCommand, steamstalkCommand } = require('./commands/stalk');
+const { ttstalkCommand, ghstalkCommand, igstalkCommand, twstalkCommand, wachannelCommand, ipstalkCommand, npmstalkCommand, steamstalkCommand } = require('./commands/stalk');
 const { sportsCommand, sportsTeamCommand, sportsPlayerCommand, standingsCommand } = require('./commands/sports');
 const { animeinfoCommand, trendingAnimeCommand, animeIndoCommand } = require('./commands/animeinfo');
 const tempmailCommand = require('./commands/tempmail');
@@ -1775,6 +1775,21 @@ case userMessage.startsWith('.bssensi'):
 
             case userMessage.startsWith('.steamstalk') || userMessage.startsWith('.steamprofile'):
                 await steamstalkCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.wachannel'):
+                await wachannelCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.ipstalk') || userMessage.startsWith('.iplookup'):
+                await ipstalkCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.npmstalk') || userMessage.startsWith('.npmlookup'):
+                await npmstalkCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
 
