@@ -198,6 +198,7 @@ const apkCommand = require('./commands/apk');
 const gitcloneCommand = require('./commands/gitclone');
 const { ttstalkCommand, ghstalkCommand, igstalkCommand, twstalkCommand, wachannelCommand, ipstalkCommand, npmstalkCommand, steamstalkCommand } = require('./commands/stalk');
 const { sportsCommand, sportsTeamCommand, sportsPlayerCommand, standingsCommand } = require('./commands/sports');
+const { flivescoreCommand, fnewsCommand, fleaguesCommand, fstreamCommand, fplayerCommand, fteamCommand, fvenueCommand, bliveCommand, eplStandCommand, eplMatchesCommand, eplUpcomingCommand, laligaStandCommand, laligaMatchCommand, laligaUpCommand, bundesStandCommand } = require('./commands/gifted-sports');
 const { animeinfoCommand, trendingAnimeCommand, animeIndoCommand } = require('./commands/animeinfo');
 const tempmailCommand = require('./commands/tempmail');
 const wallpaperCommand = require('./commands/wallpaper');
@@ -1966,8 +1967,84 @@ case userMessage.startsWith('.bssensi'):
                 commandExecuted = true;
                 break;
 
-            case userMessage === '.soccerstandings' || userMessage === '.soccerstandings':
+            case userMessage === '.soccerstandings':
                 await standingsCommand(sock, chatId, message, 'soccer');
+                commandExecuted = true;
+                break;
+
+            // ── Gifted Football / Basketball ──────────────────────────────────
+            case userMessage === '.flivescore' || userMessage === '.fls':
+                await flivescoreCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.fnews' || userMessage === '.footballnews':
+                await fnewsCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.fleagues':
+                await fleaguesCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.fstream' || userMessage === '.fstreaming':
+                await fstreamCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.fplayer'):
+                await fplayerCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.fteam'):
+                await fteamCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.fvenue'):
+                await fvenueCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.blive' || userMessage === '.bball' || userMessage === '.blive':
+                await bliveCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.eplstand' || userMessage === '.eplstandings':
+                await eplStandCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.eplmatches':
+                await eplMatchesCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.eplupcoming' || userMessage === '.eplfixtures':
+                await eplUpcomingCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.laligastand' || userMessage === '.laligastandings':
+                await laligaStandCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.laligamatches':
+                await laligaMatchCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.laligaupcoming' || userMessage === '.laligafixtures':
+                await laligaUpCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.bundesstand' || userMessage === '.bundesliga':
+                await bundesStandCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
 
