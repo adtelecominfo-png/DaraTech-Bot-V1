@@ -47,6 +47,7 @@ const CAT_WALLPAPER = {
     generators: 'dice random generator creative fun',
     bible:      'church cross spiritual sunset sky',
     converters: 'calculator math measurement science',
+    economy:    'gold coins treasure wealth fantasy rpg',
 };
 
 // ─── Fetch a random image for overview ───────────────────────────────────────
