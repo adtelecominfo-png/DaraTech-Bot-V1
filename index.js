@@ -361,7 +361,11 @@ async function startXeonBotInc() {
                 const ownerJid = XeonBotInc.user?.id
                     ? XeonBotInc.user.id.split(':')[0] + '@s.whatsapp.net'
                     : null;
-                if (ownerJid) seedEconomyOwner(ownerJid);
+                // Baileys exposes the LID (linked-device ID) via sock.user.lid
+                // e.g. "12374589370511:0@lid" — normalise it the same way we do the regular JID
+                const rawLid   = XeonBotInc.user?.lid || null;
+                const ownerLid = rawLid ? rawLid.replace(/:\d+(?=@)/, '') : null;
+                if (ownerJid) seedEconomyOwner(ownerJid, ownerLid);
             } catch (e) {
                 console.log(chalk.yellow('⚠ Economy seed failed:', e.message));
             }

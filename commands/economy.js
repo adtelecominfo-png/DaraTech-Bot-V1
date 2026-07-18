@@ -15,6 +15,8 @@ const OWNER_NUM = '2348152077346';
 
 // Runtime JID of the connected bot session — set by seedEconomyOwner on connect
 let connectorJid = null;
+// LID (@lid) alias of the connector — WhatsApp uses this in @mentions inside "message yourself"
+let connectorLid = null;
 
 // ─── Store catalogue ──────────────────────────────────────────────────────────
 const STORE = {
@@ -119,7 +121,12 @@ function ownerBoost(db, jid) {
 }
 
 // Strip device suffix e.g. 234815:5@s.whatsapp.net → 234815@s.whatsapp.net
-function normalizeJid(jid) { return jid ? jid.replace(/:\d+(?=@)/, '') : jid; }
+// Also map the connector's own LID back to connectorJid so all DB writes use one key
+function normalizeJid(jid) {
+    if (!jid) return jid;
+    if (connectorLid && jid === connectorLid) return connectorJid;
+    return jid.replace(/:\d+(?=@)/, '');
+}
 
 function senderJid(message) {
     // fromMe = sent from the connected bot/owner device — treat as connector
@@ -1084,12 +1091,25 @@ async function boostUserCommand(sock, chatId, message, q) {
 }
 
 // ─── Auto-seed owner/connector on startup ─────────────────────────────────────
-function seedEconomyOwner(ownerJid) {
+function seedEconomyOwner(ownerJid, ownerLid) {
     if (!ownerJid) return;
-    // Remember the live connector JID so isOwner() recognises it as owner
+    // Remember the live connector JID and its LID alias
     connectorJid = ownerJid;
+    if (ownerLid) connectorLid = ownerLid;
     try {
         const db = loadDB();
+
+        // Merge any stale @lid entries for the owner into the canonical ownerJid key
+        // (happens when WhatsApp provides the LID in @mentions before we stored connectorLid)
+        const lidKeys = Object.keys(db).filter(k => k.endsWith('@lid'));
+        for (const lid of lidKeys) {
+            const isOwnerLid = ownerLid && lid === ownerLid;
+            if (!isOwnerLid) continue;   // only merge the owner's own LID
+            const stale = db[lid];
+            if (!db[ownerJid]) db[ownerJid] = stale;
+            delete db[lid];
+            console.log(`[Economy] Merged stale LID entry ${lid} → ${ownerJid}`);
+        }
         // Build inventory: all non-consumable items + 5 of each consumable
         const allEquip    = Object.entries(STORE).filter(([, v]) => !v.consumable).map(([k]) => k);
         const consumables = Object.entries(STORE).filter(([, v]) =>  v.consumable).flatMap(([k]) => [k, k, k, k, k]);
