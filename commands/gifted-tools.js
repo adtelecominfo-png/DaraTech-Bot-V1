@@ -57,18 +57,45 @@ async function ttpCommand(sock, chatId, message) {
 }
 
 /** .canvas <title> — Spotify-style canvas card image */
+const CANVAS_TYPES = [
+    'spotify', 'youtube', 'google', 'tiktok', 'duckduckgo', 'brave',
+    'applemusic', 'soundcloud', 'pinterest', 'playstore', 'happymod',
+    'apkpure', 'unsplash', 'wallpaper', 'wattpad', 'weather',
+    'sticker', 'lyrics', 'shazam', 'web', 'image',
+];
+
 async function canvasCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '🎵 Usage: .canvas <song title>\nExample: .canvas Blinding Lights - The Weeknd',
+        text: `🎨 *CANVAS CARD*\n\n` +
+              `Usage: *.canvas <type> <title>*\n` +
+              `Example: *.canvas spotify Blinding Lights - The Weeknd*\n` +
+              `Example: *.canvas youtube Lo-fi Hip Hop Mix*\n\n` +
+              `*Available types:*\n${CANVAS_TYPES.join(', ')}`,
     }, { quoted: message });
+
+    const parts = q.split(' ');
+    const firstWord = parts[0].toLowerCase();
+    let type, title;
+    if (CANVAS_TYPES.includes(firstWord)) {
+        type  = firstWord;
+        title = parts.slice(1).join(' ');
+    } else {
+        type  = 'spotify';
+        title = q;
+    }
+
+    if (!title) return sock.sendMessage(chatId, {
+        text: `❌ Please provide a title after the type.\nExample: *.canvas ${type} Your Title Here*`,
+    }, { quoted: message });
+
     await react(sock, message, '⏳');
     try {
-        const buf = await toolsBuf('canvas', { title: q, type: 'spotify', text: 'Now Playing', watermark: 'Daratech' });
+        const buf = await toolsBuf('canvas', { title, type, text: 'Now Playing', watermark: 'Daratech' });
         if (buf.length < 200) throw new Error('Canvas generation failed');
         await sock.sendMessage(chatId, {
             image: buf,
-            caption: `🎵 *CANVAS CARD*\n${q}\n\n_Daratech_ ⚡`,
+            caption: `🎨 *CANVAS CARD* [${type.toUpperCase()}]\n${title}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
         await react(sock, message, '✅');
     } catch (err) {
