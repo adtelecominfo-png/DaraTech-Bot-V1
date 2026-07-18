@@ -141,7 +141,11 @@ async function sendOverview(sock, chatId, message) {
 
     for (const cat of CATEGORIES) {
         if (!cat.cmds.length) continue;
-        lines.push(`${cat.emoji} *.menu ${cat.slug.padEnd(10)}* — ${cat.cmds.length} cmds`);
+        // If a category has alt slugs, show them alongside the primary slug
+        const slugLabel = cat.altSlugs?.length
+            ? `${cat.slug} / ${cat.altSlugs.join(' / ')}`
+            : cat.slug;
+        lines.push(`${cat.emoji} *.menu ${slugLabel.padEnd(16)}* — ${cat.cmds.length} cmds`);
     }
 
     lines.push(``, `─`.repeat(34));
@@ -228,6 +232,12 @@ async function sendCategoryMenu(sock, chatId, message, input) {
     const visibleCmds = ownerSee ? cat.cmds : cat.cmds.filter(c => !c.includes('(owner)'));
     const rows = visibleCmds.map(c => `│ ${c.startsWith('.') ? c : '.' + c}`).join('\n');
 
+    // Build alt-slug hint so users know every valid keyword for this category
+    const allSlugs = [cat.slug, ...(cat.altSlugs || [])];
+    const slugHint = allSlugs.length > 1
+        ? `\n💡 Also: ${cat.altSlugs.map(s => `*.menu ${s}*`).join('  ')} → same category`
+        : '';
+
     const text = [
         `╭──${cat.emoji} *${cat.title}*`,
         rows,
@@ -235,8 +245,9 @@ async function sendCategoryMenu(sock, chatId, message, input) {
         ``,
         `📖 *.help ${cat.slug}* — full descriptions`,
         `🏠 *.menu* — back to categories`,
+        slugHint,
         `\n_Daratech_ ⚡`,
-    ].join('\n');
+    ].filter(l => l !== '').join('\n');
 
     // Fetch category-themed image in parallel with building text
     const imageUrl = await fetchCategoryImage(cat.slug);
