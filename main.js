@@ -2114,7 +2114,7 @@ case userMessage.startsWith('.bssensi'):
                  userMessage.startsWith('.withdraw') || userMessage.startsWith('.with') ||
                  userMessage.startsWith('.gamble') || userMessage.startsWith('.bet') ||
                  userMessage.startsWith('.slots') || userMessage.startsWith('.slot') ||
-                 (userMessage.startsWith('.coinflip') || userMessage.startsWith('.cf')) && userMessage.split(' ').length > 2 ||
+                 (userMessage.startsWith('.coinflip') && userMessage !== '.coinflip') || userMessage.startsWith('.cf') ||
                  userMessage.startsWith('.store') || userMessage.startsWith('.shop') ||
                  userMessage.startsWith('.buy') ||
                  userMessage.startsWith('.sell') || userMessage.startsWith('.sellitem') ||
