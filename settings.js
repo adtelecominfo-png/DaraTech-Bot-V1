@@ -1,7 +1,4 @@
 const settings = {
-  // GiftedTech API — primary API for downloads, tools, search
-  giftedApiKey: 'gifted-api_p1r5icplshukpe2x',
-  giftedApiBase: 'https://api.giftedtech.co.ke/api',
   packname: 'Daratech',
   botName: "Daratech",
   botOwner: 'Daratech', // Your name
