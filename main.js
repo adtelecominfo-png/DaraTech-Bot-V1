@@ -208,6 +208,13 @@ const { catfactCommand, catimageCommand, dogfactCommand, dogimageCommand, foxIma
 const { randomRecipeCommand, searchRecipeCommand, cocktailCommand } = require('./commands/recipe');
 const { apodCommand, issLocationCommand, spacefactCommand } = require('./commands/nasa');
 const { reverseCommand, morseCommand, unmorseCommand, binaryCommand, unbinaryCommand, base64Command, unbase64Command, passwordCommand, uuidCommand } = require('./commands/texttools');
+const {
+    everyoneCommand, leavegcCommand, joinCommand, inviteCommand,
+    getnameCommand, getdeskgcCommand, getppgcCommand, setppgcCommand,
+    svcontactCommand, opengroupCommand, closegroupCommand, linkgcCommand,
+    creategcCommand, promoteallCommand, demoteallCommand, kickallCommand,
+    removeByCountryCommand
+} = require('./commands/group');
 const { numfactCommand, datefactCommand, yearfactCommand, mathfactCommand } = require('./commands/numfact');
 const { dadjoke, chuckCommand, programmingJokeCommand, yomammaCommand, darkJokeCommand } = require('./commands/funjokes');
 const { riddleCommand, riddleAnswerCommand } = require('./commands/riddle');
@@ -533,6 +540,11 @@ case userMessage.startsWith('.gpp'):
     commandExecuted = true;
     break;
 
+case userMessage === '.leavegc':
+    await leavegcCommand(sock, chatId, message);
+    commandExecuted = true;
+    break;
+
 case userMessage.startsWith('.leave') && !userMessage.startsWith('.leaves'):
     await leaveCommand(sock, chatId, message);
     commandExecuted = true;
@@ -588,6 +600,10 @@ case userMessage.startsWith('.bssensi'):
                 commandExecuted = true;
                 break;
             }
+            case userMessage === '.kickall':
+                await kickallCommand(sock, chatId, senderId, message);
+                commandExecuted = true;
+                break;
             case userMessage.startsWith('.kick'):
                 const mentionedJidListKick = message.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 await kickCommand(sock, chatId, senderId, mentionedJidListKick, message);
@@ -874,9 +890,17 @@ case userMessage.startsWith('.bssensi'):
             case userMessage === '.clear':
                 if (isGroup) await clearCommand(sock, chatId);
                 break;
+            case userMessage === '.promoteall':
+                await promoteallCommand(sock, chatId, senderId, message);
+                commandExecuted = true;
+                break;
             case userMessage.startsWith('.promote'):
                 const mentionedJidListPromote = message.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 await promoteCommand(sock, chatId, mentionedJidListPromote, message);
+                break;
+            case userMessage === '.demoteall':
+                await demoteallCommand(sock, chatId, senderId, message);
+                commandExecuted = true;
                 break;
             case userMessage.startsWith('.demote'):
                 const mentionedJidListDemote = message.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -1474,6 +1498,72 @@ case userMessage.startsWith('.bssensi'):
 
             case userMessage.startsWith('.autoupdate'):
                 await autoUpdateCommand(sock, chatId, message, userMessage);
+                commandExecuted = true;
+                break;
+
+            // ── Group management commands ────────────────────────────────
+            case userMessage === '.everyone' || userMessage.startsWith('.everyone '):
+                await everyoneCommand(sock, chatId, senderId, userMessage, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.join ') || userMessage === '.join':
+                await joinCommand(sock, chatId, senderId, userMessage, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.invite' || userMessage.startsWith('.invite '):
+                await inviteCommand(sock, chatId, senderId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.getname':
+                await getnameCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.getdeskgc':
+                await getdeskgcCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.getppgc':
+                await getppgcCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.setppgc':
+                await setppgcCommand(sock, chatId, senderId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.svcontact':
+                await svcontactCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.opengroup':
+                await opengroupCommand(sock, chatId, senderId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.closegroup':
+                await closegroupCommand(sock, chatId, senderId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.linkgc':
+                await linkgcCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.creategc'):
+                await creategcCommand(sock, chatId, senderId, userMessage, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.remove') && !userMessage.startsWith('.removebg') && !userMessage.startsWith('.rmbg') && !userMessage.startsWith('.nobg'):
+                await removeByCountryCommand(sock, chatId, senderId, userMessage, message);
                 commandExecuted = true;
                 break;
 
