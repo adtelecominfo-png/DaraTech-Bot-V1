@@ -11,7 +11,6 @@
  * - GitHub: daratech
  */
 require('./settings')
-require('./lib/runflixPatch') // Runflix transport patch (Referer/Origin + key rotation)
 const { Boom } = require('@hapi/boom')
 const fs = require('fs')
 const chalk = require('chalk')

@@ -1,6 +1,4 @@
 
-// Runflix transport patch (Referer/Origin + key rotation)
-require('./lib/runflixPatch');
 // 🧹 Fix for ENOSPC / temp overflow in hosted panels
 const fs = require('fs');
 const path = require('path');
@@ -149,7 +147,6 @@ const { anticallCommand, readState: readAnticallState } = require('./commands/an
 const { pmblockerCommand, readState: readPmBlockerState } = require('./commands/pmblocker');
 const settingsCommand = require('./commands/settings');
 const soraCommand = require('./commands/sora');
-const { tryRunflixCommand } = require('./lib/runflixDispatch');
 const movieCommand = require('./commands/movie');
 const { mangaCommand } = require('./commands/manga');
 // Add these lines with the other command imports (find a spot near other requires)
@@ -2140,10 +2137,6 @@ case userMessage.startsWith('.bssensi'):
                 break;
 
             default:
-                if (userMessage.startsWith('.') && await tryRunflixCommand(sock, chatId, message, userMessage)) {
-                    commandExecuted = true;
-                    break;
-                }
                 // Unknown dot-command — react ❌ so the user knows it's not valid
                 if (userMessage.startsWith('.')) {
                     try {
