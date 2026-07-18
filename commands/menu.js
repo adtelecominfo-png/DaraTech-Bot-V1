@@ -147,7 +147,7 @@ async function sendOverview(sock, chatId, message) {
         const slugLabel = cat.altSlugs?.length
             ? `${cat.slug} / ${cat.altSlugs.join(' / ')}`
             : cat.slug;
-        lines.push(`${cat.emoji} *.menu ${slugLabel.padEnd(16)}* — ${cmdCount} cmds`);
+        lines.push(`${cat.emoji} *.menu ${slugLabel}* — ${cmdCount} cmds`);
     }
 
     lines.push(``, `─`.repeat(34));
