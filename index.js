@@ -447,7 +447,7 @@ async function startXeonBotInc() {
                             `╰──────────────────────────────────`,
                             ``,
                             `╭──⚡ *QUICK START*`,
-                            `│ *.menu* → see all 320+ commands`,
+                            `│ *.menu* → see all 350+ commands`,
                             `│ *.help* → commands with descriptions`,
                             `│ *.update* → check for updates`,
                             `│ *.owner* → contact bot owner`,
