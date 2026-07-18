@@ -220,6 +220,7 @@ const { dadjoke, chuckCommand, programmingJokeCommand, yomammaCommand, darkJokeC
 const { riddleCommand, riddleAnswerCommand } = require('./commands/riddle');
 const { adviceCommand, wouldyouCommand, yesnoCommand, neverhaveieverCommand } = require('./commands/advice');
 const { bibleCommand, dailyVerseCommand } = require('./commands/bible');
+const { quranCommand, dailyAyahCommand }  = require('./commands/quran');
 const { poemCommand, animequoteCommand, kanyeCommand } = require('./commands/poetry');
 const { bmiCommand, ageCommand, celsiusCommand, fahrenheitCommand, kmtomilesCommand, milestokmCommand, kgtolbsCommand, lbstokg } = require('./commands/converter');
 const { fancyCommand, boldtextCommand, italicCommand, bolditalicCommand, scriptCommand, frakturCommand, doubleCommand, sansCommand, monoCommand, wideCommand, smallcapsCommand, bubbleCommand, flipCommand, mirrorCommand } = require('./commands/fonts');
@@ -2018,6 +2019,16 @@ case userMessage.startsWith('.bssensi'):
             // ── Bible ─────────────────────────────────────────────────────
             case userMessage.startsWith('.bible'):
                 await bibleCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.quran'):
+                await quranCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '.dailyayah':
+                await dailyAyahCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
 

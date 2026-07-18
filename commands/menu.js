@@ -46,7 +46,8 @@ const CAT_WALLPAPER = {
     texttools:  'code programming terminal hacker',
     fonts:      'typography font design letters art',
     generators: 'dice random generator creative fun',
-    bible:      'church cross spiritual sunset sky',
+    bible:      'church cross spiritual sunset sky holy book',
+    quran:      'mosque islamic architecture crescent moon',
     converters: 'calculator math measurement science',
     economy:    'gold coins treasure wealth fantasy rpg',
 };
