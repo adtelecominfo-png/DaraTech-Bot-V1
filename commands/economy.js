@@ -119,6 +119,8 @@ function ownerBoost(db, jid) {
 }
 
 function senderJid(message) {
+    // fromMe = sent from the connected bot/owner device — treat as connector
+    if (message.key?.fromMe && connectorJid) return connectorJid;
     return message.key?.participant || message.key?.remoteJid || '';
 }
 function numFromJid(jid) { return jid.replace(/:[^@]*/, '').split('@')[0]; }
