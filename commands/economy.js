@@ -1038,7 +1038,7 @@ async function boostUserCommand(sock, chatId, message, q) {
         const row = (icon, label, oldVal, newVal, active) => {
             const cur = active ? lerp(oldVal, newVal, pct) : newVal;
             const bar = active ? fill(pct) : '▓'.repeat(10);
-            const v   = (done && active) ? `*${cur}*` : `${cur}`;
+            const v   = (done && active) ? `*${fmt(cur)}*` : fmt(cur);
             return `${icon} ${label.padEnd(4)} │${bar}│ ${v}`;
         };
         const hdr = done
