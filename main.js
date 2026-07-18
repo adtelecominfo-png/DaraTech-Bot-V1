@@ -237,6 +237,9 @@ const { fancyCommand, boldtextCommand, italicCommand, bolditalicCommand, scriptC
 const { ttpCommand, canvasCommand, topdfCommand, web2zipCommand, proxyCommand, obfuscateCommand, dnsCommand, headersCommand, servercheckCommand, ssphoneCommand, sstabCommand, sspcCommand, fantextCommand, fantext2Command } = require('./commands/gifted-tools');
 const { konachanCommand, kusonimeCommand, animenewCommand } = require('./commands/gifted-anime');
 const { friendshipCommand, lovetextCommand, heartbreakCommand, gratitudeCommand, thankyouCommand, newyearCommand, xmasCommand, halloweenCommand, valentinesCommand, mothersdayCommand, fathersdayCommand, bfdayCommand, gfdayCommand } = require('./commands/gifted-fun');
+const { gsearchCommand, gimageCommand, ttsearchCommand, chordCommand, hearthisCommand, npmpkgCommand, slyricsCommand, happymodCommand, scsearchCommand, wattpadCommand, stickersearchCommand } = require('./commands/gifted-search');
+const { textproCommand } = require('./commands/gifted-textpro');
+const { tempphoneCommand, smsinboxCommand } = require('./commands/gifted-tempgen');
 const { loremCommand, fakenameCommand, genemailCommand, randomnumCommand, coinflipCommand, dicerollCommand } = require('./commands/generators');
 const economyCommand = require('./commands/economy');
 // Global settings
@@ -2321,6 +2324,79 @@ case userMessage.startsWith('.bssensi'):
 
             case userMessage === '.kanye' || userMessage === '.kanyequote':
                 await kanyeCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            // ── Gifted Search ─────────────────────────────────────────────
+            case userMessage.startsWith('.gsearch'):
+                await gsearchCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.gimage'):
+                await gimageCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.ttsearch'):
+                await ttsearchCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.chord'):
+                await chordCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.hearthis'):
+                await hearthisCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.npmpkg'):
+                await npmpkgCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.slyrics'):
+                await slyricsCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.happymod'):
+                await happymodCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.scsearch'):
+                await scsearchCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.wattpad'):
+                await wattpadCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.stickersearch') || userMessage.startsWith('.sticksearch'):
+                await stickersearchCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            // ── Gifted Textpro ────────────────────────────────────────────
+            case userMessage.startsWith('.textpro'):
+                await textproCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            // ── Gifted Tempgen (Phone) ────────────────────────────────────
+            case userMessage === '.tempphone' || userMessage.startsWith('.tempphone '):
+                await tempphoneCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.smsinbox'):
+                await smsinboxCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
 
