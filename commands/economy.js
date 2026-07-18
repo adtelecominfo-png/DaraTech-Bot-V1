@@ -159,6 +159,11 @@ function getStats(u) {
         luck += Math.floor((s.luck || 0) * (1 + upLv * 0.1));
     };
     ['weapon', 'armor', 'accessory'].forEach(apply);
+    // Apply any direct stat bonuses set by .boostuser
+    const b = u.statBonus || {};
+    atk  += b.atk  || 0;
+    def  += b.def  || 0;
+    luck += b.luck || 0;
     maxHp += def * 2;
     return { atk, def, luck, maxHp };
 }
@@ -977,24 +982,42 @@ async function resetUserCommand(sock, chatId, message) {
     await sock.sendMessage(chatId, { text: `✅ Economy data reset for ${mention(mentioned)}`, mentions: [mentioned] }, { quoted: message });
 }
 
-async function boostUserCommand(sock, chatId, message) {
+async function boostUserCommand(sock, chatId, message, q) {
     const uid = senderJid(message);
     if (!isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Owner only!` }, { quoted: message });
     const db        = loadDB();
     const mentioned = resolveTarget(message);
-    if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Usage: *.boostuser @user* or reply to a message` }, { quoted: message });
+    if (!mentioned) return sock.sendMessage(chatId, {
+        text: `❌ Usage:\n*.boost @user* — full boost\n*.boost @user atk 500* — boost ATK only\n*.boost @user atk 300 def 100 luck 25* — pick any combo`,
+    }, { quoted: message });
 
-    const u       = getUser(db, mentioned);
-    const oldSt   = getStats(u);
+    // ── parse optional stat args: atk N  def N  luck N ────────────────────────
+    const raw    = (q || '').toLowerCase();
+    const grab   = stat => { const m = raw.match(new RegExp(`\\b${stat}\\s+(\\d+)`)); return m ? parseInt(m[1]) : null; };
+    const parsed = { atk: grab('atk'), def: grab('def'), luck: grab('luck') };
+    const partial = Object.values(parsed).some(v => v !== null); // any stat specified?
 
-    // Apply boost
-    u.upgrades = u.upgrades || {};
-    Object.keys(STORE).filter(k => !STORE[k].consumable).forEach(k => {
-        u.upgrades[k] = MAX_UPGRADE;
-    });
-    u.wallet = 1e84;
-    u.bank   = 1e84;
-    u.xp     = 1e84;
+    const u     = getUser(db, mentioned);
+    const oldSt = getStats(u);
+
+    // ── apply boost ───────────────────────────────────────────────────────────
+    if (partial) {
+        // Set only the requested stats via statBonus
+        u.statBonus = u.statBonus || {};
+        if (parsed.atk  !== null) u.statBonus.atk  = parsed.atk;
+        if (parsed.def  !== null) u.statBonus.def  = parsed.def;
+        if (parsed.luck !== null) u.statBonus.luck = parsed.luck;
+    } else {
+        // Full boost: max all upgrades + wallet/xp
+        u.upgrades = u.upgrades || {};
+        Object.keys(STORE).filter(k => !STORE[k].consumable).forEach(k => {
+            u.upgrades[k] = MAX_UPGRADE;
+        });
+        u.wallet    = 1e84;
+        u.bank      = 1e84;
+        u.xp        = 1e84;
+        u.statBonus = {};            // clear any previous manual bonuses
+    }
     saveDB(db);
     const newSt = getStats(u);
 
@@ -1003,23 +1026,36 @@ async function boostUserCommand(sock, chatId, message) {
     const fill   = (pct, len = 10) => '▓'.repeat(Math.round(pct * len)) + '░'.repeat(len - Math.round(pct * len));
     const lerp   = (a, b, t)       => Math.round(a + (b - a) * t);
 
+    // Which rows are actually changing?
+    const changing = {
+        atk:  oldSt.atk   !== newSt.atk,
+        def:  oldSt.def   !== newSt.def,
+        luck: oldSt.luck  !== newSt.luck,
+        hp:   oldSt.maxHp !== newSt.maxHp,
+    };
+
     const buildFrame = (pct, done = false) => {
-        const atk  = lerp(oldSt.atk,   newSt.atk,   pct);
-        const def  = lerp(oldSt.def,   newSt.def,   pct);
-        const luck = lerp(oldSt.luck,  newSt.luck,  pct);
-        const hp   = lerp(oldSt.maxHp, newSt.maxHp, pct);
-        const bar  = fill(pct);
-        const hdr  = done
+        const row = (icon, label, oldVal, newVal, active) => {
+            const cur = active ? lerp(oldVal, newVal, pct) : newVal;
+            const bar = active ? fill(pct) : '▓'.repeat(10);
+            const v   = (done && active) ? `*${cur}*` : `${cur}`;
+            return `${icon} ${label.padEnd(4)} │${bar}│ ${v}`;
+        };
+        const hdr = done
             ? `🌟 *BOOST COMPLETE!* ${mention(mentioned)}\n`
             : `⚡ *BOOSTING* ${mention(mentioned)}...\n`;
-        const val  = (n, bold) => bold ? `*${n}*` : `${n}`;
+        const footer = done
+            ? (partial
+                ? `\n_Stat bonus applied — use .profile to check_`
+                : `\n_All gear at +${MAX_UPGRADE} — use .equip to switch loadout_`)
+            : '';
         return (
             hdr + `\n` +
-            `⚔️  ATK  │${bar}│ ${val(atk,  done)}\n` +
-            `🛡️  DEF  │${bar}│ ${val(def,  done)}\n` +
-            `🍀  Luck │${bar}│ ${val(luck, done)}\n` +
-            `❤️  HP   │${bar}│ ${val(hp,   done)}\n` +
-            (done ? `\n_All gear at +${MAX_UPGRADE} — use .equip to switch loadout_` : '')
+            row('⚔️', 'ATK',  oldSt.atk,   newSt.atk,   changing.atk)  + '\n' +
+            row('🛡️', 'DEF',  oldSt.def,   newSt.def,   changing.def)  + '\n' +
+            row('🍀', 'Luck', oldSt.luck,  newSt.luck,  changing.luck) + '\n' +
+            row('❤️', 'HP',   oldSt.maxHp, newSt.maxHp, changing.hp)   +
+            footer
         );
     };
 
@@ -1029,12 +1065,11 @@ async function boostUserCommand(sock, chatId, message) {
         { quoted: message }
     );
 
-    const frames = [0.25, 0.5, 0.75, 1];
-    for (let i = 0; i < frames.length; i++) {
+    const steps = [0.25, 0.5, 0.75, 1];
+    for (let i = 0; i < steps.length; i++) {
         await sleep(650);
-        const done = i === frames.length - 1;
         await sock.sendMessage(chatId,
-            { text: buildFrame(frames[i], done), edit: sent.key, mentions: [mentioned] }
+            { text: buildFrame(steps[i], i === steps.length - 1), edit: sent.key, mentions: [mentioned] }
         );
     }
 }
@@ -1128,7 +1163,7 @@ async function economyCommand(sock, chatId, message, userMessage) {
         case 'addcoins':                                 return addCoinsCommand(sock, chatId, message, q);
         case 'removecoins': case 'deductcoins':          return removeCoinsCommand(sock, chatId, message, q);
         case 'resetuser':                                return resetUserCommand(sock, chatId, message);
-        case 'boostuser': case 'boost':                  return boostUserCommand(sock, chatId, message);
+        case 'boostuser': case 'boost':                  return boostUserCommand(sock, chatId, message, q);
         default:
             await sock.sendMessage(chatId, { text: `❌ Unknown economy command. Use *.menu economy* to see all.` }, { quoted: message });
     }
