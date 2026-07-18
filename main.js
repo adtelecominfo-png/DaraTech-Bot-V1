@@ -679,7 +679,7 @@ case userMessage.startsWith('.bssensi'):
                 const mentionedJidListWarn = message.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 await warnCommand(sock, chatId, senderId, mentionedJidListWarn, message);
                 break;
-            case userMessage.startsWith('.tts') && !userMessage.startsWith('.ttstalk') && !userMessage.startsWith('.tiktokstalk'):
+            case userMessage.startsWith('.tts') && !userMessage.startsWith('.ttstalk') && !userMessage.startsWith('.tiktokstalk') && !userMessage.startsWith('.ttsearch'):
                 const text = userMessage.slice(4).trim();
                 await ttsCommand(sock, chatId, text, message);
                 break;
@@ -1410,7 +1410,7 @@ case userMessage.startsWith('.bssensi'):
                 await autoreadCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
-            case userMessage.startsWith('.heart'):
+            case userMessage.startsWith('.heart') && !userMessage.startsWith('.hearthis'):
                 await handleHeart(sock, chatId, message);
                 break;
             case userMessage.startsWith('.horny'):
