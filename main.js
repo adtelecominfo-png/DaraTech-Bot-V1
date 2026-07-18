@@ -125,6 +125,11 @@ const { playCommand, play2Command, playDocCommand, playChCommand } = require('./
 const tiktokCommand = require('./commands/tiktok');
 const songCommand = require('./commands/song');
 const aiCommand = require('./commands/ai');
+const {
+    letmegptCommand, unlimitedAiCommand, claudeCommand, deepseekCommand,
+    muslimAiCommand, transcriptCommand, giftFluxCommand, giftTxt2ImgCommand,
+    magicStudioCommand,
+} = require('./commands/gifted-ai');
 const urlCommand = require('./commands/url');
 const { handleTranslateCommand } = require('./commands/translate');
 const { handleSsCommand } = require('./commands/ss');
@@ -1208,6 +1213,46 @@ case userMessage.startsWith('.bssensi'):
                  !userMessage.startsWith('.tiktokstalk'):
                 await tiktokCommand(sock, chatId, message);
                 break;
+            // ── GiftedTech AI text commands ──────────────────────────────────
+            case userMessage === '.letmegpt' || userMessage.startsWith('.letmegpt '):
+                await letmegptCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.unlimitedai' || userMessage.startsWith('.unlimitedai '):
+                await unlimitedAiCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.claude' || userMessage.startsWith('.claude '):
+                await claudeCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.deepseek' || userMessage.startsWith('.deepseek '):
+                await deepseekCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.muslimai' || userMessage.startsWith('.muslimai '):
+                await muslimAiCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            // ── GiftedTech AI image generation ───────────────────────────────
+            case userMessage === '.giftflux' || userMessage.startsWith('.giftflux '):
+                await giftFluxCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.gifttxt2img' || userMessage.startsWith('.gifttxt2img '):
+                await giftTxt2ImgCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.magicstudio' || userMessage.startsWith('.magicstudio '):
+                await magicStudioCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            // ── GiftedTech utility ────────────────────────────────────────────
+            case userMessage === '.transcript' || userMessage.startsWith('.transcript '):
+                await transcriptCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            // ── Pollinations AI (existing) ────────────────────────────────────
             case userMessage.startsWith('.ai ') || userMessage === '.ai' ||
                  userMessage.startsWith('.ask ') || userMessage === '.ask' ||
                  userMessage.startsWith('.gpt') || userMessage.startsWith('.gemini') ||
