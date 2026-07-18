@@ -159,11 +159,11 @@ function getStats(u) {
         luck += Math.floor((s.luck || 0) * (1 + upLv * 0.1));
     };
     ['weapon', 'armor', 'accessory'].forEach(apply);
-    // Apply any direct stat bonuses set by .boostuser
+    // statBonus (set by .boostuser) overrides the final stat when present
     const b = u.statBonus || {};
-    atk  += b.atk  || 0;
-    def  += b.def  || 0;
-    luck += b.luck || 0;
+    if (b.atk  !== undefined) atk  = b.atk;
+    if (b.def  !== undefined) def  = b.def;
+    if (b.luck !== undefined) luck = b.luck;
     maxHp += def * 2;
     return { atk, def, luck, maxHp };
 }
