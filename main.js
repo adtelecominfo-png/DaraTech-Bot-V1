@@ -223,7 +223,6 @@ const { loremCommand, fakenameCommand, genemailCommand, randomnumCommand, coinfl
 const economyCommand = require('./commands/economy');
 // Global settings
 global.packname = settings.packname;
-global.author = settings.author;
 global.ytch = "Daratech";
 
 // channelInfo is kept as empty object — spreading it is a no-op (no newsletter)
