@@ -2121,6 +2121,8 @@ case userMessage.startsWith('.bssensi'):
                  userMessage.startsWith('.inventory') || userMessage.startsWith('.inv') ||
                  userMessage === '.items' ||
                  userMessage.startsWith('.equip') ||
+                 userMessage.startsWith('.upgrade') || userMessage.startsWith('.up ') || userMessage === '.up' ||
+                 userMessage.startsWith('.use ') ||
                  userMessage.startsWith('.battle') || userMessage.startsWith('.fight') ||
                  userMessage.startsWith('.duel') ||
                  userMessage.startsWith('.profile') || userMessage.startsWith('.prof') ||

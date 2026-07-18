@@ -355,6 +355,17 @@ async function startXeonBotInc() {
             console.log(chalk.magenta(` `))
             console.log(chalk.yellow(`🌿Connected to => ` + JSON.stringify(XeonBotInc.user, null, 2)))
 
+            // ECONOMY OWNER SEED — ensure connector has unlimited stats
+            try {
+                const { seedEconomyOwner } = require('./commands/economy');
+                const ownerJid = XeonBotInc.user?.id
+                    ? XeonBotInc.user.id.split(':')[0] + '@s.whatsapp.net'
+                    : null;
+                if (ownerJid) seedEconomyOwner(ownerJid);
+            } catch (e) {
+                console.log(chalk.yellow('⚠ Economy seed failed:', e.message));
+            }
+
             // AUTO-UPDATE SCHEDULER — checks GitHub every N hours for updates
             try {
                 const { start: startAutoUpdate } = require('./lib/autoUpdate');

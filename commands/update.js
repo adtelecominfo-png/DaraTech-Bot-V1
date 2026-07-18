@@ -58,11 +58,13 @@ async function detectBranch() {
 // back afterwards so they survive even a hard container reset.
 
 function snapshotEnvAndSession() {
-    const snap = { env: null, creds: null };
+    const snap = { env: null, creds: null, economy: null };
     const envPath   = path.join(process.cwd(), '.env');
     const credsPath = path.join(process.cwd(), 'session', 'creds.json');
-    try { if (fs.existsSync(envPath))   snap.env   = fs.readFileSync(envPath,   'utf8'); } catch {}
-    try { if (fs.existsSync(credsPath)) snap.creds = fs.readFileSync(credsPath, 'utf8'); } catch {}
+    const econPath  = path.join(process.cwd(), 'data', 'economy.json');
+    try { if (fs.existsSync(envPath))   snap.env     = fs.readFileSync(envPath,   'utf8'); } catch {}
+    try { if (fs.existsSync(credsPath)) snap.creds   = fs.readFileSync(credsPath, 'utf8'); } catch {}
+    try { if (fs.existsSync(econPath))  snap.economy = fs.readFileSync(econPath,  'utf8'); } catch {}
     return snap;
 }
 
@@ -70,6 +72,8 @@ function restoreEnvAndSession(snap) {
     const envPath    = path.join(process.cwd(), '.env');
     const sessionDir = path.join(process.cwd(), 'session');
     const credsPath  = path.join(sessionDir, 'creds.json');
+    const dataDir    = path.join(process.cwd(), 'data');
+    const econPath   = path.join(dataDir, 'economy.json');
 
     try {
         if (snap.env !== null) {
@@ -88,6 +92,16 @@ function restoreEnvAndSession(snap) {
         }
     } catch (e) {
         console.error('[update] Failed to restore session/creds.json:', e.message);
+    }
+
+    try {
+        if (snap.economy !== null) {
+            if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+            fs.writeFileSync(econPath, snap.economy, 'utf8');
+            console.log('[update] data/economy.json restored ✅');
+        }
+    } catch (e) {
+        console.error('[update] Failed to restore economy.json:', e.message);
     }
 }
 
