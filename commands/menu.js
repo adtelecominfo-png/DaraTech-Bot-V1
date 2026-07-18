@@ -160,6 +160,57 @@ async function sendOverview(sock, chatId, message) {
     await sendWithImage(sock, chatId, message, text, imageUrl);
 }
 
+// ─── Search across all categories ────────────────────────────────────────────
+
+async function sendSearchMenu(sock, chatId, message, query) {
+    if (!query) return sock.sendMessage(chatId, {
+        text: `❌ Usage: *.menu search <command>*\nExample: *.menu search .battle*`
+    }, { quoted: message });
+
+    const q = query.toLowerCase().replace(/^\./, '');
+    const results = [];
+
+    for (const cat of CATEGORIES) {
+        const matches = cat.cmds.filter(c => c.toLowerCase().replace(/^\./, '').includes(q));
+        if (matches.length) {
+            results.push(`${cat.emoji} *${cat.title}*`);
+            matches.forEach(m => results.push(`  │ ${m.startsWith('.') ? m : '.' + m}`));
+        }
+    }
+
+    const text = results.length
+        ? `🔍 *Search results for "${query}":*\n\n${results.join('\n')}\n\n_Use *.menu details ${query}* for usage info_`
+        : `❌ No commands found matching *"${query}"*\n\nTry *.menu* to browse categories.`;
+
+    await sock.sendMessage(chatId, { text }, { quoted: message });
+}
+
+// ─── Details for a specific command ──────────────────────────────────────────
+
+async function sendDetailsMenu(sock, chatId, message, query) {
+    if (!query) return sock.sendMessage(chatId, {
+        text: `❌ Usage: *.menu details <command>*\nExample: *.menu details .battle*`
+    }, { quoted: message });
+
+    const q = query.toLowerCase().replace(/^\./, '');
+    const results = [];
+
+    for (const cat of CATEGORIES) {
+        const matches = cat.help.filter(line => line.toLowerCase().replace(/^\./, '').includes(q));
+        if (matches.length) {
+            results.push(`${cat.emoji} *${cat.title}*`);
+            matches.forEach(l => results.push(`  ${l}`));
+            results.push('');
+        }
+    }
+
+    const text = results.length
+        ? `📋 *Details for "${query}":*\n\n${results.join('\n').trimEnd()}`
+        : `❌ No details found for *"${query}"*\n\nTry *.menu search ${query}* to locate it first.`;
+
+    await sock.sendMessage(chatId, { text }, { quoted: message });
+}
+
 // ─── Category detail (args = slug) ────────────────────────────────────────────
 
 async function sendCategoryMenu(sock, chatId, message, input) {
@@ -195,7 +246,14 @@ async function sendCategoryMenu(sock, chatId, message, input) {
 
 async function menuCommand(sock, chatId, message, catArg) {
     if (catArg && catArg.trim()) {
-        return sendCategoryMenu(sock, chatId, message, catArg.trim());
+        const arg   = catArg.trim();
+        const parts = arg.split(/\s+/);
+        const sub   = parts[0].toLowerCase();
+        const rest  = parts.slice(1).join(' ').trim();
+
+        if (sub === 'search')  return sendSearchMenu(sock, chatId, message, rest);
+        if (sub === 'details') return sendDetailsMenu(sock, chatId, message, rest);
+        return sendCategoryMenu(sock, chatId, message, arg);
     }
     return sendOverview(sock, chatId, message);
 }
