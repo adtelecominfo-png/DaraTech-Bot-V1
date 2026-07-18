@@ -983,26 +983,60 @@ async function boostUserCommand(sock, chatId, message) {
     const db        = loadDB();
     const mentioned = resolveTarget(message);
     if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Usage: *.boostuser @user* or reply to a message` }, { quoted: message });
-    const u = getUser(db, mentioned);
-    // Max all upgrades
+
+    const u       = getUser(db, mentioned);
+    const oldSt   = getStats(u);
+
+    // Apply boost
     u.upgrades = u.upgrades || {};
     Object.keys(STORE).filter(k => !STORE[k].consumable).forEach(k => {
         u.upgrades[k] = MAX_UPGRADE;
     });
-    // Max wallet + bank + XP
     u.wallet = 1e84;
     u.bank   = 1e84;
     u.xp     = 1e84;
     saveDB(db);
-    const st = getStats(u);
-    await sock.sendMessage(chatId, {
-        text:
-            `✅ *BOOSTED!* ${mention(mentioned)}\n\n` +
-            `All gear upgraded to *+${MAX_UPGRADE}* and stats maxed!\n` +
-            `⚔️ ATK: ${st.atk}  |  🛡️ DEF: ${st.def}  |  🍀 Luck: ${st.luck}\n\n` +
-            `_Have them use .equip to switch gear — upgrades apply to all items._`,
-        mentions: [mentioned],
-    }, { quoted: message });
+    const newSt = getStats(u);
+
+    // ── animation helpers ──────────────────────────────────────────────────────
+    const sleep  = ms => new Promise(r => setTimeout(r, ms));
+    const fill   = (pct, len = 10) => '▓'.repeat(Math.round(pct * len)) + '░'.repeat(len - Math.round(pct * len));
+    const lerp   = (a, b, t)       => Math.round(a + (b - a) * t);
+
+    const buildFrame = (pct, done = false) => {
+        const atk  = lerp(oldSt.atk,   newSt.atk,   pct);
+        const def  = lerp(oldSt.def,   newSt.def,   pct);
+        const luck = lerp(oldSt.luck,  newSt.luck,  pct);
+        const hp   = lerp(oldSt.maxHp, newSt.maxHp, pct);
+        const bar  = fill(pct);
+        const hdr  = done
+            ? `🌟 *BOOST COMPLETE!* ${mention(mentioned)}\n`
+            : `⚡ *BOOSTING* ${mention(mentioned)}...\n`;
+        const val  = (n, bold) => bold ? `*${n}*` : `${n}`;
+        return (
+            hdr + `\n` +
+            `⚔️  ATK  │${bar}│ ${val(atk,  done)}\n` +
+            `🛡️  DEF  │${bar}│ ${val(def,  done)}\n` +
+            `🍀  Luck │${bar}│ ${val(luck, done)}\n` +
+            `❤️  HP   │${bar}│ ${val(hp,   done)}\n` +
+            (done ? `\n_All gear at +${MAX_UPGRADE} — use .equip to switch loadout_` : '')
+        );
+    };
+
+    // ── send first frame then animate ─────────────────────────────────────────
+    const sent = await sock.sendMessage(chatId,
+        { text: buildFrame(0), mentions: [mentioned] },
+        { quoted: message }
+    );
+
+    const frames = [0.25, 0.5, 0.75, 1];
+    for (let i = 0; i < frames.length; i++) {
+        await sleep(650);
+        const done = i === frames.length - 1;
+        await sock.sendMessage(chatId,
+            { text: buildFrame(frames[i], done), edit: sent.key, mentions: [mentioned] }
+        );
+    }
 }
 
 // ─── Auto-seed owner/connector on startup ─────────────────────────────────────
