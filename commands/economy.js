@@ -175,11 +175,11 @@ function getStats(u) {
         luck += Math.floor((s.luck || 0) * (1 + upLv * 0.1));
     };
     ['weapon', 'armor', 'accessory'].forEach(apply);
-    // statBonus (set by .boostuser) overrides the final stat when present
+    // statBonus adds on top of gear stats
     const b = u.statBonus || {};
-    if (b.atk  !== undefined) atk  = b.atk;
-    if (b.def  !== undefined) def  = b.def;
-    if (b.luck !== undefined) luck = b.luck;
+    if (b.atk  !== undefined) atk  += b.atk;
+    if (b.def  !== undefined) def  += b.def;
+    if (b.luck !== undefined) luck += b.luck;
     maxHp += def * 2;
     return { atk, def, luck, maxHp };
 }
@@ -1018,11 +1018,11 @@ async function boostUserCommand(sock, chatId, message, q) {
 
     // ── apply boost ───────────────────────────────────────────────────────────
     if (partial) {
-        // Set only the requested stats via statBonus
+        // Add to existing statBonus (cumulative, not replace)
         u.statBonus = u.statBonus || {};
-        if (parsed.atk  !== null) u.statBonus.atk  = parsed.atk;
-        if (parsed.def  !== null) u.statBonus.def  = parsed.def;
-        if (parsed.luck !== null) u.statBonus.luck = parsed.luck;
+        if (parsed.atk  !== null) u.statBonus.atk  = (u.statBonus.atk  || 0) + parsed.atk;
+        if (parsed.def  !== null) u.statBonus.def  = (u.statBonus.def  || 0) + parsed.def;
+        if (parsed.luck !== null) u.statBonus.luck = (u.statBonus.luck || 0) + parsed.luck;
     } else {
         // Full boost: max all upgrades + wallet/xp
         u.upgrades = u.upgrades || {};
