@@ -108,4 +108,56 @@ async function animenewCommand(sock, chatId, message) {
     }
 }
 
-module.exports = { konachanCommand, kusonimeCommand, animenewCommand };
+// ─── .charquote ──────────────────────────────────────────────────────────────
+/** Random quote by an anime character (.charquote <character name>) */
+async function charquoteCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q) return sock.sendMessage(chatId, {
+        text: `💬 Usage: *.charquote <character name>*\nExample: *.charquote naruto*`,
+    }, { quoted: message });
+
+    await react(sock, message, '⏳');
+    try {
+        const data = await animeGet('char-quotes', { character: q });
+        const r = data?.result;
+        if (!r?.quote) throw new Error('No quote found');
+
+        const text = `💬 *${r.character || q.toUpperCase()}*`
+            + (r.show ? `\n🎌 _${r.show}_` : '')
+            + `\n${'─'.repeat(30)}\n\n"${r.quote}"\n\n_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-anime:char-quotes]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ No quote found for *${q}*. Try another name!` }, { quoted: message });
+    }
+}
+
+// ─── .showquote ───────────────────────────────────────────────────────────────
+/** Random quote from an anime show (.showquote <show name>) */
+async function showquoteCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q) return sock.sendMessage(chatId, {
+        text: `💬 Usage: *.showquote <anime title>*\nExample: *.showquote attack on titan*`,
+    }, { quoted: message });
+
+    await react(sock, message, '⏳');
+    try {
+        const data = await animeGet('show-quotes', { show: q });
+        const r = data?.result;
+        if (!r?.quote) throw new Error('No quote found');
+
+        const text = `💬 *${r.show || q.toUpperCase()}*`
+            + (r.character ? `\n👤 _${r.character}_` : '')
+            + `\n${'─'.repeat(30)}\n\n"${r.quote}"\n\n_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-anime:show-quotes]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ No quote found for *${q}*. Try another title!` }, { quoted: message });
+    }
+}
+
+module.exports = { konachanCommand, kusonimeCommand, animenewCommand, charquoteCommand, showquoteCommand };

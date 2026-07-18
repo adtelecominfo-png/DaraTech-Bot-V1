@@ -235,7 +235,7 @@ const { poemCommand, animequoteCommand, kanyeCommand } = require('./commands/poe
 const { bmiCommand, ageCommand, celsiusCommand, fahrenheitCommand, kmtomilesCommand, milestokmCommand, kgtolbsCommand, lbstokg } = require('./commands/converter');
 const { fancyCommand, boldtextCommand, italicCommand, bolditalicCommand, scriptCommand, frakturCommand, doubleCommand, sansCommand, monoCommand, wideCommand, smallcapsCommand, bubbleCommand, flipCommand, mirrorCommand } = require('./commands/fonts');
 const { ttpCommand, canvasCommand, topdfCommand, web2zipCommand, proxyCommand, obfuscateCommand, dnsCommand, headersCommand, servercheckCommand, ssphoneCommand, sstabCommand, sspcCommand, fantextCommand, fantext2Command } = require('./commands/gifted-tools');
-const { konachanCommand, kusonimeCommand, animenewCommand } = require('./commands/gifted-anime');
+const { konachanCommand, kusonimeCommand, animenewCommand, charquoteCommand, showquoteCommand } = require('./commands/gifted-anime');
 const { friendshipCommand, lovetextCommand, heartbreakCommand, gratitudeCommand, thankyouCommand, newyearCommand, xmasCommand, halloweenCommand, valentinesCommand, mothersdayCommand, fathersdayCommand, bfdayCommand, gfdayCommand } = require('./commands/gifted-fun');
 const { gsearchCommand, gimageCommand, ttsearchCommand, chordCommand, hearthisCommand, npmpkgCommand, slyricsCommand, happymodCommand, scsearchCommand, wattpadCommand, stickersearchCommand } = require('./commands/gifted-search');
 const { textproCommand } = require('./commands/gifted-textpro');
@@ -2319,6 +2319,16 @@ case userMessage.startsWith('.bssensi'):
 
             case userMessage === '.newanime':
                 await animenewCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.charquote'):
+                await charquoteCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.showquote'):
+                await showquoteCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
 
