@@ -1196,3 +1196,4 @@ async function economyCommand(sock, chatId, message, userMessage) {
 
 module.exports = economyCommand;
 module.exports.seedEconomyOwner = seedEconomyOwner;
+module.exports.isOwner          = isOwner;

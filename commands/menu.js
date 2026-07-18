@@ -2,6 +2,7 @@
 const settings   = require('../settings');
 const { CATEGORIES, findCategory } = require('../lib/categories');
 const { davidGet } = require('../lib/gifted');
+const { isOwner }  = require('./economy');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -168,7 +169,10 @@ async function sendCategoryMenu(sock, chatId, message, input) {
         }, { quoted: message });
     }
 
-    const rows = cat.cmds.map(c => `│ ${c.startsWith('.') ? c : '.' + c}`).join('\n');
+    const senderJid = message.key?.participant || message.key?.remoteJid || '';
+    const ownerSee  = isOwner(senderJid) || message.key?.fromMe;
+    const visibleCmds = ownerSee ? cat.cmds : cat.cmds.filter(c => !c.includes('(owner)'));
+    const rows = visibleCmds.map(c => `│ ${c.startsWith('.') ? c : '.' + c}`).join('\n');
 
     const text = [
         `╭──${cat.emoji} *${cat.title}*`,
