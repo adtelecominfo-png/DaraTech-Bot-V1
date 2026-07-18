@@ -1024,15 +1024,11 @@ async function boostUserCommand(sock, chatId, message, q) {
         if (parsed.def  !== null) u.statBonus.def  = (u.statBonus.def  || 0) + parsed.def;
         if (parsed.luck !== null) u.statBonus.luck = (u.statBonus.luck || 0) + parsed.luck;
     } else {
-        // Full boost: max all upgrades + wallet/xp
-        u.upgrades = u.upgrades || {};
-        Object.keys(STORE).filter(k => !STORE[k].consumable).forEach(k => {
-            u.upgrades[k] = MAX_UPGRADE;
-        });
-        u.wallet    = 1e84;
-        u.bank      = 1e84;
-        u.xp        = 1e84;
-        u.statBonus = {};            // clear any previous manual bonuses
+        // Full boost (no args): add +10 to all stats cumulatively
+        u.statBonus = u.statBonus || {};
+        u.statBonus.atk  = (u.statBonus.atk  || 0) + 10;
+        u.statBonus.def  = (u.statBonus.def  || 0) + 10;
+        u.statBonus.luck = (u.statBonus.luck || 0) + 10;
     }
     saveDB(db);
     const newSt = getStats(u);
