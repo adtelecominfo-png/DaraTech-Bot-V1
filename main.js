@@ -1170,7 +1170,7 @@ case userMessage.startsWith('.bssensi'):
             case userMessage.startsWith('.setgpp'):
                 await setGroupPhoto(sock, chatId, senderId, message);
                 break;
-            case userMessage.startsWith('.instagram') || (userMessage.startsWith('.insta') && !userMessage.startsWith('.instastalk')) || (userMessage === '.ig' || userMessage.startsWith('.ig ')) || userMessage.startsWith('.igdl'):
+            case userMessage.startsWith('.instagram') || (userMessage.startsWith('.insta') && !userMessage.startsWith('.instastalk')) || (userMessage === '.ig' || userMessage.startsWith('.ig ')) || userMessage.startsWith('.igdl') || (userMessage === '.lg' || userMessage.startsWith('.lg ')):
                 await instagramCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('.igsc'):
