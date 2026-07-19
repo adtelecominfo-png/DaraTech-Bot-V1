@@ -20,7 +20,9 @@
 
 const { toolsGet, toolsBuf } = require('../lib/gifted');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
-const { uploadImage } = require('../lib/uploadImage');
+const { UploadFileUgu } = require('../lib/uploader');
+const fs   = require('fs');
+const path = require('path');
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
@@ -366,6 +368,23 @@ async function fantext2Command(sock, chatId, message) {
 // ─── AI Cloth Remover ────────────────────────────────────────────────────────
 
 /** .rc [url] — AI cloth/clothing remover. Works with URL, replied image, or sent image. */
+/** Download an imageMessage to a temp file, upload to uguu.se, return URL */
+async function uploadRcImage(imgMsg) {
+    const stream = await downloadContentFromMessage(imgMsg, 'image');
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    const tmpDir = path.join(__dirname, '../temp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    const tmpPath = path.join(tmpDir, `rc_${Date.now()}.jpg`);
+    fs.writeFileSync(tmpPath, Buffer.concat(chunks));
+    try {
+        const res = await UploadFileUgu(tmpPath);
+        return typeof res === 'string' ? res : (res.url || res.url_full);
+    } finally {
+        setTimeout(() => { try { fs.unlinkSync(tmpPath); } catch {} }, 3000);
+    }
+}
+
 async function rcCommand(sock, chatId, message) {
     await react(sock, message, '⏳');
     try {
@@ -376,21 +395,12 @@ async function rcCommand(sock, chatId, message) {
         // 2. Try quoted image (reply to an image)
         if (!imageUrl) {
             const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            const imgMsg = quoted?.imageMessage;
-            if (imgMsg) {
-                const stream = await downloadContentFromMessage(imgMsg, 'image');
-                const chunks = [];
-                for await (const chunk of stream) chunks.push(chunk);
-                imageUrl = await uploadImage(Buffer.concat(chunks));
-            }
+            if (quoted?.imageMessage) imageUrl = await uploadRcImage(quoted.imageMessage);
         }
 
         // 3. Try image sent alongside the command
         if (!imageUrl && message.message?.imageMessage) {
-            const stream = await downloadContentFromMessage(message.message.imageMessage, 'image');
-            const chunks = [];
-            for await (const chunk of stream) chunks.push(chunk);
-            imageUrl = await uploadImage(Buffer.concat(chunks));
+            imageUrl = await uploadRcImage(message.message.imageMessage);
         }
 
         if (!imageUrl) {
