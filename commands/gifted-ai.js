@@ -5,7 +5,11 @@
  * All endpoints confirmed working against api.giftedtech.co.ke/api/ai/
  *
  * Text AI endpoints (return result string):
- *   letmegpt, unlimitedai, overchat(model=deepseek|claude), gemini, muslimai
+ *   letmegpt, unlimitedai, muslimai
+ *   gemini (standalone Google Gemini)
+ *   venice  (uncensored AI)
+ *   pollinations (with models: openai, openai-fast, gpt-oss, gpt-oss-20b, ovh-reasoning)
+ *   overchat models: claude, deepseek, gpt4, llama, mistral, gemini, grok, qwen, o1
  *
  * Image generation endpoints:
  *   fluximg  → result.url (Flux / Amazon S3)
@@ -81,6 +85,58 @@ async function claudeCommand(sock, chatId, message) {
 /** .deepseek — DeepSeek via overchat */
 async function deepseekCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'overchat', { model: 'deepseek' }, 'DeepSeek');
+}
+
+/** .gpt4 — GPT-4 via overchat */
+async function gpt4Command(sock, chatId, message) {
+    await giftedTextReply(sock, chatId, message, 'overchat', { model: 'gpt4' }, 'GPT-4');
+}
+
+/** .llama — Meta LLaMA via overchat */
+async function llamaCommand(sock, chatId, message) {
+    await giftedTextReply(sock, chatId, message, 'overchat', { model: 'llama' }, 'LLaMA AI');
+}
+
+/** .mistralai — Mistral AI via overchat (gifted version) */
+async function mistralAiCommand(sock, chatId, message) {
+    await giftedTextReply(sock, chatId, message, 'overchat', { model: 'mistral' }, 'Mistral AI');
+}
+
+/** .geminioc — Google Gemini via overchat model */
+async function geminiOcCommand(sock, chatId, message) {
+    await giftedTextReply(sock, chatId, message, 'overchat', { model: 'gemini' }, 'Gemini (Overchat)');
+}
+
+/** .grok — Grok AI via overchat */
+async function grokCommand(sock, chatId, message) {
+    await giftedTextReply(sock, chatId, message, 'overchat', { model: 'grok' }, 'Grok AI');
+}
+
+/** .qwenai — Qwen AI via overchat (gifted version) */
+async function qwenAiCommand(sock, chatId, message) {
+    await giftedTextReply(sock, chatId, message, 'overchat', { model: 'qwen' }, 'Qwen AI');
+}
+
+/** .o1 — OpenAI O1 reasoning model via overchat */
+async function o1Command(sock, chatId, message) {
+    await giftedTextReply(sock, chatId, message, 'overchat', { model: 'o1' }, 'OpenAI O1');
+}
+
+// ─── Standalone Gifted AI endpoints ──────────────────────────────────────────
+
+/** .gifgemini — Standalone Google Gemini via Gifted API */
+async function gifGeminiCommand(sock, chatId, message) {
+    await giftedTextReply(sock, chatId, message, 'gemini', {}, 'Google Gemini');
+}
+
+/** .gifvenice — Venice AI (uncensored) via Gifted API */
+async function gifVeniceCommand(sock, chatId, message) {
+    await giftedTextReply(sock, chatId, message, 'venice', {}, 'Venice AI (Uncensored)');
+}
+
+/** .gifpoll — Pollinations AI via Gifted API */
+async function gifPollCommand(sock, chatId, message) {
+    await giftedTextReply(sock, chatId, message, 'pollinations', {}, 'Pollinations AI');
 }
 
 /** .muslimai — Islamic AI (answers Quran/Islam questions) */
@@ -241,6 +297,16 @@ module.exports = {
     unlimitedAiCommand,
     claudeCommand,
     deepseekCommand,
+    gpt4Command,
+    llamaCommand,
+    mistralAiCommand,
+    geminiOcCommand,
+    grokCommand,
+    qwenAiCommand,
+    o1Command,
+    gifGeminiCommand,
+    gifVeniceCommand,
+    gifPollCommand,
     muslimAiCommand,
     transcriptCommand,
     giftFluxCommand,

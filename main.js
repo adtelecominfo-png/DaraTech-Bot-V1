@@ -127,6 +127,9 @@ const songCommand = require('./commands/song');
 const aiCommand = require('./commands/ai');
 const {
     letmegptCommand, unlimitedAiCommand, claudeCommand, deepseekCommand,
+    gpt4Command, llamaCommand, mistralAiCommand, geminiOcCommand,
+    grokCommand, qwenAiCommand, o1Command,
+    gifGeminiCommand, gifVeniceCommand, gifPollCommand,
     muslimAiCommand, transcriptCommand, giftFluxCommand, giftTxt2ImgCommand,
     magicStudioCommand,
 } = require('./commands/gifted-ai');
@@ -1236,6 +1239,46 @@ case userMessage.startsWith('.bssensi'):
                 break;
             case userMessage === '.deepseek' || userMessage.startsWith('.deepseek '):
                 await deepseekCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.gpt4' || userMessage.startsWith('.gpt4 '):
+                await gpt4Command(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.llama' || userMessage.startsWith('.llama '):
+                await llamaCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.mistralai' || userMessage.startsWith('.mistralai '):
+                await mistralAiCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.geminioc' || userMessage.startsWith('.geminioc '):
+                await geminiOcCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.grok' || userMessage.startsWith('.grok '):
+                await grokCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.qwenai' || userMessage.startsWith('.qwenai '):
+                await qwenAiCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.o1' || userMessage.startsWith('.o1 '):
+                await o1Command(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.gifgemini' || userMessage.startsWith('.gifgemini '):
+                await gifGeminiCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.gifvenice' || userMessage.startsWith('.gifvenice '):
+                await gifVeniceCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '.gifpoll' || userMessage.startsWith('.gifpoll '):
+                await gifPollCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
             case userMessage === '.muslimai' || userMessage.startsWith('.muslimai '):
