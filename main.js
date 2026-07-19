@@ -240,6 +240,7 @@ const { konachanCommand, kusonimeCommand, animenewCommand, charquoteCommand, sho
 const { friendshipCommand, lovetextCommand, heartbreakCommand, gratitudeCommand, thankyouCommand, newyearCommand, xmasCommand, halloweenCommand, valentinesCommand, mothersdayCommand, fathersdayCommand, bfdayCommand, gfdayCommand } = require('./commands/gifted-fun');
 const { gsearchCommand, gimageCommand, ttsearchCommand, chordCommand, hearthisCommand, npmpkgCommand, slyricsCommand, happymodCommand, scsearchCommand, wattpadCommand, stickersearchCommand } = require('./commands/gifted-search');
 const { textproCommand } = require('./commands/gifted-textpro');
+const { ephotoCommand, ephoto2Command, ephotolistCommand } = require('./commands/gifted-ephoto');
 const { tempphoneCommand, smsinboxCommand } = require('./commands/gifted-tempgen');
 const { loremCommand, fakenameCommand, genemailCommand, randomnumCommand, coinflipCommand, dicerollCommand } = require('./commands/generators');
 const economyCommand = require('./commands/economy');
@@ -2509,6 +2510,22 @@ case userMessage.startsWith('.bssensi'):
             // ── Gifted Textpro ────────────────────────────────────────────
             case userMessage.startsWith('.textpro'):
                 await textproCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            // ── Gifted Ephoto ─────────────────────────────────────────────
+            case userMessage === '.ephotolist':
+                await ephotolistCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.ephoto2'):
+                await ephoto2Command(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('.ephoto'):
+                await ephotoCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
 
