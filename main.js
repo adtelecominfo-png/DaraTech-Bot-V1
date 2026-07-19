@@ -1541,7 +1541,6 @@ case userMessage.startsWith('.bssensi'):
             case userMessage.startsWith('.comrade'):
             case userMessage.startsWith('.gay'):
             case userMessage.startsWith('.glass'):
-            case userMessage.startsWith('.jail'):
             case userMessage.startsWith('.passed'):
             case userMessage.startsWith('.triggered'):
                 {
@@ -2786,7 +2785,10 @@ case userMessage.startsWith('.bssensi'):
                  userMessage.startsWith('.resetuser') ||
                  userMessage.startsWith('.leaderboard') || userMessage.startsWith('.richlist') ||
                  userMessage.startsWith('.richest') || userMessage.startsWith('.lb') ||
-                 userMessage.startsWith('.boostuser') || userMessage.startsWith('.boost'):
+                 userMessage.startsWith('.boostuser') || userMessage.startsWith('.boost') ||
+                 userMessage.startsWith('.register') ||
+                 userMessage.startsWith('.jail') || userMessage.startsWith('.unjail') || userMessage.startsWith('.freejail') ||
+                 userMessage.startsWith('.jailstatus') || userMessage.startsWith('.jailcheck'):
                 await economyCommand(sock, chatId, message, userMessage);
                 commandExecuted = true;
                 break;

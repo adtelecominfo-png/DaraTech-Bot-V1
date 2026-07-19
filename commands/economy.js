@@ -1,10 +1,11 @@
 'use strict';
 /**
  * Economy System — Daratech Bot
- * Commands: balance, daily, work, mine, fish, rob, pay, deposit, withdraw,
- *           gamble, slots, coinflip, leaderboard, profile, gift, store, buy,
- *           inventory, equip, sell, upgrade, use, battle, estats, level,
- *           quest, addcoins, removecoins, resetuser (owner-only)
+ * Commands: register, balance, daily, work, mine, fish, rob, pay, deposit,
+ *           withdraw, gamble, slots, coinflip, leaderboard, profile, gift,
+ *           store, buy, inventory, equip, sell, upgrade, use, battle, estats,
+ *           level, quest, jail, unjail, jailstatus, addcoins, removecoins,
+ *           resetuser, boost
  */
 
 const fs   = require('fs');
@@ -15,7 +16,6 @@ const OWNER_NUM = '2348152077346';
 
 // Runtime JID of the connected bot session — set by seedEconomyOwner on connect
 let connectorJid = null;
-// LID (@lid) alias of the connector — WhatsApp uses this in @mentions inside "message yourself"
 let connectorLid = null;
 
 // ─── Store catalogue ──────────────────────────────────────────────────────────
@@ -85,13 +85,19 @@ function saveDB(db) {
 
 function getUser(db, jid) {
     if (!db[jid]) db[jid] = {
-        wallet: 500, bank: 0, xp: 0, wins: 0, losses: 0,
+        registered: false, name: null,
+        wallet: 0, bank: 0, xp: 0, wins: 0, losses: 0,
         totalEarned: 0, totalSpent: 0,
         inventory: [], upgrades: {},
         equipped: { weapon: null, armor: null, accessory: null },
         lastDaily: 0, lastWork: 0, lastMine: 0, lastFish: 0,
         lastRob: 0, lastBattle: 0, lastQuest: 0,
+        jail: false, jailUntil: null,
     };
+    // backfill missing fields for existing accounts
+    if (db[jid].registered === undefined) db[jid].registered = false;
+    if (db[jid].jail      === undefined) db[jid].jail      = false;
+    if (db[jid].jailUntil === undefined) db[jid].jailUntil = null;
     if (!db[jid].upgrades) db[jid].upgrades = {};
     return db[jid];
 }
@@ -99,7 +105,6 @@ function getUser(db, jid) {
 function isOwner(jid) {
     const digits = jid.replace(/[^0-9]/g, '');
     if (digits.includes(OWNER_NUM)) return true;
-    // Also treat the live connector JID as owner
     if (connectorJid) {
         const connDigits = connectorJid.replace(/[^0-9]/g, '');
         if (connDigits && digits.includes(connDigits)) return true;
@@ -107,21 +112,66 @@ function isOwner(jid) {
     return false;
 }
 
+// ─── Registration & Jail gates ────────────────────────────────────────────────
+
+/**
+ * Returns true if the user is registered (or is the owner).
+ * Sends an error message and returns false otherwise.
+ */
+async function requireRegistered(sock, chatId, message, u, jid) {
+    if (isOwner(jid) || u.registered) return true;
+    await sock.sendMessage(chatId, {
+        text:
+            `❌ *You need to register first!*\n\n` +
+            `Use *.register <your name>* to create your economy account.\n\n` +
+            `_Example: .register Dara_`,
+    }, { quoted: message });
+    return false;
+}
+
+/**
+ * Returns true if the user is NOT currently jailed (or is the owner).
+ * Auto-expires jail if time is up. Sends jail message and returns false if jailed.
+ */
+async function requireNotJailed(sock, chatId, message, u, jid, db) {
+    if (isOwner(jid)) return true;
+    if (!u.jail && !u.jailUntil) return true;
+
+    // Auto-expire
+    if (u.jailUntil && Date.now() >= u.jailUntil) {
+        u.jail     = false;
+        u.jailUntil = null;
+        saveDB(db);
+        return true;
+    }
+
+    const remaining = u.jailUntil - Date.now();
+    const m = Math.floor(remaining / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    await sock.sendMessage(chatId, {
+        text:
+            `🔒 *You are in JAIL!*\n\n` +
+            `You cannot use economy commands while jailed.\n` +
+            `⏳ Release in: *${m}m ${s}s*\n\n` +
+            `_Serve your time and stay out of trouble!_`,
+    }, { quoted: message });
+    return false;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function ownerBoost(db, jid) {
     if (!isOwner(jid)) return;
     const u = getUser(db, jid);
     u.wallet = 1e84;
     u.bank   = 1e84;
     u.xp     = 1e84;
-    // Max all upgrades
     u.upgrades = u.upgrades || {};
     Object.keys(STORE).filter(k => !STORE[k].consumable).forEach(k => {
         u.upgrades[k] = MAX_UPGRADE;
     });
 }
 
-// Strip device suffix e.g. 234815:5@s.whatsapp.net → 234815@s.whatsapp.net
-// Also map the connector's own LID back to connectorJid so all DB writes use one key
 function normalizeJid(jid) {
     if (!jid) return jid;
     if (connectorLid && jid === connectorLid) return connectorJid;
@@ -129,13 +179,12 @@ function normalizeJid(jid) {
 }
 
 function senderJid(message) {
-    // fromMe = sent from the connected bot/owner device — treat as connector
     if (message.key?.fromMe && connectorJid) return connectorJid;
     return normalizeJid(message.key?.participant || message.key?.remoteJid || '');
 }
 function numFromJid(jid) { return jid.replace(/:[^@]*/, '').split('@')[0]; }
 function mention(jid)    { return `@${numFromJid(jid)}`; }
-function fmt(n)          {
+function fmt(n) {
     if (n >= 1e30) return 'MAX';
     if (n >= 1e27) return (n / 1e27).toFixed(1) + 'Oct';
     if (n >= 1e24) return (n / 1e24).toFixed(1) + 'Sp';
@@ -169,13 +218,11 @@ function getStats(u) {
         if (!item || !STORE[item]) return;
         const s    = STORE[item];
         const upLv = upgrades[item] || 0;
-        // Each upgrade level adds 10% of the base stat on top
         atk  += Math.floor((s.atk  || 0) * (1 + upLv * 0.1));
         def  += Math.floor((s.def  || 0) * (1 + upLv * 0.1));
         luck += Math.floor((s.luck || 0) * (1 + upLv * 0.1));
     };
     ['weapon', 'armor', 'accessory'].forEach(apply);
-    // statBonus adds on top of gear stats
     const b = u.statBonus || {};
     if (b.atk  !== undefined) atk  += b.atk;
     if (b.def  !== undefined) def  += b.def;
@@ -196,16 +243,147 @@ function badge(jid, u) {
     return '🌱 *Rookie*';
 }
 
-// Resolve the target JID from a mention or a reply (always normalized)
 function resolveTarget(message) {
-    // 1. Explicit @mention
     const mentioned = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
     if (mentioned) return normalizeJid(mentioned);
-    // 2. Reply to a message — use the quoted sender
     const ctx = message.message?.extendedTextMessage?.contextInfo;
     if (ctx?.participant) return normalizeJid(ctx.participant);
     if (ctx?.remoteJid && !ctx.remoteJid.endsWith('@g.us')) return normalizeJid(ctx.remoteJid);
     return null;
+}
+
+// ─── .register ────────────────────────────────────────────────────────────────
+
+async function registerCommand(sock, chatId, message, q) {
+    const db  = loadDB();
+    const uid = senderJid(message);
+    const u   = getUser(db, uid);
+
+    if (u.registered && !isOwner(uid)) {
+        return sock.sendMessage(chatId, {
+            text:
+                `✅ *Already Registered!*\n\n` +
+                `👤 Name   : ${u.name || 'User'}\n` +
+                `💰 Wallet : 🪙 ${fmt(u.wallet)}\n` +
+                `🏦 Bank   : 🪙 ${fmt(u.bank)}\n\n` +
+                `_Use .balance to check your funds._`,
+        }, { quoted: message });
+    }
+
+    const name = (q || '').trim().slice(0, 30) || numFromJid(uid);
+    if (!name) {
+        return sock.sendMessage(chatId, {
+            text: `❌ Please provide your name!\n\n_Usage: .register <your name>_\n_Example: .register Dara_`,
+        }, { quoted: message });
+    }
+
+    u.registered = true;
+    u.name       = name;
+    if (!isOwner(uid)) {
+        u.wallet = u.wallet || 1000; // starter coins only if brand new
+    }
+    saveDB(db);
+
+    await sock.sendMessage(chatId, {
+        text:
+            `🎉 *Welcome to the Daratech Economy!*\n\n` +
+            `╭──────────────────\n` +
+            `│ 👤 Name   : *${name}*\n` +
+            `│ 💰 Wallet : *🪙 1,000* (starter bonus!)\n` +
+            `│ 🏦 Bank   : *🪙 0*\n` +
+            `│ ⭐ Level  : *1*\n` +
+            `╰──────────────────\n\n` +
+            `*Available commands:*\n` +
+            `• .daily — claim daily reward\n` +
+            `• .work — earn coins\n` +
+            `• .balance — check wallet\n` +
+            `• .store — buy items\n` +
+            `• .profile — view your profile\n\n` +
+            `_Good luck out there! 💪_`,
+    }, { quoted: message });
+}
+
+// ─── .jail / .unjail / .jailstatus ───────────────────────────────────────────
+
+async function jailCommand(sock, chatId, message, q) {
+    const uid = senderJid(message);
+    if (!isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Owner only!` }, { quoted: message });
+
+    const db       = loadDB();
+    const target   = resolveTarget(message);
+    if (!target) return sock.sendMessage(chatId, {
+        text: `❌ Tag or reply to a user to jail them.\n_Usage: .jail @user <minutes>_\n_Example: .jail @user 30_`,
+    }, { quoted: message });
+
+    const minutes = parseInt((q || '').replace(/\D/g, '')) || 60;
+    const t  = getUser(db, target);
+    t.jail      = true;
+    t.jailUntil = Date.now() + minutes * 60 * 1000;
+    saveDB(db);
+
+    await sock.sendMessage(chatId, {
+        text:
+            `🔒 *JAILED!*\n\n` +
+            `${mention(target)} has been sent to jail for *${minutes} minutes*.\n` +
+            `They cannot use economy commands until released.\n\n` +
+            `_Use .unjail @user to release early._`,
+        mentions: [target],
+    }, { quoted: message });
+}
+
+async function unjailCommand(sock, chatId, message) {
+    const uid = senderJid(message);
+    if (!isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Owner only!` }, { quoted: message });
+
+    const db     = loadDB();
+    const target = resolveTarget(message);
+    if (!target) return sock.sendMessage(chatId, {
+        text: `❌ Tag or reply to a user to unjail them.\n_Usage: .unjail @user_`,
+    }, { quoted: message });
+
+    const t = getUser(db, target);
+    t.jail      = false;
+    t.jailUntil = null;
+    saveDB(db);
+
+    await sock.sendMessage(chatId, {
+        text: `🔓 *RELEASED!*\n\n${mention(target)} has been released from jail.`,
+        mentions: [target],
+    }, { quoted: message });
+}
+
+async function jailStatusCommand(sock, chatId, message) {
+    const db     = loadDB();
+    const uid    = senderJid(message);
+    const target = resolveTarget(message) || uid;
+    ownerBoost(db, uid);
+    const t = getUser(db, target);
+
+    // Auto-expire
+    if (t.jailUntil && Date.now() >= t.jailUntil) {
+        t.jail     = false;
+        t.jailUntil = null;
+        saveDB(db);
+    }
+
+    if (!t.jail && !t.jailUntil) {
+        return sock.sendMessage(chatId, {
+            text: `✅ *${target === uid ? 'You are' : mention(target) + ' is'} NOT in jail.*`,
+            mentions: target !== uid ? [target] : [],
+        }, { quoted: message });
+    }
+
+    const remaining = t.jailUntil - Date.now();
+    const m = Math.floor(remaining / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+
+    await sock.sendMessage(chatId, {
+        text:
+            `🔒 *JAIL STATUS*\n\n` +
+            `👤 User    : ${mention(target)}\n` +
+            `⏳ Released : in *${m}m ${s}s*`,
+        mentions: [target],
+    }, { quoted: message });
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
@@ -215,11 +393,13 @@ async function balanceCommand(sock, chatId, message) {
     const uid = senderJid(message);
     ownerBoost(db, uid);
     const u = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     saveDB(db);
     await sock.sendMessage(chatId, {
         text:
             `💰 *WALLET — ${mention(uid)}*\n\n` +
             `╭──────────────────\n` +
+            `│ 👤 Name   : *${u.name || numFromJid(uid)}*\n` +
             `│ 👛 Wallet : *🪙 ${fmt(u.wallet)}*\n` +
             `│ 🏦 Bank   : *🪙 ${fmt(u.bank)}*\n` +
             `│ 💎 Total  : *🪙 ${fmt(u.wallet + u.bank)}*\n` +
@@ -234,6 +414,7 @@ async function profileCommand(sock, chatId, message) {
     const target  = resolveTarget(message) || uid;
     ownerBoost(db, uid);
     const u  = getUser(db, target);
+    if (!await requireRegistered(sock, chatId, message, u, target)) return;
     const lv = levelOf(u.xp || 0);
     const st = getStats(u);
     const upgrades = u.upgrades || {};
@@ -246,10 +427,22 @@ async function profileCommand(sock, chatId, message) {
         return `${item?.name || key}${upLv > 0 ? ` *(+${upLv})*` : ''}`;
     };
 
+    // Jail status line
+    let jailLine = '';
+    if (u.jail && u.jailUntil && Date.now() < u.jailUntil) {
+        const remaining = u.jailUntil - Date.now();
+        const m = Math.floor(remaining / 60000);
+        const s = Math.floor((remaining % 60000) / 1000);
+        jailLine = `│ ⛓️ Jailed : *Yes* (${m}m ${s}s left)\n`;
+    } else {
+        jailLine = `│ ⛓️ Jailed : *No* ✅\n`;
+    }
+
     saveDB(db);
     await sock.sendMessage(chatId, {
         text:
             `🪪 *PROFILE — ${mention(target)}*\n\n` +
+            `│ 👤 Name   : *${u.name || numFromJid(target)}*\n` +
             `│ Badge  : ${badge(target, u)}\n` +
             `│ Level  : ⚡ *${lv}*  (${fmt(u.xp || 0)} XP)\n` +
             `│ Next   : ${fmt(xpForNext(u.xp || 0))} XP to level ${lv + 1}\n` +
@@ -269,7 +462,8 @@ async function profileCommand(sock, chatId, message) {
             `│\n` +
             `│ 🏆 Wins   : ${u.wins || 0}\n` +
             `│ 💀 Losses : ${u.losses || 0}\n` +
-            `│ 📦 Items  : ${(u.inventory || []).length}\n`,
+            `│ 📦 Items  : ${(u.inventory || []).length}\n` +
+            jailLine,
         mentions: [target],
     }, { quoted: message });
 }
@@ -279,6 +473,8 @@ async function dailyCommand(sock, chatId, message) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const CD   = 24 * 60 * 60 * 1000;
     const left = cooldownLeft(u.lastDaily, CD, uid);
     if (left) return sock.sendMessage(chatId, { text: `⏳ Daily already claimed!\nCome back in *${left}*.` }, { quoted: message });
@@ -298,6 +494,8 @@ async function workCommand(sock, chatId, message) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const CD   = 60 * 60 * 1000;
     const left = cooldownLeft(u.lastWork, CD, uid);
     if (left) return sock.sendMessage(chatId, { text: `⏳ Still tired from last job!\nRest for *${left}* more.` }, { quoted: message });
@@ -329,6 +527,8 @@ async function mineCommand(sock, chatId, message) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const CD   = 30 * 60 * 1000;
     const left = cooldownLeft(u.lastMine, CD, uid);
     if (left) return sock.sendMessage(chatId, { text: `⏳ Pickaxe needs a break!\nMine again in *${left}*.` }, { quoted: message });
@@ -357,6 +557,8 @@ async function fishCommand(sock, chatId, message) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const CD   = 20 * 60 * 1000;
     const left = cooldownLeft(u.lastFish, CD, uid);
     if (left) return sock.sendMessage(chatId, { text: `⏳ Fish aren't biting yet!\nTry again in *${left}*.` }, { quoted: message });
@@ -385,6 +587,8 @@ async function robCommand(sock, chatId, message) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const CD   = 2 * 60 * 60 * 1000;
     const left = cooldownLeft(u.lastRob, CD, uid);
     if (left) return sock.sendMessage(chatId, { text: `⏳ Lay low! Police are watching.\nRob again in *${left}*.` }, { quoted: message });
@@ -392,6 +596,7 @@ async function robCommand(sock, chatId, message) {
     if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Tag or reply to someone to rob!\n_Example: .rob @user_` }, { quoted: message });
     if (numFromJid(mentioned) === numFromJid(uid)) return sock.sendMessage(chatId, { text: `❌ You can't rob yourself!` }, { quoted: message });
     const target = getUser(db, mentioned);
+    if (!target.registered) return sock.sendMessage(chatId, { text: `❌ That user hasn't registered yet!` }, { quoted: message });
     if (target.wallet < 100) return sock.sendMessage(chatId, { text: `😂 ${mention(mentioned)} is broke! Not worth it.`, mentions: [mentioned] }, { quoted: message });
     u.lastRob = Date.now();
     const luckBonus = (getStats(u).luck || 0) / 100;
@@ -410,9 +615,18 @@ async function robCommand(sock, chatId, message) {
     } else {
         const fine = isOwner(uid) ? 0 : Math.floor(u.wallet * 0.15);
         u.wallet   = Math.max(0, u.wallet - fine);
+        // Jail for 5 minutes on rob failure
+        if (!isOwner(uid)) {
+            u.jail     = true;
+            u.jailUntil = Date.now() + 5 * 60 * 1000;
+        }
         saveDB(db);
         await sock.sendMessage(chatId, {
-            text: `🚔 *CAUGHT!*\n\nFailed to rob ${mention(mentioned)}!\nPaid *🪙 ${fmt(fine)}* as a fine.\n👛 Wallet: *🪙 ${fmt(u.wallet)}*`,
+            text:
+                `🚔 *CAUGHT!*\n\nFailed to rob ${mention(mentioned)}!\n` +
+                `💸 Fine    : *🪙 ${fmt(fine)}*\n` +
+                `🔒 Jailed  : *5 minutes*\n` +
+                `👛 Wallet  : *🪙 ${fmt(u.wallet)}*`,
             mentions: [mentioned],
         }, { quoted: message });
     }
@@ -423,12 +637,15 @@ async function payCommand(sock, chatId, message, q) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const mentioned = resolveTarget(message);
     const amount    = parseInt((q || '').replace(/[^0-9]/g, '')) || 0;
     if (!mentioned || !amount) return sock.sendMessage(chatId, { text: `❌ Usage: *.pay @user amount* or reply to a message` }, { quoted: message });
     if (numFromJid(mentioned) === numFromJid(uid)) return sock.sendMessage(chatId, { text: `❌ Can't pay yourself!` }, { quoted: message });
-    if (u.wallet < amount && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!\n👛 Wallet: *🪙 ${fmt(u.wallet)}*` }, { quoted: message });
     const tgt = getUser(db, mentioned);
+    if (!tgt.registered) return sock.sendMessage(chatId, { text: `❌ That user hasn't registered yet!` }, { quoted: message });
+    if (u.wallet < amount && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!\n👛 Wallet: *🪙 ${fmt(u.wallet)}*` }, { quoted: message });
     if (!isOwner(uid)) u.wallet -= amount;
     tgt.wallet += amount;
     saveDB(db);
@@ -443,11 +660,14 @@ async function giftCommand(sock, chatId, message, q) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const mentioned = resolveTarget(message);
     const amount    = parseInt((q || '').replace(/[^0-9]/g, '')) || 0;
     if (!mentioned || !amount) return sock.sendMessage(chatId, { text: `❌ Usage: *.gift @user amount* or reply to a message` }, { quoted: message });
-    if (u.wallet < amount && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!\n👛 Wallet: *🪙 ${fmt(u.wallet)}*` }, { quoted: message });
     const tgt = getUser(db, mentioned);
+    if (!tgt.registered) return sock.sendMessage(chatId, { text: `❌ That user hasn't registered yet!` }, { quoted: message });
+    if (u.wallet < amount && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!\n👛 Wallet: *🪙 ${fmt(u.wallet)}*` }, { quoted: message });
     if (!isOwner(uid)) u.wallet -= amount;
     tgt.wallet += amount;
     saveDB(db);
@@ -462,6 +682,8 @@ async function depositCommand(sock, chatId, message, q) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const amount = q?.toLowerCase() === 'all' ? u.wallet : parseInt(q) || 0;
     if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *.deposit <amount/all>*` }, { quoted: message });
     if (u.wallet < amount) return sock.sendMessage(chatId, { text: `❌ Not enough in wallet!` }, { quoted: message });
@@ -474,6 +696,8 @@ async function withdrawCommand(sock, chatId, message, q) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const amount = q?.toLowerCase() === 'all' ? u.bank : parseInt(q) || 0;
     if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *.withdraw <amount/all>*` }, { quoted: message });
     if (u.bank < amount) return sock.sendMessage(chatId, { text: `❌ Not enough in bank!` }, { quoted: message });
@@ -486,6 +710,8 @@ async function gambleCommand(sock, chatId, message, q) {
     const uid    = senderJid(message);
     ownerBoost(db, uid);
     const u      = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const amount = q?.toLowerCase() === 'all' ? u.wallet : parseInt(q) || 0;
     if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *.gamble <amount/all>*` }, { quoted: message });
     if (u.wallet < amount && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!` }, { quoted: message });
@@ -506,6 +732,8 @@ async function slotsCommand(sock, chatId, message, q) {
     const uid    = senderJid(message);
     ownerBoost(db, uid);
     const u      = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const amount = q?.toLowerCase() === 'all' ? u.wallet : parseInt(q) || 0;
     if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *.slots <amount>*` }, { quoted: message });
     if (u.wallet < amount && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!` }, { quoted: message });
@@ -529,6 +757,8 @@ async function coinflipEcoCommand(sock, chatId, message, q) {
     const uid    = senderJid(message);
     ownerBoost(db, uid);
     const u      = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const parts  = (q || '').trim().split(' ');
     const amount = parseInt(parts[0]) || 0;
     const side   = (parts[1] || '').toLowerCase();
@@ -546,6 +776,10 @@ async function coinflipEcoCommand(sock, chatId, message, q) {
 }
 
 async function storeCommand(sock, chatId, message) {
+    const db  = loadDB();
+    const uid = senderJid(message);
+    const u   = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     const categories = { weapon: [], armor: [], accessory: [], potion: [], boost: [] };
     for (const [key, item] of Object.entries(STORE)) {
         const cat = categories[item.type] || categories.potion;
@@ -574,6 +808,8 @@ async function buyCommand(sock, chatId, message, q) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const key  = (q || '').trim().toLowerCase().replace(/\s+/g, '');
     const item = STORE[key];
     if (!item) return sock.sendMessage(chatId, { text: `❌ Item not found! Use *.store* to see available items.` }, { quoted: message });
@@ -591,6 +827,7 @@ async function sellCommand(sock, chatId, message, q) {
     const db  = loadDB();
     const uid = senderJid(message);
     const u   = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     const key = (q || '').trim().toLowerCase();
     const inv = u.inventory || [];
     const idx = inv.indexOf(key);
@@ -614,6 +851,7 @@ async function inventoryCommand(sock, chatId, message) {
     const uid = senderJid(message);
     ownerBoost(db, uid);
     const u   = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     saveDB(db);
     const inv = u.inventory || [];
     const upgrades = u.upgrades || {};
@@ -640,6 +878,7 @@ async function equipCommand(sock, chatId, message, q) {
     const uid = senderJid(message);
     ownerBoost(db, uid);
     const u   = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     const key = (q || '').trim().toLowerCase();
     const item = STORE[key];
     if (!item) return sock.sendMessage(chatId, { text: `❌ Item not found! Check *.inventory*` }, { quoted: message });
@@ -656,12 +895,13 @@ async function equipCommand(sock, chatId, message, q) {
     }, { quoted: message });
 }
 
-// ─── Upgrade ──────────────────────────────────────────────────────────────────
 async function upgradeCommand(sock, chatId, message, q) {
     const db  = loadDB();
     const uid = senderJid(message);
     ownerBoost(db, uid);
     const u   = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const key = (q || '').trim().toLowerCase().replace(/\s+/g, '');
 
     if (!key) return sock.sendMessage(chatId, {
@@ -696,7 +936,6 @@ async function upgradeCommand(sock, chatId, message, q) {
     u.upgrades[key] = currentLevel + 1;
     const newLevel = u.upgrades[key];
 
-    // Stat bonuses at new level
     const bonuses = [];
     if (item.atk)  bonuses.push(`⚔️ ATK ${item.atk} → ${Math.floor(item.atk  * (1 + newLevel * 0.1))}`);
     if (item.def)  bonuses.push(`🛡️ DEF ${item.def} → ${Math.floor(item.def  * (1 + newLevel * 0.1))}`);
@@ -722,12 +961,12 @@ async function upgradeCommand(sock, chatId, message, q) {
     }, { quoted: message });
 }
 
-// ─── Use consumable ───────────────────────────────────────────────────────────
 async function useCommand(sock, chatId, message, q) {
     const db  = loadDB();
     const uid = senderJid(message);
     ownerBoost(db, uid);
     const u   = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     const key = (q || '').trim().toLowerCase();
 
     if (!key) return sock.sendMessage(chatId, {
@@ -753,7 +992,6 @@ async function useCommand(sock, chatId, message, q) {
         addXp(u, item.xp);
         resultText = `⚡ Gained *+${item.xp} XP*!\n🔮 Total XP: ${fmt(u.xp)}\n⭐ Level: ${levelOf(u.xp)}`;
     } else if (item.hp) {
-        // Out-of-battle HP potions just give bonus coins as a flavour reward
         const bonus = Math.floor(item.hp * 10);
         u.wallet += bonus;
         u.totalEarned = (u.totalEarned || 0) + bonus;
@@ -766,12 +1004,13 @@ async function useCommand(sock, chatId, message, q) {
     }, { quoted: message });
 }
 
-// ─── Battle ───────────────────────────────────────────────────────────────────
 async function battleCommand(sock, chatId, message, q) {
     const db   = loadDB();
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const CD   = 30 * 60 * 1000;
     const left = cooldownLeft(u.lastBattle, CD, uid);
     if (left) return sock.sendMessage(chatId, { text: `⏳ Still recovering from last battle!\nFight again in *${left}*.` }, { quoted: message });
@@ -780,6 +1019,7 @@ async function battleCommand(sock, chatId, message, q) {
     if (numFromJid(mentioned) === numFromJid(uid)) return sock.sendMessage(chatId, { text: `❌ You can't battle yourself!` }, { quoted: message });
     const bet = parseInt((q || '').replace(/\D/g, '')) || 0;
     const t   = getUser(db, mentioned);
+    if (!t.registered) return sock.sendMessage(chatId, { text: `❌ That user hasn't registered yet!` }, { quoted: message });
     if (bet > 0) {
         if (u.wallet < bet && !isOwner(uid))       return sock.sendMessage(chatId, { text: `❌ You don't have 🪙 ${fmt(bet)} in your wallet!` }, { quoted: message });
         if (t.wallet < bet && !isOwner(mentioned)) return sock.sendMessage(chatId, { text: `❌ ${mention(mentioned)} doesn't have enough coins for this bet!`, mentions: [mentioned] }, { quoted: message });
@@ -855,11 +1095,12 @@ async function battleCommand(sock, chatId, message, q) {
 }
 
 async function statsCommand(sock, chatId, message) {
-    const db   = loadDB();
-    const uid  = senderJid(message);
+    const db     = loadDB();
+    const uid    = senderJid(message);
     const target = resolveTarget(message) || uid;
     ownerBoost(db, uid);
     const u  = getUser(db, target);
+    if (!await requireRegistered(sock, chatId, message, u, target)) return;
     const st = getStats(u);
     saveDB(db);
     const total  = (u.wins || 0) + (u.losses || 0);
@@ -891,6 +1132,7 @@ async function levelCommand(sock, chatId, message) {
     const uid = senderJid(message);
     ownerBoost(db, uid);
     const u   = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     saveDB(db);
     const lv     = levelOf(u.xp || 0);
     const toNext = xpForNext(u.xp || 0);
@@ -913,6 +1155,8 @@ async function questCommand(sock, chatId, message) {
     const uid  = senderJid(message);
     ownerBoost(db, uid);
     const u    = getUser(db, uid);
+    if (!await requireRegistered(sock, chatId, message, u, uid)) return;
+    if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const now  = Date.now();
     const CD   = 24 * 60 * 60 * 1000;
     if (!isOwner(uid) && u.lastQuest && now - u.lastQuest < CD) {
@@ -948,15 +1192,14 @@ async function questCommand(sock, chatId, message) {
 async function leaderboardCommand(sock, chatId, message) {
     const db      = loadDB();
     const entries = Object.entries(db)
-        .filter(([, u]) => u && typeof u.wallet === 'number')
-        .map(([id, u]) => ({ id, total: (u.wallet || 0) + (u.bank || 0) }))
+        .filter(([, u]) => u && u.registered && typeof u.wallet === 'number')
+        .map(([id, u]) => ({ id, total: (u.wallet || 0) + (u.bank || 0), name: u.name || numFromJid(id) }))
         .sort((a, b) => b.total - a.total).slice(0, 10);
-    if (!entries.length) return sock.sendMessage(chatId, { text: `📊 No economy data yet!` }, { quoted: message });
+    if (!entries.length) return sock.sendMessage(chatId, { text: `📊 No registered users yet!` }, { quoted: message });
     const medals = ['🥇', '🥈', '🥉'];
-    const rows   = entries.map((e, i) => `│ ${medals[i] || `${i + 1}.`}  ${mention(e.id)}  🪙 ${fmt(e.total)}`).join('\n');
+    const rows   = entries.map((e, i) => `│ ${medals[i] || `${i + 1}.`}  *${e.name}*  🪙 ${fmt(e.total)}`).join('\n');
     await sock.sendMessage(chatId, {
         text: `🏆 *RICHEST USERS*\n\n╭──────────────────\n${rows}\n╰──────────────────`,
-        mentions: entries.map(e => e.id.includes('@') ? e.id : `${e.id}@s.whatsapp.net`),
     }, { quoted: message });
 }
 
@@ -1007,24 +1250,20 @@ async function boostUserCommand(sock, chatId, message, q) {
         text: `❌ Usage:\n*.boost @user* — full boost\n*.boost @user atk 500* — boost ATK only\n*.boost @user atk 300 def 100 luck 25* — pick any combo`,
     }, { quoted: message });
 
-    // ── parse optional stat args: atk N  def N  luck N ────────────────────────
     const raw    = (q || '').toLowerCase();
     const grab   = stat => { const m = raw.match(new RegExp(`\\b${stat}\\s+(\\d+)`)); return m ? parseInt(m[1]) : null; };
     const parsed = { atk: grab('atk'), def: grab('def'), luck: grab('luck') };
-    const partial = Object.values(parsed).some(v => v !== null); // any stat specified?
+    const partial = Object.values(parsed).some(v => v !== null);
 
     const u     = getUser(db, mentioned);
     const oldSt = getStats(u);
 
-    // ── apply boost ───────────────────────────────────────────────────────────
     if (partial) {
-        // Add to existing statBonus (cumulative, not replace)
         u.statBonus = u.statBonus || {};
         if (parsed.atk  !== null) u.statBonus.atk  = (u.statBonus.atk  || 0) + parsed.atk;
         if (parsed.def  !== null) u.statBonus.def  = (u.statBonus.def  || 0) + parsed.def;
         if (parsed.luck !== null) u.statBonus.luck = (u.statBonus.luck || 0) + parsed.luck;
     } else {
-        // Full boost (no args): add +10 to all stats cumulatively
         u.statBonus = u.statBonus || {};
         u.statBonus.atk  = (u.statBonus.atk  || 0) + 10;
         u.statBonus.def  = (u.statBonus.def  || 0) + 10;
@@ -1033,12 +1272,10 @@ async function boostUserCommand(sock, chatId, message, q) {
     saveDB(db);
     const newSt = getStats(u);
 
-    // ── animation helpers ──────────────────────────────────────────────────────
     const sleep  = ms => new Promise(r => setTimeout(r, ms));
     const fill   = (pct, len = 10) => '▓'.repeat(Math.round(pct * len)) + '░'.repeat(len - Math.round(pct * len));
     const lerp   = (a, b, t)       => Math.round(a + (b - a) * t);
 
-    // Which rows are actually changing?
     const changing = {
         atk:  oldSt.atk   !== newSt.atk,
         def:  oldSt.def   !== newSt.def,
@@ -1071,7 +1308,6 @@ async function boostUserCommand(sock, chatId, message, q) {
         );
     };
 
-    // ── send first frame then animate ─────────────────────────────────────────
     const sent = await sock.sendMessage(chatId,
         { text: buildFrame(0), mentions: [mentioned] },
         { quoted: message }
@@ -1086,33 +1322,30 @@ async function boostUserCommand(sock, chatId, message, q) {
     }
 }
 
-// ─── Auto-seed owner/connector on startup ─────────────────────────────────────
+// ─── Auto-seed owner/connector on startup ────────────────────────────────────
 function seedEconomyOwner(ownerJid, ownerLid) {
     if (!ownerJid) return;
-    // Remember the live connector JID and its LID alias
     connectorJid = ownerJid;
     if (ownerLid) connectorLid = ownerLid;
     try {
         const db = loadDB();
 
-        // Merge any stale @lid entries for the owner into the canonical ownerJid key
-        // (happens when WhatsApp provides the LID in @mentions before we stored connectorLid)
+        // Merge stale @lid entries for the owner into the canonical key
         const lidKeys = Object.keys(db).filter(k => k.endsWith('@lid'));
         for (const lid of lidKeys) {
-            const isOwnerLid = ownerLid && lid === ownerLid;
-            if (!isOwnerLid) continue;   // only merge the owner's own LID
-            const stale = db[lid];
-            if (!db[ownerJid]) db[ownerJid] = stale;
-            delete db[lid];
-            console.log(`[Economy] Merged stale LID entry ${lid} → ${ownerJid}`);
+            if (ownerLid && lid === ownerLid) {
+                const stale = db[lid];
+                if (!db[ownerJid]) db[ownerJid] = stale;
+                delete db[lid];
+                console.log(`[Economy] Merged stale LID entry ${lid} → ${ownerJid}`);
+            }
         }
-        // Build inventory: all non-consumable items + 5 of each consumable
+
         const allEquip    = Object.entries(STORE).filter(([, v]) => !v.consumable).map(([k]) => k);
         const consumables = Object.entries(STORE).filter(([, v]) =>  v.consumable).flatMap(([k]) => [k, k, k, k, k]);
         const allUpgrades = {};
         allEquip.forEach(k => { allUpgrades[k] = MAX_UPGRADE; });
 
-        // Best gear auto-picked from STORE
         const bestOf = (type, stat) => Object.entries(STORE)
             .filter(([, v]) => v.type === type)
             .sort(([, a], [, b]) => (b[stat] || 0) - (a[stat] || 0))[0]?.[0];
@@ -1124,6 +1357,8 @@ function seedEconomyOwner(ownerJid, ownerLid) {
             .sort(([, a], [, b]) => ((b.atk||0)+(b.def||0)+(b.luck||0)) - ((a.atk||0)+(a.def||0)+(a.luck||0)))[0]?.[0];
 
         db[ownerJid] = {
+            registered:  true,
+            name:        'Daratech',
             wallet:      1e84,
             bank:        1e84,
             xp:          1e84,
@@ -1140,6 +1375,7 @@ function seedEconomyOwner(ownerJid, ownerLid) {
             },
             lastDaily: 0, lastWork: 0, lastMine: 0, lastFish: 0,
             lastRob: 0, lastBattle: 0, lastQuest: 0,
+            jail: false, jailUntil: null,
         };
 
         const dir = path.join(__dirname, '../data');
@@ -1158,6 +1394,7 @@ async function economyCommand(sock, chatId, message, userMessage) {
     const q   = raw.trim().split(' ').slice(1).join(' ').trim();
 
     switch (cmd) {
+        case 'register':                                 return registerCommand(sock, chatId, message, q);
         case 'balance': case 'bal': case 'wallet':       return balanceCommand(sock, chatId, message);
         case 'profile': case 'prof':                     return profileCommand(sock, chatId, message);
         case 'daily':                                    return dailyCommand(sock, chatId, message);
@@ -1185,6 +1422,9 @@ async function economyCommand(sock, chatId, message, userMessage) {
         case 'quest':                                    return questCommand(sock, chatId, message);
         case 'leaderboard': case 'richlist':
         case 'richest': case 'lb':                       return leaderboardCommand(sock, chatId, message);
+        case 'jail':                                     return jailCommand(sock, chatId, message, q);
+        case 'unjail': case 'freejail':                  return unjailCommand(sock, chatId, message);
+        case 'jailstatus': case 'jailcheck':             return jailStatusCommand(sock, chatId, message);
         case 'addcoins':                                 return addCoinsCommand(sock, chatId, message, q);
         case 'removecoins': case 'deductcoins':          return removeCoinsCommand(sock, chatId, message, q);
         case 'resetuser':                                return resetUserCommand(sock, chatId, message);
