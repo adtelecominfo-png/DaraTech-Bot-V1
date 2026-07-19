@@ -361,6 +361,50 @@ async function fantext2Command(sock, chatId, message) {
     }
 }
 
+// ─── URL Shorteners ──────────────────────────────────────────────────────────
+const SHORTENERS = {
+    tinyurl:   { label: 'TinyURL',    cmd: '.tinyurl' },
+    cleanuri:  { label: 'CleanURI',   cmd: '.cleanuri' },
+    vgd:       { label: 'v.gd',       cmd: '.vgd' },
+    rebrandly: { label: 'Rebrandly',  cmd: '.rebrandly' },
+    vurl:      { label: 'Vurl',       cmd: '.vurl' },
+    adfoc:     { label: 'Adf.ly',     cmd: '.adfoc' },
+    ssur:      { label: 'Ssur.cc',    cmd: '.ssur' },
+};
+
+function makeShortener(service) {
+    return async function (sock, chatId, message) {
+        const q = getQ(message);
+        if (!q) return sock.sendMessage(chatId, {
+            text: `🔗 Usage: *${SHORTENERS[service].cmd} <url>*\nExample: *${SHORTENERS[service].cmd} https://example.com*`,
+        }, { quoted: message });
+
+        await react(sock, message, '⏳');
+        try {
+            const data = await toolsGet(service, { url: q });
+            if (!data?.success || !data?.result) throw new Error(data?.message || 'Failed to shorten URL');
+
+            const txt = `🔗 *URL SHORTENER — ${SHORTENERS[service].label}*\n\n`
+                + `📎 Original:\n${q}\n\n`
+                + `✂️ Shortened:\n*${data.result}*\n\n_Daratech_ ⚡`;
+            await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+            await react(sock, message, '✅');
+        } catch (err) {
+            console.error(`[gifted-tools:${service}]`, err.message);
+            await react(sock, message, '❌');
+            await sock.sendMessage(chatId, { text: `❌ Could not shorten URL. Make sure it starts with https://` }, { quoted: message });
+        }
+    };
+}
+
+const tinyurlCommand   = makeShortener('tinyurl');
+const cleanuriCommand  = makeShortener('cleanuri');
+const vgdCommand       = makeShortener('vgd');
+const rebrandlyCommand = makeShortener('rebrandly');
+const vurlCommand      = makeShortener('vurl');
+const adfocCommand     = makeShortener('adfoc');
+const ssurCommand      = makeShortener('ssur');
+
 module.exports = {
     ttpCommand,
     canvasCommand,
@@ -376,4 +420,11 @@ module.exports = {
     sspcCommand,
     fantextCommand,
     fantext2Command,
+    tinyurlCommand,
+    cleanuriCommand,
+    vgdCommand,
+    rebrandlyCommand,
+    vurlCommand,
+    adfocCommand,
+    ssurCommand,
 };
