@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://textpro.me/images/user_image/2026/07/6a5ce3497159b.jpg" alt="Daratech Bot" width="160" style="border-radius:50%"/>
+<img src="https://files.catbox.moe/4mx22l.png" alt="Daratech Bot" width="160" style="border-radius:50%"/>
 
 # DARATECH BOT
 
