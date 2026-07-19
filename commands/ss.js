@@ -1,5 +1,5 @@
 'use strict';
-const { get } = require('../lib/gifted');
+const { toolsBuf } = require('../lib/gifted');
 
 async function handleSsCommand(sock, chatId, message, match) {
     if (!match || !match.trim()) {
@@ -14,16 +14,23 @@ async function handleSsCommand(sock, chatId, message, match) {
         }, { quoted: message });
     }
     try {
-        await sock.sendMessage(chatId, { text: `⏳ Screenshotting: *${url}*...` }, { quoted: message });
-        const data = await get('/tools/ssweb', { url });
-        const imgUrl = data?.result?.url || data?.result?.image || data?.result;
-        if (!imgUrl || typeof imgUrl !== 'string') throw new Error('No screenshot URL returned');
+        await sock.sendMessage(message.key.remoteJid, {
+            react: { text: '⏳', key: message.key },
+        });
+        const buf = await toolsBuf('ssweb', { url });
+        if (buf.length < 1000) throw new Error('Screenshot failed or empty response');
         await sock.sendMessage(chatId, {
-            image: { url: imgUrl },
-            caption: `📸 *SCREENSHOT*\n🔗 ${url}\n\n_Daratech_ ⚡`,
+            image: buf,
+            caption: `📸 *SCREENSHOT (HD)*\n🔗 ${url}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
+        await sock.sendMessage(message.key.remoteJid, {
+            react: { text: '✅', key: message.key },
+        });
     } catch (e) {
         console.error('[ss]', e.message);
+        await sock.sendMessage(message.key.remoteJid, {
+            react: { text: '❌', key: message.key },
+        });
         await sock.sendMessage(chatId, {
             text: '❌ Failed to screenshot. URL may be invalid or the site is blocking access.',
         }, { quoted: message });

@@ -361,6 +361,66 @@ async function fantext2Command(sock, chatId, message) {
     }
 }
 
+// ─── Whois Lookup ────────────────────────────────────────────────────────────
+
+/** .whois <domain> — domain WHOIS registration info */
+async function whoisCommand(sock, chatId, message) {
+    const q = getQ(message).replace(/^https?:\/\//, '').split('/')[0].trim();
+    if (!q) return sock.sendMessage(chatId, {
+        text: '🔎 Usage: .whois <domain>\nExample: .whois google.com',
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('whois', { domain: q });
+        if (!data?.success || !data?.result) throw new Error(data?.message || 'WHOIS lookup failed');
+        const r = data.result;
+        const created  = r.creationDate   ? new Date(r.creationDate * 1000).toUTCString().slice(0, 16)   : 'N/A';
+        const expires  = r.expirationDate ? new Date(r.expirationDate * 1000).toUTCString().slice(0, 16) : 'N/A';
+        const updated  = r.updatedDate    ? new Date(r.updatedDate * 1000).toUTCString().slice(0, 16)    : 'N/A';
+        const ns = Array.isArray(r.nameServers) ? r.nameServers.slice(0, 3).join(', ') : (r.nameServers || 'N/A');
+        const txt =
+            `🔎 *WHOIS — ${r.domainName || q}*\n\n` +
+            `▸ 🏢 *Owner:* ${r.owner || 'N/A'}\n` +
+            `▸ 📋 *Registrar:* ${r.registrar || 'N/A'}\n` +
+            `▸ 🌐 *WHOIS Server:* ${r.whoisServer || 'N/A'}\n` +
+            `▸ 📅 *Created:* ${created}\n` +
+            `▸ ⌛ *Expires:* ${expires}\n` +
+            `▸ 🔄 *Updated:* ${updated}\n` +
+            `▸ 🔒 *DNSSEC:* ${r.dnssec || 'N/A'}\n` +
+            `▸ 🖧 *Name Servers:* ${ns}\n\n` +
+            `_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:whois]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ WHOIS lookup failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
+// ─── JS Obfuscator V2 ────────────────────────────────────────────────────────
+
+/** .obfuscate2 <js code> — obfuscate JavaScript code using encryptv2 engine */
+async function obfuscate2Command(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q) return sock.sendMessage(chatId, {
+        text: '🔐 Usage: .obfuscate2 <JavaScript code>\nExample: .obfuscate2 console.log("hello")',
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('encryptv2', { code: q });
+        if (!data?.success || !data?.result?.encrypted_code) throw new Error(data?.message || 'Obfuscation failed');
+        const result = data.result.encrypted_code;
+        const txt = `🔐 *JS OBFUSCATOR V2*\n\n\`\`\`\n${result.slice(0, 3000)}${result.length > 3000 ? '\n…(truncated)' : ''}\n\`\`\`\n\n_Daratech_ ⚡`;
+        await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:obfuscate2]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Obfuscation v2 failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
 // ─── URL Shorteners ──────────────────────────────────────────────────────────
 const SHORTENERS = {
     tinyurl:   { label: 'TinyURL',    cmd: '.tinyurl' },
@@ -412,6 +472,7 @@ module.exports = {
     web2zipCommand,
     proxyCommand,
     obfuscateCommand,
+    obfuscate2Command,
     dnsCommand,
     headersCommand,
     servercheckCommand,
@@ -420,6 +481,7 @@ module.exports = {
     sspcCommand,
     fantextCommand,
     fantext2Command,
+    whoisCommand,
     tinyurlCommand,
     cleanuriCommand,
     vgdCommand,
