@@ -1,24 +1,19 @@
 'use strict';
 /**
- * commands/gifted-tempgen.js — Gifted Tempgen API commands (temp phone / SMS)
+ * commands/gifted-tempgen.js — Temp phone (SMS) + Temp email v2
  * Base: https://api.gifted.co.ke/api/tempgen/
  *
  * Working endpoints:
  *   tempgen/sms/generate → result.{number, country, availableCountries, expiresIn}
  *   tempgen/sms/inbox    → params: number → result[] (SMS messages)
- *   tempgen/v2/generate  → result.{email, mode, expiresIn}  (email — backup)
+ *   tempgen/v2/generate  → params: mode=random → result.{email, mode, expiresIn}
  *   tempgen/v2/inbox     → params: email → result[] (emails)
- *
- * Note: .tempmail / .tempmail inbox is handled by commands/tempmail.js.
- * This file adds temp phone / SMS commands alongside it.
  */
 
-const { tempgenGet } = require('../lib/gifted');
+const { sportsGet } = require('../lib/gifted'); // sportsGet hits api.gifted.co.ke/api/<endpoint>
 
-// Per-user temp phone number storage (in-memory, resets on restart)
+// Per-user stores (in-memory, resets on restart)
 const phoneStore = new Map();
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getQ(message) {
     const raw = message.message?.conversation ||
@@ -37,23 +32,24 @@ function userId(message) {
 }
 
 // ─── .tempphone — generate a temporary SMS number ─────────────────────────────
-
 async function tempphoneCommand(sock, chatId, message) {
     await react(sock, message, '⏳');
     try {
-        const data = await tempgenGet('sms/generate');
+        const data = await sportsGet('tempgen/sms/generate');
         if (!data?.success || !data?.result?.number) throw new Error(data?.error || 'Could not generate number');
         const r = data.result;
         phoneStore.set(userId(message), r.number);
 
-        const countries = (r.availableCountries || []).join(', ') || 'random';
+        const countries = (r.availableCountries || []).join(' · ') || 'random';
         const txt =
             `📲 *TEMP PHONE NUMBER*\n\n` +
             `▸ 📞 *Number:* \`${r.number}\`\n` +
             `▸ 🌍 *Country:* ${r.country || 'Random'}\n` +
             `▸ ⏳ *Expires:* ${r.expiresIn || '10 minutes'}\n\n` +
-            `📋 *Available Countries:*\n${countries}\n\n` +
-            `💡 To check incoming SMS:\n*.smsinbox* (uses your saved number)\n*.smsinbox <number>* (specific number)\n\n` +
+            `🌍 *Available Countries:*\n${countries}\n\n` +
+            `💡 Check incoming SMS:\n` +
+            `*.smsinbox* — uses your saved number\n` +
+            `*.smsinbox <number>* — specific number\n\n` +
             `_Daratech_ ⚡`;
         await sock.sendMessage(chatId, { text: txt }, { quoted: message });
         await react(sock, message, '✅');
@@ -64,10 +60,9 @@ async function tempphoneCommand(sock, chatId, message) {
     }
 }
 
-// ─── .smsinbox [number] — check SMS inbox of temp phone number ────────────────
-
+// ─── .smsinbox [number] — check SMS inbox ─────────────────────────────────────
 async function smsinboxCommand(sock, chatId, message) {
-    const arg = getQ(message);
+    const arg    = getQ(message);
     const number = arg || phoneStore.get(userId(message));
 
     if (!number) {
@@ -78,7 +73,7 @@ async function smsinboxCommand(sock, chatId, message) {
 
     await react(sock, message, '⏳');
     try {
-        const data = await tempgenGet('sms/inbox', { number });
+        const data = await sportsGet('tempgen/sms/inbox', { number });
         if (!data?.success) throw new Error(data?.error || 'Inbox check failed');
         const msgs = data?.result || [];
 
