@@ -75,6 +75,7 @@ async function quranCommand(sock, chatId, message) {
             return sock.sendMessage(chatId, { text: '❌ Surah number must be between 1 and 114.' }, { quoted: message });
         }
         try {
+            await sock.sendMessage(chatId, { text: '📿 Fetching surah info……' }, { quoted: message });
             const { data } = await axios.get(`${BASE}/surah/${surahNum}`, { timeout: 12000 });
             const s = data?.data;
             if (!s) throw new Error('no data');
@@ -106,6 +107,7 @@ async function quranCommand(sock, chatId, message) {
     }
 
     try {
+        await sock.sendMessage(chatId, { text: '📿 Fetching ayah……' }, { quoted: message });
         const { en, ar } = await fetchAyah(arg);
         if (!en) throw new Error('no data');
         return sock.sendMessage(chatId, { text: ayahCard(en, ar) }, { quoted: message });
@@ -120,6 +122,7 @@ async function dailyAyahCommand(sock, chatId, message) {
     const day = Math.floor(Date.now() / 86400000);
     const ref = DAILY_AYAHS[day % DAILY_AYAHS.length];
     try {
+        await sock.sendMessage(chatId, { text: '📅 Fetching ayah of the day……' }, { quoted: message });
         const { en, ar } = await fetchAyah(ref);
         if (!en) throw new Error('no data');
         const text = [

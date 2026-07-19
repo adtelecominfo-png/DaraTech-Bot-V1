@@ -194,6 +194,7 @@ async function igsCommand(sock, chatId, message, crop = false) {
         }
 
         await sock.sendMessage(chatId, { react: { text: '🔄', key: message.key } });
+        await sock.sendMessage(chatId, { text: '📸 Fetching Instagram sticker……' }, { quoted: message });
 
         const downloadData = await igdl(urlMatch[0]).catch(() => null);
         if (!downloadData || !downloadData.data) {

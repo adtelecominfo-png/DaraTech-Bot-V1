@@ -11,6 +11,7 @@ async function ttsCommand(sock, chatId, text, message, language = 'en') {
     const fileName = `tts-${Date.now()}.mp3`;
     const filePath = path.join(__dirname, '..', 'assets', fileName);
 
+    await sock.sendMessage(chatId, { text: '🗣️ Converting text to speech……' }, { quoted: message });
     const gtts = new gTTS(text, language);
     gtts.save(filePath, async function (err) {
         if (err) {

@@ -27,6 +27,7 @@ async function cryptoPriceCommand(sock, chatId, message, args) {
     const input = (args[0] || 'bitcoin').toLowerCase();
     const coinId = COIN_MAP[input] || input;
     try {
+        await sock.sendMessage(chatId, { text: '💰 Fetching crypto price……' }, { quoted: message });
         const res = await fetch(`${COINGECKO}/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true`);
         const json = await res.json();
         const d = json[coinId];
@@ -43,6 +44,7 @@ async function cryptoPriceCommand(sock, chatId, message, args) {
 
 async function topCryptoCommand(sock, chatId, message) {
     try {
+        await sock.sendMessage(chatId, { text: '🏆 Fetching top cryptocurrencies……' }, { quoted: message });
         const res = await fetch(`${COINGECKO}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1`);
         const list = await res.json();
         if (!Array.isArray(list)) throw new Error('Bad response');
@@ -61,6 +63,7 @@ async function topCryptoCommand(sock, chatId, message) {
 
 async function trendingCryptoCommand(sock, chatId, message) {
     try {
+        await sock.sendMessage(chatId, { text: '🔥 Fetching trending crypto……' }, { quoted: message });
         const res = await fetch(`${COINGECKO}/search/trending`);
         const json = await res.json();
         const coins = json.coins || [];
@@ -86,6 +89,7 @@ async function cryptoConvertCommand(sock, chatId, message, args) {
     if (isNaN(amount)) return sock.sendMessage(chatId, { text: '❌ Invalid amount.' }, { quoted: message });
     const fromId = COIN_MAP[from] || from;
     try {
+        await sock.sendMessage(chatId, { text: '💱 Converting……' }, { quoted: message });
         const res = await fetch(`${COINGECKO}/simple/price?ids=${fromId}&vs_currencies=${to}`);
         const json = await res.json();
         const price = json[fromId]?.[to];

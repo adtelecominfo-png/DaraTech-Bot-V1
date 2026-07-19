@@ -8,6 +8,7 @@ async function defineCommand(sock, chatId, message) {
     const word = text.split(' ').slice(1).join(' ').trim();
     if (!word) return sock.sendMessage(chatId, { text: '📖 Usage: .define <word>\nExample: .define serendipity' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '📖 Searching dictionary……' }, { quoted: message });
         const { data } = await axios.get(`${BASE}/${encodeURIComponent(word)}`, { timeout: 10000 });
         const entry = data[0];
         const phonetic = entry.phonetic || entry.phonetics?.find(p => p.text)?.text || '';
@@ -36,6 +37,7 @@ async function synonymCommand(sock, chatId, message) {
     const word = text.split(' ').slice(1).join(' ').trim();
     if (!word) return sock.sendMessage(chatId, { text: '🔁 Usage: .synonym <word>' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '🔁 Searching synonyms……' }, { quoted: message });
         const { data } = await axios.get(`${BASE}/${encodeURIComponent(word)}`, { timeout: 10000 });
         const syns = [];
         for (const m of (data[0]?.meanings || [])) {
@@ -58,6 +60,7 @@ async function antonymCommand(sock, chatId, message) {
     const word = text.split(' ').slice(1).join(' ').trim();
     if (!word) return sock.sendMessage(chatId, { text: '↔️ Usage: .antonym <word>' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '↔️ Searching antonyms……' }, { quoted: message });
         const { data } = await axios.get(`${BASE}/${encodeURIComponent(word)}`, { timeout: 10000 });
         const ants = [];
         for (const m of (data[0]?.meanings || [])) {
@@ -82,6 +85,7 @@ async function wordofdayCommand(sock, chatId, message) {
     const dayIndex = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 86400000);
     const word = words[dayIndex % words.length];
     try {
+        await sock.sendMessage(chatId, { text: '📅 Fetching word of the day……' }, { quoted: message });
         const { data } = await axios.get(`${BASE}/${word}`, { timeout: 10000 });
         const entry = data[0];
         const meaning = entry.meanings?.[0];

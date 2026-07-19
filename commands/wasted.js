@@ -31,6 +31,7 @@ async function wastedCommand(sock, chatId, message) {
         }
 
         // Get the wasted effect image
+        await sock.sendMessage(chatId, { text: '⚰️ Generating wasted image……' }, { quoted: message });
         const wastedResponse = await axios.get(
             `https://some-random-api.com/canvas/overlay/wasted?avatar=${encodeURIComponent(profilePic)}`,
             { responseType: 'arraybuffer' }

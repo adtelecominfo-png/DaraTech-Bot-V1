@@ -3,6 +3,7 @@ const axios = require('axios');
 
 async function randomRecipeCommand(sock, chatId, message) {
     try {
+        await sock.sendMessage(chatId, { text: '🍽️ Fetching a random recipe……' }, { quoted: message });
         const { data } = await axios.get('https://www.themealdb.com/api/json/v1/1/random.php', { timeout: 10000 });
         const m = data.meals?.[0];
         if (!m) throw new Error('no meal');
@@ -39,6 +40,7 @@ async function searchRecipeCommand(sock, chatId, message) {
     const query = text.split(' ').slice(1).join(' ').trim();
     if (!query) return sock.sendMessage(chatId, { text: '🍽️ Usage: .recipe <meal name>\nExample: .recipe pasta\n\nFor random: .randomrecipe' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '🍳 Searching recipe……' }, { quoted: message });
         const { data } = await axios.get(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`, { timeout: 10000 });
         const meals = data.meals;
         if (!meals) return sock.sendMessage(chatId, { text: `❌ No recipe found for "*${query}*".` }, { quoted: message });
@@ -78,6 +80,7 @@ async function cocktailCommand(sock, chatId, message) {
         ? `https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`
         : 'https://www.thecocktaildb.com/api/json/v1/1/random.php';
     try {
+        await sock.sendMessage(chatId, { text: '🍹 Looking up cocktail……' }, { quoted: message });
         const { data } = await axios.get(url, { timeout: 10000 });
         const d = data.drinks?.[0];
         if (!d) return sock.sendMessage(chatId, { text: `❌ No cocktail found${query ? ` for "${query}"` : ''}.` }, { quoted: message });

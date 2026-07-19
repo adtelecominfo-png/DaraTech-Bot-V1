@@ -5,6 +5,7 @@ async function handleTranslateCommand(sock, chatId, message, match) {
         // Show typing indicator
         await sock.presenceSubscribe(chatId);
         await sock.sendPresenceUpdate('composing', chatId);
+        await sock.sendMessage(chatId, { text: '🌐 Translating……' }, { quoted: message });
 
         let textToTranslate = '';
         let lang = '';

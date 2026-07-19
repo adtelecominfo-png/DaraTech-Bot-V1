@@ -44,6 +44,7 @@ async function blurCommand(sock, chatId, message, quotedMessage) {
         }
 
         // Resize and optimize image
+        await sock.sendMessage(chatId, { text: '🌫️ Blurring image……' }, { quoted: message });
         const resizedImage = await sharp(imageBuffer)
             .resize(800, 800, { // Resize to max 800x800
                 fit: 'inside',

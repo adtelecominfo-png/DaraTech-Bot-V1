@@ -26,6 +26,7 @@ async function textmakerCommand(sock, chatId, message, q, type) {
         }
 
         try {
+            await sock.sendMessage(chatId, { text: '✍️ Generating text image……' }, { quoted: message });
             let result;
             switch (type) {
                 case 'metallic':

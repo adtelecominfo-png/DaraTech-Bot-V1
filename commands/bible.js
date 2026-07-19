@@ -15,6 +15,7 @@ async function bibleCommand(sock, chatId, message) {
     const ref = text.split(' ').slice(1).join(' ').trim();
     if (!ref) return sock.sendMessage(chatId, { text: '📖 Usage: .bible <reference>\nExample: .bible john 3:16\nExample: .bible psalm 23\n\nFor daily verse: .dailyverse' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '📖 Fetching scripture……' }, { quoted: message });
         const { data } = await axios.get(`https://bible-api.com/${encodeURIComponent(ref)}`, { timeout: 10000 });
         if (data.error) return sock.sendMessage(chatId, { text: `❌ Verse not found: "${ref}"` }, { quoted: message });
         const verses = data.verses || [];
@@ -29,6 +30,7 @@ async function dailyVerseCommand(sock, chatId, message) {
     const day = Math.floor(Date.now() / 86400000);
     const ref = DAILY_VERSES[day % DAILY_VERSES.length];
     try {
+        await sock.sendMessage(chatId, { text: '📅 Fetching verse of the day……' }, { quoted: message });
         const { data } = await axios.get(`https://bible-api.com/${encodeURIComponent(ref)}`, { timeout: 10000 });
         const verseText = (data.verses || []).map(v => v.text.trim()).join(' ') || data.text?.trim() || 'No text found.';
         await sock.sendMessage(chatId, {

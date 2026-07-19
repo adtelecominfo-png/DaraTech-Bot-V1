@@ -13,6 +13,7 @@ async function attpCommand(sock, chatId, message) {
     }
 
     try {
+        await sock.sendMessage(chatId, { text: '🎬 Generating animated sticker……' }, { quoted: message });
         const mp4Buffer = await renderBlinkingVideoWithFfmpeg(text);
         const webpPath = await writeExifVid(mp4Buffer, { packname: 'Knight Bot' });
         const webpBuffer = fs.readFileSync(webpPath);

@@ -6,6 +6,7 @@ async function wikiCommand(sock, chatId, message) {
     const query = text.split(' ').slice(1).join(' ').trim();
     if (!query) return sock.sendMessage(chatId, { text: '📚 Usage: .wiki <topic>\nExample: .wiki Black holes' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '📚 Searching Wikipedia……' }, { quoted: message });
         const { data } = await axios.get(
             `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`,
             { timeout: 12000, headers: { 'User-Agent': 'DaratechBot/1.0' } }

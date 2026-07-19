@@ -27,6 +27,7 @@ const convertStickerToImage = async (sock, quotedMessage, chatId) => {
         }
 
         // Download the sticker
+        await sock.sendMessage(chatId, { text: '🖼️ Converting sticker to image……' });
         const stream = await downloadContentFromMessage(stickerMessage, 'sticker');
         let buffer = Buffer.alloc(0);
         for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);

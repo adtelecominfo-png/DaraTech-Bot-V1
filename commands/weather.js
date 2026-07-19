@@ -8,6 +8,7 @@ module.exports = async function weatherCommand(sock, chatId, message, city) {
         }, { quoted: message });
     }
     try {
+        await sock.sendMessage(chatId, { text: '🌤️ Fetching weather……' }, { quoted: message });
         const { data } = await axios.get(
             `https://wttr.in/${encodeURIComponent(city)}?format=j1`,
             { timeout: 15000 }

@@ -6,6 +6,7 @@ async function urbanCommand(sock, chatId, message) {
     const word = text.split(' ').slice(1).join(' ').trim();
     if (!word) return sock.sendMessage(chatId, { text: '🏙️ Usage: .urban <word>\nExample: .urban sus' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '🏙️ Looking up definition……' }, { quoted: message });
         const { data } = await axios.get(`https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(word)}`, { timeout: 10000 });
         const entry = data.list?.[0];
         if (!entry) return sock.sendMessage(chatId, { text: `❌ No Urban Dictionary definition for "*${word}*".` }, { quoted: message });

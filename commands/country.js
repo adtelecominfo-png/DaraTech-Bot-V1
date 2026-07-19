@@ -6,6 +6,7 @@ async function countryCommand(sock, chatId, message) {
     const name = text.split(' ').slice(1).join(' ').trim();
     if (!name) return sock.sendMessage(chatId, { text: '🌍 Usage: .country <name>\nExample: .country Nigeria' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '🌍 Fetching country info……' }, { quoted: message });
         const { data } = await axios.get(`https://restcountries.com/v3.1/name/${encodeURIComponent(name)}`, { timeout: 10000 });
         const c = data[0];
         const currencies = Object.values(c.currencies || {}).map(v => `${v.name} (${v.symbol || '-'})`).join(', ') || '-';
@@ -43,6 +44,7 @@ async function capitalCommand(sock, chatId, message) {
     const name = text.split(' ').slice(1).join(' ').trim();
     if (!name) return sock.sendMessage(chatId, { text: '🏙️ Usage: .capital <country>' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '🏙️ Fetching capital info……' }, { quoted: message });
         const { data } = await axios.get(`https://restcountries.com/v3.1/name/${encodeURIComponent(name)}`, { timeout: 10000 });
         const c = data[0];
         const capital = (c.capital || ['Unknown']).join(', ');
@@ -59,6 +61,7 @@ async function flagCommand(sock, chatId, message) {
     const name = text.split(' ').slice(1).join(' ').trim();
     if (!name) return sock.sendMessage(chatId, { text: '🚩 Usage: .flag <country>' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '🚩 Fetching country flag……' }, { quoted: message });
         const { data } = await axios.get(`https://restcountries.com/v3.1/name/${encodeURIComponent(name)}`, { timeout: 10000 });
         const c = data[0];
         const flag = c.flags?.png || c.flags?.svg;
@@ -77,6 +80,7 @@ async function timezoneCountryCommand(sock, chatId, message) {
     const name = text.split(' ').slice(1).join(' ').trim();
     if (!name) return sock.sendMessage(chatId, { text: '🕐 Usage: .countrytime <country>' }, { quoted: message });
     try {
+        await sock.sendMessage(chatId, { text: '🕐 Fetching timezone info……' }, { quoted: message });
         const { data } = await axios.get(`https://restcountries.com/v3.1/name/${encodeURIComponent(name)}`, { timeout: 10000 });
         const c = data[0];
         const zones = (c.timezones || []).join(', ') || '-';

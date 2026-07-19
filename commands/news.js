@@ -3,6 +3,7 @@ const { davidGet } = require('../lib/gifted');
 
 async function newsCommand(sock, chatId, message) {
     try {
+        await sock.sendMessage(chatId, { text: '📰 Fetching latest news……' }, { quoted: message });
         const data = await davidGet('/news/trending');
         if (!data?.success) throw new Error('News feed unreachable');
 
