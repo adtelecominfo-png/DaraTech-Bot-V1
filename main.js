@@ -982,11 +982,9 @@ case userMessage.startsWith('.bssensi'):
                     await sock.sendMessage(chatId, { text: 'This command can only be used in groups.', ...channelInfo }, { quoted: message });
                 }
                 break;
-            case userMessage === '.git':
-            case userMessage === '.github':
-            case userMessage === '.sc':
-            case userMessage === '.script':
-            case userMessage === '.repo':
+            case userMessage === '.unknown':
+            case userMessage === '.unknownofrun':
+            case userMessage === '.daratechbot':
                 await githubCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('.antibadword'):
