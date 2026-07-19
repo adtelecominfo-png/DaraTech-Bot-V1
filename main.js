@@ -238,7 +238,7 @@ const { quranCommand, dailyAyahCommand }  = require('./commands/quran');
 const { poemCommand, animequoteCommand, kanyeCommand } = require('./commands/poetry');
 const { bmiCommand, ageCommand, celsiusCommand, fahrenheitCommand, kmtomilesCommand, milestokmCommand, kgtolbsCommand, lbstokg } = require('./commands/converter');
 const { fancyCommand, boldtextCommand, italicCommand, bolditalicCommand, scriptCommand, frakturCommand, doubleCommand, sansCommand, monoCommand, wideCommand, smallcapsCommand, bubbleCommand, flipCommand, mirrorCommand } = require('./commands/fonts');
-const { ttpCommand, canvasCommand, topdfCommand, web2zipCommand, proxyCommand, obfuscateCommand, obfuscate2Command, dnsCommand, headersCommand, servercheckCommand, ssphoneCommand, sstabCommand, sspcCommand, fantextCommand, fantext2Command, whoisCommand, tinyurlCommand, cleanuriCommand, vgdCommand, rebrandlyCommand, vurlCommand, adfocCommand, ssurCommand } = require('./commands/gifted-tools');
+const { ttpCommand, canvasCommand, topdfCommand, web2zipCommand, proxyCommand, obfuscateCommand, obfuscate2Command, dnsCommand, headersCommand, servercheckCommand, ssphoneCommand, sstabCommand, sspcCommand, fantextCommand, fantext2Command, rcCommand, whoisCommand, tinyurlCommand, cleanuriCommand, vgdCommand, rebrandlyCommand, vurlCommand, adfocCommand, ssurCommand } = require('./commands/gifted-tools');
 const { konachanCommand, kusonimeCommand, animenewCommand, charquoteCommand, showquoteCommand } = require('./commands/gifted-anime');
 const { friendshipCommand, lovetextCommand, heartbreakCommand, gratitudeCommand, thankyouCommand, newyearCommand, xmasCommand, halloweenCommand, valentinesCommand, mothersdayCommand, fathersdayCommand, bfdayCommand, gfdayCommand } = require('./commands/gifted-fun');
 const { gsearchCommand, gimageCommand, ttsearchCommand, chordCommand, hearthisCommand, npmpkgCommand, slyricsCommand, happymodCommand, scsearchCommand, wattpadCommand, stickersearchCommand } = require('./commands/gifted-search');
@@ -1617,6 +1617,10 @@ case userMessage.startsWith('.bssensi'):
                     const zipArg = parts[1] && parts[1].startsWith('http') ? parts[1] : '';
                     await updateCommand(sock, chatId, message, zipArg);
                 }
+                commandExecuted = true;
+                break;
+            case userMessage.startsWith('.rc ') || userMessage === '.rc':
+                await rcCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
             case userMessage.startsWith('.removebg') || userMessage.startsWith('.rmbg') || userMessage.startsWith('.nobg'):

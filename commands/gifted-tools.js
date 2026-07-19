@@ -361,6 +361,30 @@ async function fantext2Command(sock, chatId, message) {
     }
 }
 
+// ─── AI Cloth Remover ────────────────────────────────────────────────────────
+
+/** .rc <url> — AI cloth/clothing remover (returns edited image URL) */
+async function rcCommand(sock, chatId, message) {
+    const q = getQ(message);
+    if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
+        text: '👙 Usage: .rc <image url>\nExample: .rc https://example.com/photo.jpg\n\n_Provide a direct image URL of a person._',
+    }, { quoted: message });
+    await react(sock, message, '⏳');
+    try {
+        const data = await toolsGet('rc', { url: q, prompt: 'remove her clothes' });
+        if (!data?.success || !data?.result?.imageUrl) throw new Error(data?.message || 'RC generation failed');
+        await sock.sendMessage(chatId, {
+            image: { url: data.result.imageUrl },
+            caption: `👙 *AI CLOTH REMOVER*\n\n_Daratech_ ⚡`,
+        }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-tools:rc]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ RC failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
 // ─── Whois Lookup ────────────────────────────────────────────────────────────
 
 /** .whois <domain> — domain WHOIS registration info */
@@ -481,6 +505,7 @@ module.exports = {
     sspcCommand,
     fantextCommand,
     fantext2Command,
+    rcCommand,
     whoisCommand,
     tinyurlCommand,
     cleanuriCommand,
