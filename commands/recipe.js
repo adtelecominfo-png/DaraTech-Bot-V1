@@ -1,5 +1,22 @@
 'use strict';
 const axios = require('axios');
+const { get: giftedGet } = require('../lib/gifted');
+
+// Fallback: GiftedTech Google search when TheMealDB has no results
+async function googleRecipeSearch(query) {
+    const data = await giftedGet('/search/google', { query: `${query} recipe` });
+    const results = data?.results || [];
+    if (!results.length) return null;
+    // Build a card from the top web result
+    const top = results[0];
+    const lines = results.slice(0, 5).map((r, i) => `${i + 1}. *${r.title}*\n   🔗 ${r.link}\n   _${r.description?.slice(0, 100) || ''}_`);
+    return (
+        `╭━═『 🍽️ *RECIPE: ${query.toUpperCase()}* 』═━╮\n` +
+        `┃ ℹ️ Not in MealDB — showing web results\n` +
+        `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+        lines.join('\n\n') + '\n\n_Daratech_ ⚡'
+    );
+}
 
 async function randomRecipeCommand(sock, chatId, message) {
     try {
@@ -43,7 +60,14 @@ async function searchRecipeCommand(sock, chatId, message) {
         await sock.sendMessage(chatId, { text: '🍳 Searching recipe……' }, { quoted: message });
         const { data } = await axios.get(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`, { timeout: 10000 });
         const meals = data.meals;
-        if (!meals) return sock.sendMessage(chatId, { text: `❌ No recipe found for "*${query}*".` }, { quoted: message });
+        if (!meals) {
+            // Fallback to web search via GiftedTech Google API
+            try {
+                const webCard = await googleRecipeSearch(query);
+                if (webCard) return sock.sendMessage(chatId, { text: webCard }, { quoted: message });
+            } catch { /* ignore fallback errors */ }
+            return sock.sendMessage(chatId, { text: `❌ No recipe found for "*${query}*".` }, { quoted: message });
+        }
         const m = meals[0];
         const ingredients = [];
         for (let i = 1; i <= 20; i++) {

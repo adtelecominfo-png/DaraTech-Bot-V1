@@ -316,22 +316,41 @@ async function creategcCommand(sock, chatId, senderId, userMessage, message) {
             return sock.sendMessage(chatId, { text: '❌ Only the owner can create groups.' }, { quoted: message });
         }
 
-        // .creategc GroupName @mention1 @mention2
-        const groupName = userMessage.slice(9).replace(/@\d+/g, '').trim();
+        // Parse everything after ".creategc"
+        const afterCmd = userMessage.slice(9).trim();
+
+        // Extract phone numbers (pure digit tokens, 7–15 chars)
+        const phoneNumbers = [];
+        const mentioned = getMentioned(message);
+        for (const token of afterCmd.replace(/@\d+/g, '').split(/\s+/)) {
+            const cleaned = token.replace(/[^0-9]/g, '');
+            if (cleaned.length >= 7 && cleaned.length <= 15) {
+                phoneNumbers.push(cleaned + '@s.whatsapp.net');
+            }
+        }
+
+        // Group name = everything that is NOT a pure phone-number token and NOT an @mention token
+        const groupName = afterCmd
+            .replace(/@\d+/g, '')
+            .split(/\s+/)
+            .filter(t => !/^\d{7,15}$/.test(t))
+            .join(' ')
+            .trim();
+
         if (!groupName) {
             return sock.sendMessage(chatId, {
-                text: '❌ Usage: .creategc GroupName @member1 @member2'
+                text: '❌ Usage:\n*.creategc GroupName @member*  (in groups)\n*.creategc GroupName 2348012345678*  (in DMs, use full number)',
             }, { quoted: message });
         }
 
-        const mentioned = getMentioned(message);
-        if (mentioned.length === 0) {
+        const allMembers = [...new Set([...mentioned, ...phoneNumbers])];
+        if (allMembers.length === 0) {
             return sock.sendMessage(chatId, {
-                text: '❌ You must @mention at least one member.\n\nUsage: *.creategc GroupName @member1 @member2*',
+                text: '❌ You must provide at least one member.\n\n📌 Usage:\n*.creategc GroupName @member*  (in groups)\n*.creategc GroupName 2348012345678*  (in DMs, use full number)',
             }, { quoted: message });
         }
         const botJid = getBotJid(sock);
-        const participants = [...new Set([...mentioned, botJid])];
+        const participants = [...new Set([...allMembers, botJid])];
 
         await sock.sendMessage(chatId, { text: '⏳ Creating group……' }, { quoted: message });
         const gc = await sock.groupCreate(groupName, participants);
