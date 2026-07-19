@@ -17,6 +17,7 @@ async function handleSsCommand(sock, chatId, message, match) {
         await sock.sendMessage(message.key.remoteJid, {
             react: { text: '⏳', key: message.key },
         });
+        await sock.sendMessage(chatId, { text: '📸 Taking screenshot……' }, { quoted: message });
         const buf = await toolsBuf('ssweb', { url });
         if (buf.length < 1000) throw new Error('Screenshot failed or empty response');
         await sock.sendMessage(chatId, {

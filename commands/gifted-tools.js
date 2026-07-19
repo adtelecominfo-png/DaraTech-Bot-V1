@@ -38,13 +38,19 @@ async function react(sock, message, emoji) {
     } catch (_) {}
 }
 
+/** React with ⏳ AND send a "processing…" text so the user sees immediate feedback */
+async function processing(sock, message, chatId, text) {
+    await react(sock, message, '⏳');
+    await sock.sendMessage(chatId, { text }, { quoted: message });
+}
+
 // ─── Image Tools ─────────────────────────────────────────────────────────────
 
 /** .ttp <text> — text to picture image */
 async function ttpCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, { text: '🖼️ Usage: .ttp <text>\nExample: .ttp Hello World' }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '🖼️ Generating image……');
     try {
         const data = await toolsGet('ttp', { query: q });
         if (!data?.success || !data?.image_url) throw new Error(data?.message || 'No image returned');
@@ -93,7 +99,7 @@ async function canvasCommand(sock, chatId, message) {
         text: `❌ Please provide a title after the type.\nExample: *.canvas ${type} Your Title Here*`,
     }, { quoted: message });
 
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '🎨 Creating canvas card……');
     try {
         const buf = await toolsBuf('canvas', { title, type, text: 'Now Playing', watermark: 'Daratech' });
         if (buf.length < 200) throw new Error('Canvas generation failed');
@@ -117,7 +123,7 @@ async function topdfCommand(sock, chatId, message) {
     if (!q) return sock.sendMessage(chatId, {
         text: '📄 Usage: .topdf <text or URL>\nExample: .topdf https://example.com\nExample: .topdf This is my document content',
     }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '📄 Generating PDF……');
     try {
         const buf = await toolsBuf('topdf', { query: q });
         if (buf.length < 100) throw new Error('PDF generation failed — try a different input');
@@ -144,7 +150,7 @@ async function web2zipCommand(sock, chatId, message) {
     if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
         text: '🗜️ Usage: .web2zip <url>\nExample: .web2zip https://example.com',
     }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '🗜️ Archiving website……');
     try {
         const data = await toolsGet('web2zip', { url: q }, 60000);
         if (!data?.success || !data?.result?.download_url) throw new Error(data?.message || 'Failed to archive website');
@@ -166,7 +172,7 @@ async function web2zipCommand(sock, chatId, message) {
 
 /** .proxy — get a fresh list of working proxies */
 async function proxyCommand(sock, chatId, message) {
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '🌐 Fetching proxy list……');
     try {
         const data = await toolsGet('proxy', {});
         if (!data?.success || !data?.results?.length) throw new Error('No proxies returned');
@@ -192,7 +198,7 @@ async function obfuscateCommand(sock, chatId, message) {
     if (!q) return sock.sendMessage(chatId, {
         text: '🔐 Usage: .obfuscate <JavaScript code>\nExample: .obfuscate console.log("hello")',
     }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '🔐 Obfuscating code……');
     try {
         const data = await toolsGet('encrypt', { code: q });
         if (!data?.success || !data?.encrypted_code) throw new Error(data?.message || 'Obfuscation failed');
@@ -215,7 +221,7 @@ async function dnsCommand(sock, chatId, message) {
     if (!q) return sock.sendMessage(chatId, {
         text: '🔍 Usage: .dns <domain>\nExample: .dns google.com',
     }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '🔍 Looking up DNS records……');
     try {
         const data = await toolsGet('dns-check', { domain: q });
         if (!data?.success || !data?.result) throw new Error(data?.message || 'DNS lookup failed');
@@ -244,7 +250,7 @@ async function headersCommand(sock, chatId, message) {
     if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
         text: '📡 Usage: .headers <url>\nExample: .headers https://google.com',
     }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '📡 Fetching HTTP headers……');
     try {
         const data = await toolsGet('http-headers', { url: q });
         if (!data?.success || !data?.result) throw new Error(data?.message || 'Headers fetch failed');
@@ -265,7 +271,7 @@ async function servercheckCommand(sock, chatId, message) {
     if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
         text: '🖥️ Usage: .servercheck <url>\nExample: .servercheck https://google.com',
     }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '🖥️ Checking server……');
     try {
         const data = await toolsGet('server-check', { url: q });
         if (!data?.success || !data?.result) throw new Error(data?.message || 'Server check failed');
@@ -294,7 +300,7 @@ async function _screenshotViewport(sock, chatId, message, endpoint, label) {
     if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
         text: `📸 Usage: .${endpoint} <url>\nExample: .${endpoint} https://google.com`,
     }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '📸 Taking screenshot……');
     try {
         const buf = await toolsBuf(endpoint, { url: q });
         if (buf.length < 500) throw new Error('Screenshot failed or empty response');
@@ -331,7 +337,7 @@ async function sspcCommand(sock, chatId, message) {
 async function fantextCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, { text: '✨ Usage: .fantext <text>\nExample: .fantext Hello World' }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '✨ Generating fancy text……');
     try {
         const data = await toolsGet('fancy', { text: q });
         if (!data?.success || !Array.isArray(data?.results)) throw new Error(data?.message || 'No styles returned');
@@ -350,7 +356,7 @@ async function fantextCommand(sock, chatId, message) {
 async function fantext2Command(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, { text: '✨ Usage: .fantext2 <text>\nExample: .fantext2 Hello World' }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '✨ Generating fancy text v2……');
     try {
         const data = await toolsGet('fancyv2', { text: q });
         if (!data?.success || !Array.isArray(data?.results)) throw new Error(data?.message || 'No styles returned');
@@ -386,7 +392,7 @@ async function uploadRcImage(imgMsg) {
 }
 
 async function rcCommand(sock, chatId, message) {
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '👙 AI cloth removal processing……');
     try {
         // 1. Try URL from command text
         let imageUrl = getQ(message);
@@ -445,7 +451,7 @@ async function whoisCommand(sock, chatId, message) {
     if (!q) return sock.sendMessage(chatId, {
         text: '🔎 Usage: .whois <domain>\nExample: .whois google.com',
     }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '🔎 Looking up WHOIS info……');
     try {
         const data = await toolsGet('whois', { domain: q });
         if (!data?.success || !data?.result) throw new Error(data?.message || 'WHOIS lookup failed');
@@ -482,7 +488,7 @@ async function obfuscate2Command(sock, chatId, message) {
     if (!q) return sock.sendMessage(chatId, {
         text: '🔐 Usage: .obfuscate2 <JavaScript code>\nExample: .obfuscate2 console.log("hello")',
     }, { quoted: message });
-    await react(sock, message, '⏳');
+    await processing(sock, message, chatId, '🔐 Obfuscating code v2……');
     try {
         const data = await toolsGet('encryptv2', { code: q });
         if (!data?.success || !data?.result?.encrypted_code) throw new Error(data?.message || 'Obfuscation failed');
@@ -515,7 +521,7 @@ function makeShortener(service) {
             text: `🔗 Usage: *${SHORTENERS[service].cmd} <url>*\nExample: *${SHORTENERS[service].cmd} https://example.com*`,
         }, { quoted: message });
 
-        await react(sock, message, '⏳');
+        await processing(sock, message, chatId, '🔗 Shortening URL……');
         try {
             const data = await toolsGet(service, { url: q });
             if (!data?.success || !data?.result) throw new Error(data?.message || 'Failed to shorten URL');

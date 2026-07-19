@@ -42,6 +42,7 @@ module.exports = {
                 }, { quoted: message });
             }
             await sock.sendPresenceUpdate('composing', chatId);
+            await sock.sendMessage(chatId, { text: '🖼️ Background removal processing……' }, { quoted: message });
             const data = await toolsGet('removebg', { url: imageUrl });
             if (!data?.success || !data?.result?.image_url) throw new Error(data?.message || 'No result returned');
             await sock.sendMessage(chatId, {

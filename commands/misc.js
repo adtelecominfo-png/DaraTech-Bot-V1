@@ -1,6 +1,22 @@
 const axios = require('axios');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
-const { uploadImage } = require('../lib/uploadImage');
+const { UploadFileUgu } = require('../lib/uploader');
+const fs   = require('fs');
+const path = require('path');
+
+/** Download image buffer → write temp file → upload to uguu.se → return URL */
+async function uploadBuffer(buffer) {
+    const tmpDir = path.join(__dirname, '../temp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    const tmpPath = path.join(tmpDir, `misc_${Date.now()}.jpg`);
+    fs.writeFileSync(tmpPath, buffer);
+    try {
+        const res = await UploadFileUgu(tmpPath);
+        return typeof res === 'string' ? res : (res.url || res.url_full);
+    } finally {
+        setTimeout(() => { try { fs.unlinkSync(tmpPath); } catch {} }, 3000);
+    }
+}
 
 async function getQuotedOrOwnImageUrl(sock, message) {
     // 1) Quoted image (highest priority)
@@ -9,8 +25,7 @@ async function getQuotedOrOwnImageUrl(sock, message) {
         const stream = await downloadContentFromMessage(quoted.imageMessage, 'image');
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
-        const buffer = Buffer.concat(chunks);
-        return await uploadImage(buffer);
+        return await uploadBuffer(Buffer.concat(chunks));
     }
 
     // 2) Image in the current message
@@ -18,8 +33,7 @@ async function getQuotedOrOwnImageUrl(sock, message) {
         const stream = await downloadContentFromMessage(message.message.imageMessage, 'image');
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
-        const buffer = Buffer.concat(chunks);
-        return await uploadImage(buffer);
+        return await uploadBuffer(Buffer.concat(chunks));
     }
 
     // 3) Mentioned or replied participant avatar
