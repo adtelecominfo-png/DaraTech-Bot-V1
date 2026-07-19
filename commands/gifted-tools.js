@@ -19,6 +19,8 @@
  */
 
 const { toolsGet, toolsBuf } = require('../lib/gifted');
+const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const { uploadImage } = require('../lib/uploadImage');
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
@@ -363,15 +365,42 @@ async function fantext2Command(sock, chatId, message) {
 
 // ─── AI Cloth Remover ────────────────────────────────────────────────────────
 
-/** .rc <url> — AI cloth/clothing remover (returns edited image URL) */
+/** .rc [url] — AI cloth/clothing remover. Works with URL, replied image, or sent image. */
 async function rcCommand(sock, chatId, message) {
-    const q = getQ(message);
-    if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
-        text: '👙 Usage: .rc <image url>\nExample: .rc https://example.com/photo.jpg\n\n_Provide a direct image URL of a person._',
-    }, { quoted: message });
     await react(sock, message, '⏳');
     try {
-        const data = await toolsGet('rc', { url: q, prompt: 'remove her clothes' });
+        // 1. Try URL from command text
+        let imageUrl = getQ(message);
+        if (imageUrl && !imageUrl.startsWith('http')) imageUrl = null;
+
+        // 2. Try quoted image (reply to an image)
+        if (!imageUrl) {
+            const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            const imgMsg = quoted?.imageMessage;
+            if (imgMsg) {
+                const stream = await downloadContentFromMessage(imgMsg, 'image');
+                const chunks = [];
+                for await (const chunk of stream) chunks.push(chunk);
+                imageUrl = await uploadImage(Buffer.concat(chunks));
+            }
+        }
+
+        // 3. Try image sent alongside the command
+        if (!imageUrl && message.message?.imageMessage) {
+            const stream = await downloadContentFromMessage(message.message.imageMessage, 'image');
+            const chunks = [];
+            for await (const chunk of stream) chunks.push(chunk);
+            imageUrl = await uploadImage(Buffer.concat(chunks));
+        }
+
+        if (!imageUrl) {
+            await react(sock, message, '❌');
+            return sock.sendMessage(chatId, {
+                text: '👙 *Usage:*\n• Reply to an image with *.rc*\n• Send an image with caption *.rc*\n• *.rc <image url>*',
+            }, { quoted: message });
+        }
+
+        const data = await toolsGet('rc', { url: imageUrl, prompt: 'remove her clothes' });
         if (!data?.success || !data?.result?.imageUrl) throw new Error(data?.message || 'RC generation failed');
         await sock.sendMessage(chatId, {
             image: { url: data.result.imageUrl },
