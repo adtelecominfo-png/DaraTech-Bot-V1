@@ -325,9 +325,15 @@ async function creategcCommand(sock, chatId, senderId, userMessage, message) {
         }
 
         const mentioned = getMentioned(message);
+        if (mentioned.length === 0) {
+            return sock.sendMessage(chatId, {
+                text: '❌ You must @mention at least one member.\n\nUsage: *.creategc GroupName @member1 @member2*',
+            }, { quoted: message });
+        }
         const botJid = getBotJid(sock);
         const participants = [...new Set([...mentioned, botJid])];
 
+        await sock.sendMessage(chatId, { text: '⏳ Creating group……' }, { quoted: message });
         const gc = await sock.groupCreate(groupName, participants);
         await sock.sendMessage(chatId, {
             text: `✅ *Group Created!*\n\n📌 Name: *${groupName}*\n👥 Members: ${participants.length}\n🔗 ID: ${gc.id}`
