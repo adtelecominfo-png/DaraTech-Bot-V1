@@ -349,8 +349,8 @@ async function creategcCommand(sock, chatId, senderId, userMessage, message) {
                 text: '❌ You must provide at least one member.\n\n📌 Usage:\n*.creategc GroupName @member*  (in groups)\n*.creategc GroupName 2348012345678*  (in DMs, use full number)',
             }, { quoted: message });
         }
-        const botJid = getBotJid(sock);
-        const participants = [...new Set([...allMembers, botJid])];
+        // Do NOT add the bot's own JID — WhatsApp auto-adds the creator
+        const participants = [...new Set([...allMembers])];
 
         await sock.sendMessage(chatId, { text: '⏳ Creating group……' }, { quoted: message });
         const gc = await sock.groupCreate(groupName, participants);

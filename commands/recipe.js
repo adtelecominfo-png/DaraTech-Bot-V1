@@ -1,18 +1,32 @@
 'use strict';
 const axios = require('axios');
 const { get: giftedGet } = require('../lib/gifted');
+const { searchLocalRecipe } = require('../data/local-recipes');
 
-// Fallback: GiftedTech Google search when TheMealDB has no results
+/** Format a local recipe into a WhatsApp card */
+function formatLocalRecipe(r) {
+    return (
+        `╭━═『 🍽️ *${r.name.toUpperCase()}* 』═━╮\n` +
+        `┃ 🌍 *Origin:* ${r.origin}\n` +
+        `┃ ⏱️ *Time:* ${r.time}\n` +
+        `┃ 🍽️ *Serves:* ${r.servings}\n` +
+        `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+        `🧂 *Ingredients:*\n${r.ingredients.map(i => `▸ ${i}`).join('\n')}\n\n` +
+        `📋 *Instructions:*\n${r.instructions}\n\n` +
+        (r.youtube ? `▶️ ${r.youtube}\n\n` : '') +
+        `_Daratech_ ⚡`
+    );
+}
+
+// Fallback: GiftedTech Google search when both MealDB and local DB have no results
 async function googleRecipeSearch(query) {
     const data = await giftedGet('/search/google', { query: `${query} recipe` });
     const results = data?.results || [];
     if (!results.length) return null;
-    // Build a card from the top web result
-    const top = results[0];
     const lines = results.slice(0, 5).map((r, i) => `${i + 1}. *${r.title}*\n   🔗 ${r.link}\n   _${r.description?.slice(0, 100) || ''}_`);
     return (
         `╭━═『 🍽️ *RECIPE: ${query.toUpperCase()}* 』═━╮\n` +
-        `┃ ℹ️ Not in MealDB — showing web results\n` +
+        `┃ ℹ️ Showing web results\n` +
         `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
         lines.join('\n\n') + '\n\n_Daratech_ ⚡'
     );
@@ -61,7 +75,12 @@ async function searchRecipeCommand(sock, chatId, message) {
         const { data } = await axios.get(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`, { timeout: 10000 });
         const meals = data.meals;
         if (!meals) {
-            // Fallback to web search via GiftedTech Google API
+            // Fallback 1: local Nigerian/African recipe database
+            const local = searchLocalRecipe(query);
+            if (local) {
+                return sock.sendMessage(chatId, { text: formatLocalRecipe(local) }, { quoted: message });
+            }
+            // Fallback 2: GiftedTech Google web search
             try {
                 const webCard = await googleRecipeSearch(query);
                 if (webCard) return sock.sendMessage(chatId, { text: webCard }, { quoted: message });
