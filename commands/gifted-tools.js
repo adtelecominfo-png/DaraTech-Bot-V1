@@ -410,7 +410,20 @@ async function rcCommand(sock, chatId, message) {
     } catch (err) {
         console.error('[gifted-tools:rc]', err.message);
         await react(sock, message, '❌');
-        await sock.sendMessage(chatId, { text: `❌ RC failed.\n\n_${err.message}_` }, { quoted: message });
+
+        const code = err?.response?.status || (err.message.includes('500') ? 500 : 0);
+        let msg;
+        if (code === 500) {
+            msg = '❌ Could not process that image.\n\n_Make sure the image clearly shows a person. Objects, animals, or blurry photos won\'t work._';
+        } else if (code === 429) {
+            msg = '❌ Too many requests. Wait a moment and try again.';
+        } else if (err.message.toLowerCase().includes('upload') || err.message.toLowerCase().includes('network')) {
+            msg = '❌ Failed to upload the image. Check your connection and try again.';
+        } else {
+            msg = `❌ RC failed. Try again with a clearer photo of a person.\n\n_${err.message}_`;
+        }
+
+        await sock.sendMessage(chatId, { text: msg }, { quoted: message });
     }
 }
 
