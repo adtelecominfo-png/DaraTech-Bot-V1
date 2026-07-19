@@ -4,13 +4,13 @@
 
 # DARATECH BOT
 
-**A multi-purpose WhatsApp bot with 400+ commands across 29 categories.**
+**A multi-purpose WhatsApp bot with 465+ commands across 29 categories.**
 
 [![WhatsApp](https://img.shields.io/badge/Platform-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://whatsapp.com)
 [![Node.js](https://img.shields.io/badge/Node.js-24-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 [![Baileys](https://img.shields.io/badge/Baileys-Latest-7C3AED?style=flat-square)](https://github.com/WhiskeySockets/Baileys)
 [![License](https://img.shields.io/badge/License-ISC-F59E0B?style=flat-square)](LICENSE)
-[![Commands](https://img.shields.io/badge/Commands-400+-EC4899?style=flat-square)]()
+[![Commands](https://img.shields.io/badge/Commands-465+-EC4899?style=flat-square)]()
 
 </div>
 
@@ -70,7 +70,7 @@ To start fresh: delete `session/`, clear `SESSION_ID=` in `.env`, run the genera
 
 ---
 
-## Commands — 400+ across 29 categories
+## Commands — 465+ across 29 categories
 
 Use `.menu` in chat to browse all categories.
 Use `.menu <category>` for command list. Use `.help <category>` for full descriptions.
