@@ -1,8 +1,9 @@
 'use strict';
-const yts = require('yt-search');
+const yts   = require('yt-search');
+const axios = require('axios');
 const { get } = require('../lib/gifted');
 
-// ─── Shared: search YouTube ───────────────────────────────────────────────────
+// ─── Shared helpers ───────────────────────────────────────────────────────────
 
 async function ytSearch(input) {
     if (/youtube\.com|youtu\.be/i.test(input)) {
@@ -18,7 +19,19 @@ function pickDl(result) {
     return result.download_url || result.video_url || result.url || result.link || null;
 }
 
-// ─── .video / .ytmp4 — YouTube video as video message (720p) ─────────────────
+/** Download a URL to a Buffer so we send bytes, not an expiring link */
+async function toBuffer(url) {
+    const res = await axios.get(url, {
+        responseType: 'arraybuffer',
+        timeout: 90000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+    return Buffer.from(res.data);
+}
+
+// ─── .video / .ytmp4 — YouTube video (720p) ──────────────────────────────────
 
 async function videoCommand(sock, chatId, message) {
     try {
@@ -34,52 +47,55 @@ async function videoCommand(sock, chatId, message) {
         const dl   = pickDl(data?.result);
         if (!dl) throw new Error('No download URL');
 
+        const buf = await toBuffer(dl);
         await sock.sendMessage(chatId, {
-            video:    { url: dl },
+            video:    buf,
             mimetype: 'video/mp4',
             caption:  `🎬 *${data?.result?.title || title}*\n\n_Daratech_ ⚡`,
         }, { quoted: message });
-    } catch {
+    } catch (err) {
+        console.error('[video]', err.message);
         await sock.sendMessage(chatId, { text: '❌ Video download failed. Try again.' }, { quoted: message });
     }
 }
 
-// ─── .video2 / .savetube — YouTube video via SaveTube server ─────────────────
+// ─── .video2 / .savetube — YouTube video via SaveTube (360p) ─────────────────
 
 async function video2Command(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.(video2|savetube)\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
-            text: '🎬 Usage: .video2 <title or YouTube URL>\n_Downloads via SaveTube — alternative server._',
+            text: '🎬 Usage: .video2 <title or YouTube URL>',
         }, { quoted: message });
 
         const { url, title } = await ytSearch(input);
-        await sock.sendMessage(chatId, { text: `🎬 *Downloading via SaveTube:* ${title}…` }, { quoted: message });
+        await sock.sendMessage(chatId, { text: `🎬 *Downloading (360p):* ${title}…` }, { quoted: message });
 
-        // SaveTube MP4 — confirmed endpoint, result.download_url
         const data = await get('/download/savetubemp4', { url });
         const dl   = pickDl(data?.result);
         if (!dl) throw new Error('No download URL');
 
+        const buf = await toBuffer(dl);
         await sock.sendMessage(chatId, {
-            video:    { url: dl },
+            video:    buf,
             mimetype: 'video/mp4',
             caption:  `🎬 *${data?.result?.title || title}*\n📊 ${data?.result?.quality || '360p'}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
-    } catch {
-        await sock.sendMessage(chatId, { text: '❌ Video download failed (SaveTube). Try .video instead.' }, { quoted: message });
+    } catch (err) {
+        console.error('[video2]', err.message);
+        await sock.sendMessage(chatId, { text: '❌ Video download failed. Try .video instead.' }, { quoted: message });
     }
 }
 
-// ─── .videodoc — YouTube video as downloadable document file ─────────────────
+// ─── .videodoc — YouTube video as downloadable document ──────────────────────
 
 async function videoDocCommand(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-        const input = text.replace(/^\.(videodoc)\s*/i, '').trim();
+        const input = text.replace(/^\.videodoc\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
-            text: '🎬 Usage: .videodoc <title or YouTube URL>\n_Sends the MP4 as a file you can download & share._',
+            text: '🎬 Usage: .videodoc <title or YouTube URL>',
         }, { quoted: message });
 
         const { url, title } = await ytSearch(input);
@@ -89,13 +105,15 @@ async function videoDocCommand(sock, chatId, message) {
         const dl   = pickDl(data?.result);
         if (!dl) throw new Error('No download URL');
 
+        const buf = await toBuffer(dl);
         const vidTitle = data?.result?.title || title;
         await sock.sendMessage(chatId, {
-            document: { url: dl },
+            document: buf,
             mimetype: 'video/mp4',
             fileName: `${vidTitle}.mp4`,
         }, { quoted: message });
-    } catch {
+    } catch (err) {
+        console.error('[videodoc]', err.message);
         await sock.sendMessage(chatId, { text: '❌ Video file download failed. Try again.' }, { quoted: message });
     }
 }

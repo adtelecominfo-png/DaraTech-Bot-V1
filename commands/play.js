@@ -1,8 +1,9 @@
 'use strict';
-const yts = require('yt-search');
+const yts   = require('yt-search');
+const axios = require('axios');
 const { get } = require('../lib/gifted');
 
-// ─── Shared: search YouTube ───────────────────────────────────────────────────
+// ─── Shared helpers ───────────────────────────────────────────────────────────
 
 async function ytSearch(input) {
     if (/youtube\.com|youtu\.be/i.test(input)) {
@@ -26,6 +27,18 @@ function pickDl(result) {
     return result.download_url || result.audio_url || result.url || result.link || null;
 }
 
+/** Download a URL to a Buffer so we send bytes, not an expiring link */
+async function toBuffer(url) {
+    const res = await axios.get(url, {
+        responseType: 'arraybuffer',
+        timeout: 60000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+    return Buffer.from(res.data);
+}
+
 async function sendBanner(sock, chatId, message, meta, action) {
     const caption = [
         `🎵 *${meta.title}*`,
@@ -46,7 +59,7 @@ async function sendBanner(sock, chatId, message, meta, action) {
     return sock.sendMessage(chatId, { text: caption }, { quoted: message });
 }
 
-// ─── .play — YouTube audio as audio bubble (ytaudio, 128kbps) ────────────────
+// ─── .play — YouTube audio ────────────────────────────────────────────────────
 
 async function playCommand(sock, chatId, message) {
     try {
@@ -62,55 +75,58 @@ async function playCommand(sock, chatId, message) {
         const dl   = pickDl(data?.result);
         if (!dl) throw new Error('No download URL');
 
+        const buf = await toBuffer(dl);
         await sock.sendMessage(chatId, {
-            audio:    { url: dl },
+            audio:    buf,
             mimetype: 'audio/mpeg',
             fileName: `${data?.result?.title || meta.title}.mp3`,
             ptt:      false,
         }, { quoted: message });
-    } catch {
+    } catch (err) {
+        console.error('[play]', err.message);
         await sock.sendMessage(chatId, { text: '❌ Audio download failed. Try again.' }, { quoted: message });
     }
 }
 
-// ─── .play2 — SaveTube MP3 (alternate server, audio bubble) ──────────────────
+// ─── .play2 — SaveTube MP3 ────────────────────────────────────────────────────
 
 async function play2Command(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.(play2|playdoc)\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
-            text: '🎵 Usage: .play2 <song name or YouTube URL>\n_Uses SaveTube server — alternative source._',
+            text: '🎵 Usage: .play2 <song name or YouTube URL>',
         }, { quoted: message });
 
         const meta = await ytSearch(input);
         await sendBanner(sock, chatId, message, meta, 'Downloading via SaveTube…');
 
-        // SaveTube MP3 — confirmed endpoint, result.download_url
         const data = await get('/download/savetubemp3', { url: meta.url });
         const dl   = pickDl(data?.result);
         if (!dl) throw new Error('No download URL');
 
+        const buf = await toBuffer(dl);
         const title = data?.result?.title || meta.title;
         await sock.sendMessage(chatId, {
-            audio:    { url: dl },
+            audio:    buf,
             mimetype: 'audio/mpeg',
             fileName: `${title}.mp3`,
             ptt:      false,
         }, { quoted: message });
-    } catch {
-        await sock.sendMessage(chatId, { text: '❌ Audio download failed (SaveTube). Try .play instead.' }, { quoted: message });
+    } catch (err) {
+        console.error('[play2]', err.message);
+        await sock.sendMessage(chatId, { text: '❌ Audio download failed. Try .play instead.' }, { quoted: message });
     }
 }
 
-// ─── .playdoc — YouTube audio sent as downloadable document file ──────────────
+// ─── .playdoc — YouTube audio as document ────────────────────────────────────
 
 async function playDocCommand(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.playdoc\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
-            text: '🎵 Usage: .playdoc <song name or YouTube URL>\n_Sends the MP3 as a file you can download & share._',
+            text: '🎵 Usage: .playdoc <song name or YouTube URL>',
         }, { quoted: message });
 
         const meta = await ytSearch(input);
@@ -120,43 +136,46 @@ async function playDocCommand(sock, chatId, message) {
         const dl   = pickDl(data?.result);
         if (!dl) throw new Error('No download URL');
 
+        const buf = await toBuffer(dl);
         const title = data?.result?.title || meta.title;
         await sock.sendMessage(chatId, {
-            document: { url: dl },
+            document: buf,
             mimetype: 'audio/mpeg',
             fileName: `${title}.mp3`,
         }, { quoted: message });
-    } catch {
+    } catch (err) {
+        console.error('[playdoc]', err.message);
         await sock.sendMessage(chatId, { text: '❌ Audio file download failed. Try again.' }, { quoted: message });
     }
 }
 
-// ─── .playch — High-quality 320kbps audio (ytmp3 server) ─────────────────────
+// ─── .playch — 320kbps high-quality audio ────────────────────────────────────
 
 async function playChCommand(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.playch\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
-            text: '🎵 Usage: .playch <song name or YouTube URL>\n_Downloads at 320kbps high quality via ytmp3 server._',
+            text: '🎵 Usage: .playch <song name or YouTube URL>',
         }, { quoted: message });
 
         const meta = await ytSearch(input);
         await sendBanner(sock, chatId, message, meta, 'Downloading 320kbps audio…');
 
-        // ytmp3 supports quality param: 128kbps or 320kbps
         const data = await get('/download/ytmp3', { url: meta.url, quality: '320kbps' });
         const dl   = pickDl(data?.result);
         if (!dl) throw new Error('No download URL');
 
+        const buf = await toBuffer(dl);
         const title = data?.result?.title || meta.title;
         await sock.sendMessage(chatId, {
-            audio:    { url: dl },
+            audio:    buf,
             mimetype: 'audio/mpeg',
             fileName: `${title}.mp3`,
             ptt:      false,
         }, { quoted: message });
-    } catch {
+    } catch (err) {
+        console.error('[playch]', err.message);
         await sock.sendMessage(chatId, { text: '❌ High-quality audio download failed. Try .play instead.' }, { quoted: message });
     }
 }
