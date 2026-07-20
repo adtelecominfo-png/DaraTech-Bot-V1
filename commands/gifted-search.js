@@ -91,7 +91,7 @@ async function gimageCommand(sock, chatId, message) {
     }
 }
 
-// ─── .ttsearch <query> — TikTok video search ─────────────────────────────────
+// ─── .ttsearch <query> — TikTok video search (downloads & sends actual video) ──
 
 async function ttsearchCommand(sock, chatId, message) {
     const q = getQ(message);
@@ -103,17 +103,36 @@ async function ttsearchCommand(sock, chatId, message) {
         const data = await searchGet('tiktoksearch', { query: q });
         if (!data?.success || !data?.results) throw new Error(data?.error || 'No results');
         const r = data.results;
-        const cover = r.cover || r.thumbnail || r.image;
-        const title = r.title || r.description || q;
+
+        const title  = r.title || r.description || q;
         const author = r.author || r.username || '';
-        let txt = `🎵 *TIKTOK SEARCH — "${q}"*\n\n`;
+        const cover  = r.cover || r.thumbnail || r.image || '';
+        // Try every common field name for the actual video URL
+        const videoUrl = r.play || r.video || r.url || r.download || r.videoUrl || r.playUrl || '';
+
+        let txt = `🎵 *TIKTOK — "${q}"*\n\n`;
         txt += `*${title}*\n`;
-        if (author) txt += `▸ 👤 *Author:* ${author}\n`;
-        if (r.playCount) txt += `▸ ▶️ *Plays:* ${Number(r.playCount).toLocaleString()}\n`;
-        if (r.likeCount) txt += `▸ ❤️ *Likes:* ${Number(r.likeCount).toLocaleString()}\n`;
+        if (author)       txt += `▸ 👤 *Author:* ${author}\n`;
+        if (r.playCount)  txt += `▸ ▶️ *Plays:* ${Number(r.playCount).toLocaleString()}\n`;
+        if (r.likeCount)  txt += `▸ ❤️ *Likes:* ${Number(r.likeCount).toLocaleString()}\n`;
         txt += `\n_Daratech_ ⚡`;
-        if (cover && cover.startsWith('http')) {
-            await sock.sendMessage(chatId, { image: { url: cover }, caption: txt }, { quoted: message });
+
+        if (videoUrl && videoUrl.startsWith('http')) {
+            // Download and send as actual video
+            const axios = require('axios');
+            await sock.sendMessage(chatId, { text: '⬇️ _Downloading video…_' }, { quoted: message });
+            const resp = await axios.get(videoUrl, { responseType: 'arraybuffer', timeout: 45000 });
+            const buf = Buffer.from(resp.data);
+            if (buf.length < 5000) throw new Error('Video too small — may be a bad URL');
+            await sock.sendMessage(chatId, {
+                video: buf,
+                mimetype: 'video/mp4',
+                caption: txt,
+                fileName: `ttsearch_${Date.now()}.mp4`,
+            }, { quoted: message });
+        } else if (cover && cover.startsWith('http')) {
+            // Fallback: send thumbnail image with info
+            await sock.sendMessage(chatId, { image: { url: cover }, caption: txt + '\n\n⚠️ _Video URL not available — showing thumbnail_' }, { quoted: message });
         } else {
             await sock.sendMessage(chatId, { text: txt }, { quoted: message });
         }

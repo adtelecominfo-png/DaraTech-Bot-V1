@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const fetch = require('node-fetch');
+const { get } = require('../lib/gifted');
 
 const USER_GROUP_DATA = path.join(__dirname, '../data/userGroupData.json');
 
@@ -85,12 +86,56 @@ function extractUserInfo(message, senderId) {
     return info;
 }
 
+// ─── AI response using GiftedTech Gemini (overchat), Pollinations fallback ────
+
+async function getAIResponse(userMessage, context) {
+    // Build a short system context string
+    let sysCtx = 'You are Dara, a friendly and smart WhatsApp chatbot. Be helpful, casual, and keep replies short (1-3 lines).';
+    if (context?.userInfo) {
+        const u = context.userInfo;
+        if (u.name) sysCtx += ` The user's name is ${u.name}.`;
+        if (u.location) sysCtx += ` They are from ${u.location}.`;
+    }
+
+    const fullQuery = sysCtx + '\n\nUser: ' + userMessage + '\n\nDara:';
+
+    // Primary: GiftedTech overchat — gemini model
+    try {
+        const data = await get('/ai/overchat', { q: fullQuery, model: 'gemini' }, 20000);
+        if (!data?.success) throw new Error(data?.message || 'No response');
+        let reply = typeof data.result === 'string'
+            ? data.result
+            : (data.result?.answer || JSON.stringify(data.result));
+        reply = reply.replace(/^(Dara|Bot|AI|Assistant):\s*/i, '').trim();
+        if (reply && reply.length <= 2000) return reply;
+        throw new Error('Empty or oversized reply');
+    } catch (primaryErr) {
+        console.warn('[chatbot:gemini]', primaryErr.message, '— falling back to Pollinations');
+    }
+
+    // Fallback: Pollinations free API
+    try {
+        const prompt = `You are Dara, a friendly WhatsApp assistant. Be casual and helpful. Keep responses short (1-3 lines).\n\nUser: ${userMessage}\n\nDara:`;
+        const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}`, { timeout: 20000 });
+        if (!response.ok) throw new Error(`Pollinations HTTP ${response.status}`);
+        const raw = (await response.text()).trim();
+        const clean = raw.replace(/^(Dara|Bot|AI|Assistant|ALASTOR-XD):\s*/i, '').trim();
+        if (clean && clean.length <= 1000) return clean;
+    } catch (fallbackErr) {
+        console.error('[chatbot:pollinations]', fallbackErr.message);
+    }
+
+    return null;
+}
+
+// ─── .chatbot on/off/status — admin command ───────────────────────────────────
+
 async function handleChatbotCommand(sock, chatId, message, match) {
     if (!match) {
         await showTyping(sock, chatId);
         await stopTyping(sock, chatId);
         return sock.sendMessage(chatId, {
-            text: `🤖 *CHATBOT SETUP*\n\n*.chatbot on* - Enable chatbot in this group\n*.chatbot off* - Disable chatbot in this group\n*.chatbot status* - Check chatbot status`,
+            text: `🤖 *CHATBOT SETUP*\n\n*.chatbot on* - Enable auto-reply in this group\n*.chatbot off* - Disable auto-reply in this group\n*.chatbot status* - Check status\n\n💡 *Tip:* Use *.botchat <message>* anytime to chat with the bot directly — no need to @mention.`,
             quoted: message
         });
     }
@@ -99,9 +144,7 @@ async function handleChatbotCommand(sock, chatId, message, match) {
     const sender = message.key.participant || message.key.remoteJid;
     const isGroup = chatId.endsWith('@g.us');
     
-    // For private chats, only bot owner can control
     if (!isGroup) {
-        // Check if sender is bot owner (you need to define bot owner in your config)
         const botOwner = process.env.BOT_OWNER || 'YOUR_NUMBER@s.whatsapp.net';
         if (sender !== botOwner) {
             await sock.sendMessage(chatId, {
@@ -110,32 +153,22 @@ async function handleChatbotCommand(sock, chatId, message, match) {
             });
             return;
         }
-        
         if (match === 'on') {
             data.chatbot[chatId] = true;
             saveUserGroupData(data);
-            await sock.sendMessage(chatId, { 
-                text: '✅ Chatbot enabled for this chat',
-                quoted: message
-            });
+            await sock.sendMessage(chatId, { text: '✅ Chatbot enabled for this chat', quoted: message });
         } else if (match === 'off') {
             delete data.chatbot[chatId];
             saveUserGroupData(data);
-            await sock.sendMessage(chatId, { 
-                text: '✅ Chatbot disabled for this chat',
-                quoted: message
-            });
+            await sock.sendMessage(chatId, { text: '✅ Chatbot disabled for this chat', quoted: message });
         } else if (match === 'status') {
             const status = data.chatbot[chatId] ? 'enabled' : 'disabled';
-            await sock.sendMessage(chatId, {
-                text: `Chatbot status: ${status}`,
-                quoted: message
-            });
+            await sock.sendMessage(chatId, { text: `Chatbot status: ${status}`, quoted: message });
         }
         return;
     }
 
-    // For groups, check admin status
+    // Groups: check admin
     let isAdmin = false;
     try {
         const groupMetadata = await sock.groupMetadata(chatId);
@@ -155,38 +188,23 @@ async function handleChatbotCommand(sock, chatId, message, match) {
 
     if (match === 'on') {
         if (data.chatbot[chatId]) {
-            await sock.sendMessage(chatId, { 
-                text: '🤖 Chatbot is already enabled in this group',
-                quoted: message
-            });
+            await sock.sendMessage(chatId, { text: '🤖 Chatbot is already enabled in this group', quoted: message });
         } else {
             data.chatbot[chatId] = true;
             saveUserGroupData(data);
-            await sock.sendMessage(chatId, { 
-                text: '✅ Chatbot has been enabled for this group',
-                quoted: message
-            });
+            await sock.sendMessage(chatId, { text: '✅ Chatbot enabled\n\n💡 Members can now @mention the bot or use *.botchat <message>* to chat.', quoted: message });
         }
     } else if (match === 'off') {
         if (!data.chatbot[chatId]) {
-            await sock.sendMessage(chatId, { 
-                text: '🤖 Chatbot is already disabled in this group',
-                quoted: message
-            });
+            await sock.sendMessage(chatId, { text: '🤖 Chatbot is already disabled in this group', quoted: message });
         } else {
             delete data.chatbot[chatId];
             saveUserGroupData(data);
-            await sock.sendMessage(chatId, { 
-                text: '✅ Chatbot has been disabled for this group',
-                quoted: message
-            });
+            await sock.sendMessage(chatId, { text: '✅ Chatbot disabled for this group', quoted: message });
         }
     } else if (match === 'status') {
-        const status = data.chatbot[chatId] ? 'enabled' : 'disabled';
-        await sock.sendMessage(chatId, {
-            text: `🤖 Chatbot status: ${status}`,
-            quoted: message
-        });
+        const status = data.chatbot[chatId] ? '✅ enabled' : '❌ disabled';
+        await sock.sendMessage(chatId, { text: `🤖 Chatbot status: ${status}`, quoted: message });
     } else {
         await sock.sendMessage(chatId, {
             text: '❌ Invalid command. Use: .chatbot [on/off/status]',
@@ -195,63 +213,97 @@ async function handleChatbotCommand(sock, chatId, message, match) {
     }
 }
 
+// ─── .botchat <message> — direct chat command (works regardless of chatbot on/off) ─
+
+async function handleBotchatCommand(sock, chatId, message, query, senderId) {
+    if (!query) {
+        return sock.sendMessage(chatId, {
+            text: '🤖 *BOTCHAT*\n\nUsage: *.botchat <your message>*\nExample: *.botchat What is the capital of Nigeria?*\n\n_Just like @mentioning the bot, but with a command prefix_ ⚡',
+            quoted: message
+        });
+    }
+
+    // Ensure memory initialized
+    if (!chatMemory.messages.has(senderId)) {
+        chatMemory.messages.set(senderId, []);
+        chatMemory.userInfo.set(senderId, {});
+    }
+
+    // Extract user info
+    const userInfo = extractUserInfo(query, senderId);
+    if (Object.keys(userInfo).length > 0) {
+        chatMemory.userInfo.set(senderId, { ...chatMemory.userInfo.get(senderId), ...userInfo });
+    }
+
+    // Add to message history
+    const msgs = chatMemory.messages.get(senderId);
+    msgs.push({ role: 'user', content: query });
+    if (msgs.length > 20) msgs.splice(0, msgs.length - 20);
+
+    await showTyping(sock, chatId);
+
+    const response = await getAIResponse(query, {
+        messages: chatMemory.messages.get(senderId),
+        userInfo: chatMemory.userInfo.get(senderId),
+        chatType: chatId.endsWith('@g.us') ? 'group' : 'private',
+    });
+
+    await new Promise(r => setTimeout(r, getRandomDelay()));
+    await stopTyping(sock, chatId);
+
+    const reply = response || "Hmm, let me think about that... 🤔\nI'm having a bit of trouble right now, try again!";
+    await sock.sendMessage(chatId, {
+        text: reply,
+        mentions: [senderId],
+    }, { quoted: message });
+
+    // Save bot reply to memory
+    msgs.push({ role: 'assistant', content: reply });
+    if (msgs.length > 20) msgs.splice(0, msgs.length - 20);
+}
+
+// ─── Auto-reply: triggered by @mention or reply to bot ───────────────────────
+
 async function handleChatbotResponse(sock, chatId, message, userMessage, senderId) {
     const data = loadUserGroupData();
     if (!data.chatbot[chatId]) return;
 
     try {
-        // Get bot's number
         const botNumber = sock.user.id.split(':')[0];
         
-        // Check if message is for bot
         const isMentioned = userMessage.includes(`@${botNumber}`);
-        const isReply = message.message?.extendedTextMessage?.contextInfo?.participant;
-        const isDirectMessage = !chatId.endsWith('@g.us'); // Private chat
+        const quotedParticipant = message.message?.extendedTextMessage?.contextInfo?.participant;
+        const quotedSender     = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        const isReplyToBot     = quotedParticipant && quotedParticipant.includes(botNumber);
+        const isDirectMessage  = !chatId.endsWith('@g.us');
         
-        // If not mentioned, not a reply to bot, and not in private chat, ignore
-        if (!isDirectMessage && !isMentioned && !isReply) {
-            return;
-        }
+        // Only respond if: DM, @mentioned, or reply to bot's own message
+        if (!isDirectMessage && !isMentioned && !isReplyToBot) return;
         
         // Clean the message
-        let cleanedMessage = userMessage;
-        if (isMentioned) {
-            cleanedMessage = cleanedMessage.replace(new RegExp(`@${botNumber}`, 'g'), '').trim();
-        }
+        let cleanedMessage = userMessage
+            .replace(new RegExp(`@${botNumber}`, 'g'), '')
+            .replace(/^[\.!\/]/, '')
+            .trim();
         
-        // Remove command prefix if present
-        cleanedMessage = cleanedMessage.replace(/^[\.!\/]/, '').trim();
-        
-        // If message is empty after cleaning, return
         if (!cleanedMessage) return;
 
-        // Initialize user's chat memory if not exists
         if (!chatMemory.messages.has(senderId)) {
             chatMemory.messages.set(senderId, []);
             chatMemory.userInfo.set(senderId, {});
         }
 
-        // Extract and update user information
         const userInfo = extractUserInfo(cleanedMessage, senderId);
         if (Object.keys(userInfo).length > 0) {
-            chatMemory.userInfo.set(senderId, {
-                ...chatMemory.userInfo.get(senderId),
-                ...userInfo
-            });
+            chatMemory.userInfo.set(senderId, { ...chatMemory.userInfo.get(senderId), ...userInfo });
         }
 
-        // Add message to history (keep last 10 messages)
         const messages = chatMemory.messages.get(senderId);
         messages.push({ role: 'user', content: cleanedMessage });
-        if (messages.length > 10) {
-            messages.shift();
-        }
-        chatMemory.messages.set(senderId, messages);
+        if (messages.length > 20) messages.splice(0, messages.length - 20);
 
-        // Show typing indicator
         await showTyping(sock, chatId);
 
-        // Get AI response with context
         const response = await getAIResponse(cleanedMessage, {
             messages: chatMemory.messages.get(senderId),
             userInfo: chatMemory.userInfo.get(senderId),
@@ -267,30 +319,22 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
             return;
         }
 
-        // Add human-like delay
         await new Promise(resolve => setTimeout(resolve, getRandomDelay()));
         await stopTyping(sock, chatId);
 
-        // Send response
         await sock.sendMessage(chatId, {
             text: response,
             mentions: isMentioned ? [senderId] : []
-        }, {
-            quoted: message
-        });
+        }, { quoted: message });
 
-        // Add bot's response to memory
         const botMessages = chatMemory.messages.get(senderId);
         botMessages.push({ role: 'assistant', content: response });
-        if (botMessages.length > 10) {
-            botMessages.shift();
-        }
+        if (botMessages.length > 20) botMessages.splice(0, botMessages.length - 20);
 
     } catch (error) {
         console.error('❌ Error in chatbot response:', error);
         await stopTyping(sock, chatId);
         
-        // Don't send error messages for session errors
         if (error.message && error.message.includes('session')) {
             console.error('Session error - skipping response');
             return;
@@ -307,94 +351,24 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
     }
 }
 
-async function getAIResponse(userMessage, context) {
-    try {
-        // Format conversation history
-        let conversationHistory = '';
-        if (context.messages && context.messages.length > 0) {
-            conversationHistory = context.messages.map(msg => {
-                const role = msg.role === 'user' ? 'User' : 'You';
-                return `${role}: ${msg.content}`;
-            }).join('\n');
-        }
-
-        // Format user info
-        let userInfoStr = '';
-        if (context.userInfo) {
-            const info = context.userInfo;
-            userInfoStr = `User info:\n${info.name ? `Name: ${info.name}\n` : ''}${info.age ? `Age: ${info.age}\n` : ''}${info.location ? `Location: ${info.location}\n` : ''}`.trim();
-        }
-
-        const prompt = `You are ALASTOR-XD, a human chatting on WhatsApp. Be casual, use Hinglish naturally, and keep responses short (1-2 lines).
-
-${userInfoStr ? userInfoStr + '\n\n' : ''}
-Recent conversation:
-${conversationHistory}
-
-User: ${userMessage}
-
-ALASTOR-XD:`;
-
-        const apiUrl = `https://text.pollinations.ai/${encodeURIComponent(prompt)}`;
-        const response = await fetch(apiUrl, { timeout: 20000 });
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-        }
-
-        // Pollinations returns plain text
-        const raw  = await response.text();
-        const data = { result: raw };
-        
-        if (!data || (!data.result && !data.data && !data.response)) {
-            throw new Error("Invalid API response");
-        }
-
-        // Clean response
-        let cleanedResponse = (data.result || data.data || data.response || '').trim();
-        
-        // Remove any remaining prompt text
-        cleanedResponse = cleanedResponse
-            .replace(/^(ALASTOR-XD|Bot|AI|Assistant):\s*/i, '')
-            .replace(/^.*?(?:said|replied|responded):\s*/i, '')
-            .trim();
-            
-        // If response is empty or too long, return default
-        if (!cleanedResponse || cleanedResponse.length > 500) {
-            return "Hmm, interesting! 😊";
-        }
-        
-        return cleanedResponse;
-
-    } catch (error) {
-        console.error("AI API error:", error.message);
-        return null;
-    }
-}
-
-// Clear chat memory periodically (optional, to prevent memory buildup)
+// Clear chat memory periodically
 function clearOldChatMemory() {
     setInterval(() => {
-        const now = Date.now();
-        const oneHour = 60 * 60 * 1000;
-        
-        // This is a basic implementation - you might want to add timestamps to messages
         for (const [userId] of chatMemory.messages) {
-            // Simple: clear memory if user hasn't interacted in a while
-            // In production, you'd want to track last interaction time
-            if (Math.random() < 0.1) { // 10% chance to clear old entries
+            if (Math.random() < 0.1) {
                 chatMemory.messages.delete(userId);
                 chatMemory.userInfo.delete(userId);
             }
         }
-    }, 30 * 60 * 1000); // Every 30 minutes
+    }, 30 * 60 * 1000);
 }
 
-// Start memory cleanup
 clearOldChatMemory();
 
 module.exports = {
     handleChatbotCommand,
     handleChatbotResponse,
+    handleBotchatCommand,
     loadUserGroupData,
     saveUserGroupData
 };

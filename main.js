@@ -94,7 +94,7 @@ const { goodbyeCommand, handleLeaveEvent } = require('./commands/goodbye');
 const githubCommand = require('./commands/github');
 const { handleAntiBadwordCommand, handleBadwordDetection } = require('./lib/antibadword');
 const antibadwordCommand = require('./commands/antibadword');
-const { handleChatbotCommand, handleChatbotResponse } = require('./commands/chatbot');
+const { handleChatbotCommand, handleChatbotResponse, handleBotchatCommand } = require('./commands/chatbot');
 const takeCommand = require('./commands/take');
 const { flirtCommand } = require('./commands/flirt');
 const characterCommand = require('./commands/character');
@@ -108,6 +108,7 @@ const emojimixCommand = require('./commands/emojimix');
 const { handlePromotionEvent } = require('./commands/promote');
 const { handleDemotionEvent } = require('./commands/demote');
 const viewOnceCommand = require('./commands/viewonce');
+const { vvdmCommand } = require('./commands/viewonce');
 const clearSessionCommand = require('./commands/clearsession');
 const { autoStatusCommand, handleStatusUpdate } = require('./commands/autostatus');
 const { simpCommand } = require('./commands/simp');
@@ -1078,6 +1079,14 @@ case userMessage.startsWith('.bssensi'):
             case userMessage === '.vv':
                 await viewOnceCommand(sock, chatId, message);
                 break;
+            case userMessage === '.vv2' || userMessage === '.vvdm':
+                await vvdmCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('.botchat'): {
+                const botchatQuery = userMessage.slice(8).trim();
+                await handleBotchatCommand(sock, chatId, message, botchatQuery, senderId);
+                break;
+            }
             case userMessage === '.clearsession' || userMessage === '.clearsesi':
                 await clearSessionCommand(sock, chatId, message);
                 break;
