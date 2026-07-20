@@ -1919,14 +1919,11 @@ case userMessage.startsWith('$bssensi'):
                 break;
 
 
-            case userMessage.startsWith('$dir search'):
-                await searchDirCommand(sock, chatId, message, userMessage.slice(11).trim());
-                commandExecuted = true;
-                break;
-
             case userMessage === '$dir' || userMessage.startsWith('$dir '):
                 if (!await getSenderIsOwnerOrSudo()) {
                     await sock.sendMessage(chatId, { text: '❌ Only the owner can use $dir.' }, { quoted: message });
+                } else if (userMessage.startsWith('$dir search')) {
+                    await searchDirCommand(sock, chatId, message, userMessage.slice(11).trim());
                 } else {
                     await dirCommand(sock, chatId, message, userMessage);
                 }

@@ -11,14 +11,36 @@ async function handleTranslateCommand(sock, chatId, message, match) {
 
         const USAGE = `*TRANSLATOR*\n\nUsage:\n1. Reply to a message: *$translate <lang>*\n2. Direct: *$translate <text> | <lang>*\n\nExamples:\n_$translate hello | fr_\n_$translate buenos días | en_\n\nLanguage codes:\nen - English\nfr - French\nes - Spanish\nde - German\nit - Italian\npt - Portuguese\nru - Russian\nja - Japanese\nko - Korean\nzh - Chinese\nar - Arabic\nhi - Hindi\nha - Hausa\nyo - Yoruba\nig - Igbo\ntpi - Tok Pisin`;
 
-        // Check if it's a reply to another message
-        const quotedMessage = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        // Extract quoted message from any message type that carries contextInfo
+        const msgContent = message.message || {};
+        const contextInfo = (
+            msgContent.extendedTextMessage?.contextInfo ||
+            msgContent.imageMessage?.contextInfo ||
+            msgContent.videoMessage?.contextInfo ||
+            msgContent.audioMessage?.contextInfo ||
+            msgContent.documentMessage?.contextInfo ||
+            msgContent.stickerMessage?.contextInfo ||
+            null
+        );
+        const quotedMessage = contextInfo?.quotedMessage || null;
+
+        // Extract text from the quoted message (cover all common types)
+        function quotedText(qm) {
+            if (!qm) return '';
+            return (
+                qm.conversation ||
+                qm.extendedTextMessage?.text ||
+                qm.imageMessage?.caption ||
+                qm.videoMessage?.caption ||
+                qm.documentMessage?.caption ||
+                qm.ephemeralMessage?.message?.conversation ||
+                qm.ephemeralMessage?.message?.extendedTextMessage?.text ||
+                ''
+            );
+        }
+
         if (quotedMessage) {
-            textToTranslate = quotedMessage.conversation || 
-                            quotedMessage.extendedTextMessage?.text || 
-                            quotedMessage.imageMessage?.caption || 
-                            quotedMessage.videoMessage?.caption || 
-                            '';
+            textToTranslate = quotedText(quotedMessage);
             lang = match.trim();
         } else {
             // Direct: support both "text | lang" and legacy "text lang" (last word)
