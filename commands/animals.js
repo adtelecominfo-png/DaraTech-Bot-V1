@@ -52,10 +52,20 @@ async function dogimageCommand(sock, chatId, message) {
 
 async function foxImageCommand(sock, chatId, message) {
     try {
-        const { data } = await axios.get(`${SRA}/fox`, { timeout: 10000 });
+        // randomfox.ca is reliable; SRA fox endpoint is frequently blocked by CloudFlare
+        let imgUrl, fact = '';
+        try {
+            const { data } = await axios.get('https://randomfox.ca/floof/', { timeout: 10000 });
+            imgUrl = data.image;
+        } catch {
+            // fallback to SRA if randomfox is down
+            const { data } = await axios.get(`${SRA}/fox`, { timeout: 10000 });
+            imgUrl = data.image;
+            fact   = data.fact || '';
+        }
         await sock.sendMessage(chatId, {
-            image: await fetchImgBuf(data.image),
-            caption: `🦊 *RANDOM FOX*\n\n💡 ${data.fact || ''}\n\n_Daratech_ ⚡`
+            image: await fetchImgBuf(imgUrl),
+            caption: `🦊 *RANDOM FOX*${fact ? `\n\n💡 ${fact}` : ''}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch {
         await sock.sendMessage(chatId, { text: '❌ Could not fetch fox image.' }, { quoted: message });

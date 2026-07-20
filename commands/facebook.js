@@ -25,7 +25,8 @@ async function facebookCommand(sock, chatId, message) {
         await sock.sendMessage(chatId, { text: '⏳ _Downloading Facebook video…_' }, { quoted: message });
         const data = await get('/download/facebook', { url });
         const r    = data?.result || {};
-        const dl   = r.download_url || r.hd || r.sd || r.url;
+        // GiftedTech returns hd_video / sd_video (not hd / sd)
+        const dl   = r.hd_video || r.sd_video || r.download_url || r.hd || r.sd || r.url;
         if (!dl) throw new Error('No download URL returned');
         const buf  = await toBuffer(dl);
         await sock.sendMessage(chatId, {
