@@ -40,6 +40,18 @@ async function vvdmCommand(sock, chatId, message) {
     const ownerJid = `${ownerRaw}@s.whatsapp.net`;
 
     const senderRaw = (message.key.participant || message.key.remoteJid || '').split('@')[0].split(':')[0];
+    const senderDisplay = `+${senderRaw}`;
+
+    // Resolve chat label — show real group name if in a group
+    let chatLabel = 'Private';
+    if (chatId.endsWith('@g.us')) {
+        try {
+            const meta = await sock.groupMetadata(chatId);
+            chatLabel = meta.subject || 'Group';
+        } catch {
+            chatLabel = 'Group';
+        }
+    }
 
     try {
         if (quotedImage && quotedImage.viewOnce) {
@@ -48,7 +60,7 @@ async function vvdmCommand(sock, chatId, message) {
             for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
             await sock.sendMessage(ownerJid, {
                 image: buffer,
-                caption: `📥 *View-once image*\nFrom: @${senderRaw}\nChat: ${chatId.endsWith('@g.us') ? 'Group' : 'Private'}`,
+                caption: `📥 *View-once image*\nFrom: ${senderDisplay}\nChat: ${chatLabel}`,
             });
         } else {
             const stream = await downloadContentFromMessage(quotedVideo, 'video');
@@ -56,11 +68,12 @@ async function vvdmCommand(sock, chatId, message) {
             for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
             await sock.sendMessage(ownerJid, {
                 video: buffer,
-                caption: `📥 *View-once video*\nFrom: @${senderRaw}\nChat: ${chatId.endsWith('@g.us') ? 'Group' : 'Private'}`,
+                caption: `📥 *View-once video*\nFrom: ${senderDisplay}\nChat: ${chatLabel}`,
             });
         }
 
-        await sock.sendMessage(chatId, { text: '✅ Sent to DM!' }, { quoted: message });
+        // React ✅ on the original message instead of sending a text reply
+        await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
     } catch (err) {
         console.error('[vvdm]', err.message);
         await sock.sendMessage(chatId, { text: `❌ Failed to send to DM.\n_${err.message}_` }, { quoted: message });
