@@ -126,8 +126,8 @@ module.exports = {
             
             const senderNumber = m.sender.split('@')[0];
             
-            // Authorization check - FIXED
-            if (!isAuthorized(senderNumber)) {
+            // Authorization check — trust caller if isFromMe=true (main.js already verified)
+            if (!isFromMe && !isAuthorized(senderNumber)) {
                 await sock.sendMessage(m.chat, {
                     text: `❌ You are not authorized to use this command.\nYour number: ${senderNumber}\nAuthorized numbers: +2348152077346, +2347040439564`
                 }, { quoted: message });
