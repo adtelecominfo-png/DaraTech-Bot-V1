@@ -447,6 +447,11 @@ if (checkAFK(senderId)) {
 // 🔥 END OF AFK CODE 🔥
                 }
             }
+
+            // Velora name trigger — DMs and groups, no $ needed
+            if (/velora/i.test(userMessage)) {
+                await handleVeloraNameTrigger(sock, chatId, message, userMessage, senderId);
+            }
             return;
         }
         // In private mode, only owner/sudo can run commands
