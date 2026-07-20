@@ -560,7 +560,7 @@ case userMessage.startsWith('$unmute-user'):
         commandExecuted = true;
         break;
 
-case userMessage.startsWith('$pinterest'):
+case userMessage.startsWith('$pinterest') && !userMessage.startsWith('$pinterestdl') && !userMessage.startsWith('$pintdl') && !userMessage.startsWith('$pdl'):
     await pinterestCommand(sock, chatId, message);
     commandExecuted = true;
     break;

@@ -201,13 +201,34 @@ async function snackVideoCommand(sock, chatId, message) {
 
     try {
         await sock.sendMessage(chatId, { text: '🍿 _Downloading SnackVideo…_' }, { quoted: message });
-        const data = await get('/download/snackdl', { url });
-        const dl   = data?.result?.media || pickUrl(data?.result);
+
+        let dl = null, title = '';
+
+        // Method 1 — nexray API (returns proper download_url)
+        try {
+            const { data } = await axios.get('https://api.nexray.eu.cc/downloader/snackvideo', {
+                params: { url }, timeout: 30000,
+                headers: { 'User-Agent': 'Mozilla/5.0' },
+            });
+            if (data?.status && data?.result?.download_url) {
+                dl    = data.result.download_url;
+                title = data.result.title || '';
+            }
+        } catch { /* fallthrough */ }
+
+        // Method 2 — GiftedTech snackdl fallback
+        if (!dl) {
+            const data = await get('/download/snackdl', { url });
+            const media = data?.result?.media;
+            dl    = (media && media !== '' ? media : null) || pickUrl(data?.result);
+            title = data?.result?.title || title;
+        }
+
         if (!dl) throw new Error('no url');
         const buf = await toBuffer(dl);
         await sock.sendMessage(chatId, {
             video: buf, mimetype: 'video/mp4',
-            caption: `🍿 *SnackVideo*\n${data?.result?.title || ''}\n\n_Daratech_ ⚡`,
+            caption: `🍿 *SnackVideo*${title ? `\n${title}` : ''}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
     } catch { await sendErr(sock, chatId, message, 'SnackVideo'); }
 }
@@ -246,7 +267,7 @@ async function mediafireCommand(sock, chatId, message) {
         await sock.sendMessage(chatId, { text: '🔥 _Fetching MediaFire link…_' }, { quoted: message });
         const data     = await get('/download/mediafire', { url });
         const res      = data?.result;
-        const dl       = res?.download_url || res?.direct_link || res?.link || pickUrl(res);
+        const dl       = res?.downloadUrl || res?.download_url || res?.direct_link || res?.link || pickUrl(res);
         if (!dl) throw new Error('no url');
         const fileName = res?.filename || res?.name || url.split('/').filter(Boolean).pop() || 'mediafire_file';
         const buf      = await toBuffer(dl);
