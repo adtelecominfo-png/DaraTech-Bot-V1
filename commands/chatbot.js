@@ -213,12 +213,25 @@ async function handleChatbotCommand(sock, chatId, message, match) {
     }
 }
 
-// ─── .botchat <message> — direct chat command (works regardless of chatbot on/off) ─
+// ─── .botchat <message> — direct chat command (requires chatbot on in groups) ──
 
 async function handleBotchatCommand(sock, chatId, message, query, senderId) {
+    const isGroup = chatId.endsWith('@g.us');
+
+    // In groups, chatbot must be enabled first
+    if (isGroup) {
+        const data = loadUserGroupData();
+        if (!data.chatbot[chatId]) {
+            return sock.sendMessage(chatId, {
+                text: '❌ Chatbot is not enabled in this group.\n\nAsk an admin to run *.chatbot on* first.',
+                quoted: message
+            });
+        }
+    }
+
     if (!query) {
         return sock.sendMessage(chatId, {
-            text: '🤖 *BOTCHAT*\n\nUsage: *.botchat <your message>*\nExample: *.botchat What is the capital of Nigeria?*\n\n_Just like @mentioning the bot, but with a command prefix_ ⚡',
+            text: '🤖 *BOTCHAT*\n\nUsage: *.botchat <your message>*\nExample: *.botchat What is the capital of Nigeria?*\n\n_You can also @mention the bot or reply to any of its messages_ ⚡',
             quoted: message
         });
     }
