@@ -68,6 +68,24 @@ async function apiFetch(path) {
     }
 }
 
+/**
+ * shortenUrl — shorten a URL via TinyURL's free no-auth API.
+ * Falls back to the original URL if the request fails or times out.
+ */
+async function shortenUrl(longUrl) {
+    try {
+        const { data } = await axios.get('https://tinyurl.com/api-create.php', {
+            params:  { url: longUrl },
+            timeout: 5000,
+            responseType: 'text',
+        });
+        const short = (data || '').trim();
+        return (short.startsWith('http') && short.length < longUrl.length) ? short : longUrl;
+    } catch {
+        return longUrl;
+    }
+}
+
 // ─── Format helpers ───────────────────────────────────────────────────────────
 
 function mediaEmoji(type) {
@@ -335,13 +353,16 @@ async function sendVideoOrLinks(sock, chatId, message, data, title, poster, epLa
 
     // Always build a links block — used as fallback when video can't be sent
     const titleLabel = epLabel ? `${title || 'Movie'} ${epLabel}` : (title || 'Movie');
+    // Shorten all URLs in parallel (TinyURL, falls back to original on failure)
+    const shortUrls = await Promise.all(
+        validSources.map(s => shortenUrl(s.download_url || s.url))
+    );
     let linksText = `📥 *Download Links* — ${titleLabel}\n\n`;
     validSources.forEach((s, i) => {
         const q   = s.quality || `Link ${i + 1}`;
-        const url = s.download_url || s.url;
         const sz  = s.size ? ` (${fileSize(s.size)})` : '';
         const fmt = s.format ? ` [${s.format.toUpperCase()}]` : '';
-        linksText += `*${i + 1}. ${q}${fmt}${sz}*\n${url}\n\n`;
+        linksText += `*${i + 1}. ${q}${fmt}${sz}*\n${shortUrls[i]}\n\n`;
     });
     if (audioTracks.length > 1)
         linksText += `🔊 *Audio:* ${audioTracks.map(a => a.language).join(' | ')}\n`;
