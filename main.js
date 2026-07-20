@@ -1941,7 +1941,9 @@ case userMessage.startsWith('$bssensi'):
                 await twitterDlCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
-            case (userMessage === '$pinterestdl' || userMessage.startsWith('$pinterestdl ')):
+            case (userMessage === '$pinterestdl' || userMessage.startsWith('$pinterestdl ') ||
+                  userMessage === '$pintdl'     || userMessage.startsWith('$pintdl ')     ||
+                  userMessage === '$pdl'        || userMessage.startsWith('$pdl ')):
                 await pinterestDlCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;

@@ -104,40 +104,132 @@ async function igdlCommand(sock, chatId, message) {
     } catch { await sendErr(sock, chatId, message, 'Instagram'); }
 }
 
-// ─── $pinterestdl ─────────────────────────────────────────────────────────────
+// ─── Pinterest helpers ─────────────────────────────────────────────────────────
+
+const PINTEREST_BOT_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_ufi.php)';
+
+function isPinterestUrl(u) {
+    return /pinterest\.(com|co\.\w+|[a-z]{2,3})\/pin\//i.test(u) || /pin\.it\//i.test(u);
+}
+
+/** Extract <meta property="X" content="Y"> or <meta content="Y" property="X"> */
+function ogContent(html, prop) {
+    const re = [
+        new RegExp(`property=["']${prop}["'][^>]*content=["']([^"']+)["']`, 'i'),
+        new RegExp(`content=["']([^"']+)["'][^>]*property=["']${prop}["']`, 'i'),
+    ];
+    for (const r of re) {
+        const m = html.match(r);
+        if (m?.[1]?.startsWith('http')) return m[1];
+    }
+    return null;
+}
+
+/**
+ * Fetch the Pinterest pin page using Facebook bot UA (Pinterest reliably serves
+ * og:image / og:video meta tags to social crawlers without login).
+ * Handles pin.it short URLs via axios redirect following.
+ */
+async function fetchPinterestMedia(pinUrl) {
+    const res = await axios.get(pinUrl, {
+        timeout: 20000,
+        maxRedirects: 10,
+        headers: {
+            'User-Agent': PINTEREST_BOT_UA,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+        },
+    });
+
+    const html = typeof res.data === 'string' ? res.data : '';
+    if (!html) return null;
+
+    // ── Video (og:video or og:video:url) ──────────────────────────────────────
+    const videoUrl = ogContent(html, 'og:video:url') || ogContent(html, 'og:video');
+    if (videoUrl) return { type: 'video', url: videoUrl };
+
+    // ── Also hunt for v.pinimg.com .mp4 embedded in JSON blobs ───────────────
+    const mp4Match = html.match(/https?:\/\/v\.pinimg\.com\/[^\s"'\\]+\.mp4[^\s"'\\]*/i);
+    if (mp4Match) return { type: 'video', url: mp4Match[0] };
+
+    // ── Image (og:image — upgrade to /originals/ for full quality) ────────────
+    const imgUrl = ogContent(html, 'og:image');
+    if (imgUrl) {
+        // Pinterest og:image is often /236x/, /474x/, /736x/ — upgrade to originals
+        const hq = imgUrl.replace(/\/\d+x\//, '/originals/').replace(/\/\d+x\d+_/, '/originals/');
+        return { type: 'image', url: hq };
+    }
+
+    // ── Last-resort: find any i.pinimg.com originals URL ─────────────────────
+    const origMatch = html.match(/https?:\/\/i\.pinimg\.com\/originals\/[^\s"'\\]+/i);
+    if (origMatch) return { type: 'image', url: origMatch[0] };
+
+    return null;
+}
+
+// ─── $pinterestdl / $pintdl / $pdl ───────────────────────────────────────────
 
 async function pinterestDlCommand(sock, chatId, message) {
     const url = extractArg(message);
-    if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '📌 Usage: $pinterestdl <Pinterest pin URL>',
+    if (!url) return sock.sendMessage(chatId, {
+        text: '📌 *PINTEREST DOWNLOADER*\n\n' +
+              'Usage: *$pinterestdl <Pinterest URL>*\n\n' +
+              'Examples:\n' +
+              '• $pinterestdl https://pin.it/xxxxxx\n' +
+              '• $pinterestdl https://www.pinterest.com/pin/123456/\n\n' +
+              '_Supports images & videos_ ⚡',
+    }, { quoted: message });
+
+    if (!isPinterestUrl(url)) return sock.sendMessage(chatId, {
+        text: '❌ Please send a valid Pinterest URL.\n\nExamples:\n• https://pin.it/xxxxxx\n• https://www.pinterest.com/pin/123456/',
     }, { quoted: message });
 
     try {
-        await sock.sendMessage(chatId, { text: '📌 _Downloading Pinterest pin…_' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: '📌 _Fetching Pinterest media…_' }, { quoted: message });
 
-        let dl = null;
-        for (const ep of ['/download/pinterestv2', '/download/pinterestv3', '/download/pinterestv4']) {
-            try {
-                const data = await get(ep, { url });
-                dl = pickUrl(data?.result);
-                if (dl) break;
-            } catch { /* try next */ }
+        // ── Strategy 1: Custom scraper (Facebook bot UA → og tags) ──────────
+        let media = null;
+        try {
+            media = await fetchPinterestMedia(url);
+        } catch (e) {
+            console.error('[pintdl] scrape err:', e.message);
         }
-        if (!dl) throw new Error('no url');
 
-        const buf     = await toBuffer(dl);
-        const isVideo = /\.(mp4|webm|mov)/i.test(dl);
-        if (isVideo) {
+        // ── Strategy 2: Gifted API fallbacks ────────────────────────────────
+        if (!media) {
+            for (const ep of ['/download/pinterestv2', '/download/pinterestv3', '/download/pinterestv4']) {
+                try {
+                    const data = await get(ep, { url });
+                    const dl = pickUrl(data?.result);
+                    if (dl) {
+                        const isVideo = /\.(mp4|webm|mov)/i.test(dl) || data?.result?.type === 'video';
+                        media = { type: isVideo ? 'video' : 'image', url: dl };
+                        break;
+                    }
+                } catch { /* try next */ }
+            }
+        }
+
+        if (!media) throw new Error('Could not extract media from this Pinterest link');
+
+        const buf = await toBuffer(media.url);
+        if (media.type === 'video') {
             await sock.sendMessage(chatId, {
                 video: buf, mimetype: 'video/mp4',
                 caption: '📌 *Pinterest*\n\n_Daratech_ ⚡',
             }, { quoted: message });
         } else {
             await sock.sendMessage(chatId, {
-                image: buf, caption: '📌 *Pinterest*\n\n_Daratech_ ⚡',
+                image: buf,
+                caption: '📌 *Pinterest*\n\n_Daratech_ ⚡',
             }, { quoted: message });
         }
-    } catch { await sendErr(sock, chatId, message, 'Pinterest'); }
+    } catch (e) {
+        console.error('[pinterestdl]', e.message);
+        await sock.sendMessage(chatId, {
+            text: `❌ Failed to download Pinterest media.\n\n_${e.message}_\n\nMake sure you send a valid Pinterest pin URL.`,
+        }, { quoted: message });
+    }
 }
 
 // ─── $douyin ──────────────────────────────────────────────────────────────────
