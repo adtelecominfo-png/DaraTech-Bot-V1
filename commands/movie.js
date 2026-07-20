@@ -280,8 +280,9 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
 
     // Download to buffer — CDN URLs are short-lived signed tokens; passing
     // them directly to WA's servers often results in a 403 after expiry.
-    const buf  = await downloadBuffer(dlUrl, sizeHint);
-    const size = buf?.length || parseInt(sizeHint) || 0;
+    const buf      = await downloadBuffer(dlUrl, sizeHint);
+    const size     = buf?.length || parseInt(sizeHint) || 0;
+    const sizeStr  = size ? fileSize(String(size)) : '';
 
     // ── Attempt: send as video (inline player, ≤ VIDEO_LIMIT) ───────────────────
     if (buf && size <= VIDEO_LIMIT) {
@@ -296,14 +297,15 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
         }
     }
 
-    // ── Fallback: plain-text link ────────────────────────────────────────────────
-    const urlLine  = `🔗 *Direct download link:*\n${dlUrl}`;
-    const fallback = [
-        `⚠️ *Couldn't send the video directly.*`,
-        ``,
-        urlLine,
-        linksText ? `\n${linksText}` : '',
-    ].filter(l => l !== undefined).join('\n').replace(/\n\n\n+/g, '\n\n');
+    // ── Fallback: links message ───────────────────────────────────────────────────
+    // Determine why we couldn't send as video
+    const tooLarge = size > VIDEO_LIMIT || (!buf && parseInt(sizeHint) > VIDEO_LIMIT);
+    const reasonLine = tooLarge
+        ? `⚠️ File too large to send as video _(${quality ? quality + ' is ' : ''}${sizeStr} — too large to send directly)_`
+        : `⚠️ Couldn't send the video directly _(download failed or link expired)_`;
+
+    const fallback = [reasonLine, '', linksText || `🔗 *Direct link:*\n${dlUrl}`]
+        .join('\n').replace(/\n\n\n+/g, '\n\n');
     await sock.sendMessage(chatId, { text: fallback }, { quoted: message });
 }
 
@@ -326,33 +328,30 @@ async function sendVideoOrLinks(sock, chatId, message, data, title, poster, epLa
         return sock.sendMessage(chatId, { text: '⚠️ No valid download URLs in API response.' }, { quoted: message });
     }
 
-    // Pick the one being sent (smallest size = lowest quality, safe to auto-send)
-    // Note: resolveAndSend already narrows to [selected], so validSources[0] is it.
+    // Pick the one being sent (resolveAndSend already narrows to [selected])
     const target  = validSources[0];
     const dlUrl   = target.download_url || target.url;
     const quality = target.quality || '';
 
-    // Build links list for ALL sources (sent as follow-up if multiple exist)
-    let linksText = '';
-    if (validSources.length > 1) {
-        linksText = `📥 *All Qualities — ${title || 'Movie'}*\n\n`;
-        validSources.forEach((s, i) => {
-            const q   = s.quality || `Link ${i + 1}`;
-            const url = s.download_url || s.url;
-            const sz  = s.size ? ` (${fileSize(s.size)})` : '';
-            const fmt = s.format ? ` [${s.format.toUpperCase()}]` : '';
-            linksText += `*${i + 1}. ${q}${fmt}${sz}*\n${url}\n\n`;
-        });
-        if (audioTracks.length > 1)
-            linksText += `🔊 *Audio:* ${audioTracks.map(a => a.language).join(' | ')}\n`;
-        if (subtitles.length)
-            linksText += `📜 *Subs:* ${subtitles.map(s => s.language || s.languageCode).join(', ')}\n`;
-    }
+    // Always build a links block — used as fallback when video can't be sent
+    const titleLabel = epLabel ? `${title || 'Movie'} ${epLabel}` : (title || 'Movie');
+    let linksText = `📥 *Download Links* — ${titleLabel}\n\n`;
+    validSources.forEach((s, i) => {
+        const q   = s.quality || `Link ${i + 1}`;
+        const url = s.download_url || s.url;
+        const sz  = s.size ? ` (${fileSize(s.size)})` : '';
+        const fmt = s.format ? ` [${s.format.toUpperCase()}]` : '';
+        linksText += `*${i + 1}. ${q}${fmt}${sz}*\n${url}\n\n`;
+    });
+    if (audioTracks.length > 1)
+        linksText += `🔊 *Audio:* ${audioTracks.map(a => a.language).join(' | ')}\n`;
+    if (subtitles.length)
+        linksText += `📜 *Subs:* ${subtitles.map(s => s.language || s.languageCode).join(', ')}\n`;
 
     // Strip epLabel from display title to avoid duplication in caption
     const baseTitle = epLabel ? (title || '').replace(epLabel, '').trim() : (title || '');
 
-    return sendAsDocument(sock, chatId, message, dlUrl, baseTitle || title, quality, epLabel || null, linksText.trim() || null, target.size);
+    return sendAsDocument(sock, chatId, message, dlUrl, baseTitle || title, quality, epLabel || null, linksText.trim(), target.size);
 }
 
 // ─── Shared resolution picker & send helpers ──────────────────────────────────
