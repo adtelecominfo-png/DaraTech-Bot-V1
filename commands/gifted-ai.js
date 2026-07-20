@@ -41,7 +41,7 @@ async function giftedTextReply(sock, chatId, message, endpoint, params, label) {
     const query = extractQuery(message);
     if (!query) {
         return sock.sendMessage(chatId,
-            { text: `🤖 Usage: .${endpoint.replace(/\s.*/, '')} <your question>` },
+            { text: `🤖 Usage: ${endpoint.replace(/\s.*/, '')} <your question>` },
             { quoted: message });
     }
     try {

@@ -298,7 +298,7 @@ async function servercheckCommand(sock, chatId, message) {
 async function _screenshotViewport(sock, chatId, message, endpoint, label) {
     const q = getQ(message);
     if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
-        text: `📸 Usage: .${endpoint} <url>\nExample: .${endpoint} https://google.com`,
+        text: `📸 Usage: ${endpoint} <url>\nExample: ${endpoint} https://google.com`,
     }, { quoted: message });
     await processing(sock, message, chatId, '📸 Taking screenshot……');
     try {

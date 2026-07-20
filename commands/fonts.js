@@ -73,7 +73,7 @@ function toMirror(str) { return [...str].reverse().join(''); }
 function makeHandler(label, fn) {
     return async (sock, chatId, message) => {
         const input = getArgs(message);
-        if (!input) return sock.sendMessage(chatId, { text: `✏️ Usage: .${label} <text>` }, { quoted: message });
+        if (!input) return sock.sendMessage(chatId, { text: `✏️ Usage: ${label} <text>` }, { quoted: message });
         const result = fn(input);
         await sock.sendMessage(chatId, { text: `✏️ *${label.toUpperCase()}:*\n${result}\n\n_Daratech_ ⚡` }, { quoted: message });
     };
