@@ -211,6 +211,30 @@ function parsePick(pick) {
 const VIDEO_LIMIT = 64  * 1024 * 1024; // 64 MB  — WA video message ceiling
 const DOC_LIMIT   = 2   * 1024 * 1024 * 1024; // 2 GB  — WA document ceiling
 
+/**
+ * downloadBuffer — fetch a URL into a Buffer.
+ * Returns null (don't attempt) if the file is already known to exceed VIDEO_LIMIT,
+ * or if the download itself fails (caller falls back to link).
+ */
+async function downloadBuffer(url, sizeHint) {
+    // Skip downloading if the known file size is already over the video ceiling
+    const knownSize = parseInt(sizeHint) || 0;
+    if (knownSize > VIDEO_LIMIT) return null;
+
+    try {
+        const resp = await axios.get(url, {
+            responseType: 'arraybuffer',
+            timeout: 120000,        // 2 min — large files need time
+            maxContentLength: VIDEO_LIMIT + 1,
+            maxBodyLength:    VIDEO_LIMIT + 1,
+        });
+        return Buffer.from(resp.data);
+    } catch (err) {
+        console.warn('[movie:downloadBuffer] failed:', err.message);
+        return null;
+    }
+}
+
 // ─── Filename builder ──────────────────────────────────────────────────────────
 /**
  * buildFileName — constructs a clean document filename.
