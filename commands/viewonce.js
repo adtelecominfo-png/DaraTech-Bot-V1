@@ -42,9 +42,26 @@ async function vvdmCommand(sock, chatId, message) {
     // Get the ORIGINAL sender of the view-once (from contextInfo), not whoever ran .vv2
     const contextInfo = message.message?.extendedTextMessage?.contextInfo || {};
     const voSenderJid = contextInfo.participant || contextInfo.remoteJid || message.key.participant || message.key.remoteJid || '';
-    const voSenderNum = voSenderJid.split('@')[0].split(':')[0];
-    // If it's a real WA JID show +number; if it's a LID we still show the number (best we can without server lookup)
-    const senderDisplay = voSenderNum ? `+${voSenderNum}` : 'Unknown';
+
+    // Strip device suffix (:0, :1 …) e.g. "2348012345678:0@s.whatsapp.net" → "2348012345678@s.whatsapp.net"
+    const rawJid = voSenderJid.replace(/:\d+@/, '@');
+    const isRealJid = rawJid.endsWith('@s.whatsapp.net');
+    const jidNum = rawJid.split('@')[0];
+
+    let senderDisplay;
+    if (isRealJid) {
+        // Plain phone number — safe to show with +
+        senderDisplay = `+${jidNum}`;
+    } else {
+        // LID or unknown — try to resolve display name via sock.getName (uses contacts store)
+        try {
+            const name = await sock.getName(rawJid);
+            // getName sometimes returns the raw JID if unresolved; prefer a clean name
+            senderDisplay = (name && !name.includes('@')) ? name : jidNum;
+        } catch {
+            senderDisplay = jidNum;
+        }
+    }
 
     // Resolve chat label — show real group name if in a group
     let chatLabel = 'Private';
