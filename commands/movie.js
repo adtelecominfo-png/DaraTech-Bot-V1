@@ -69,21 +69,32 @@ async function apiFetch(path) {
 }
 
 /**
- * shortenUrl — shorten a URL via TinyURL's free no-auth API.
- * Falls back to the original URL if the request fails or times out.
+ * shortenUrl — tries multiple free no-auth shorteners in order.
+ * Falls back to the next service on failure; returns original URL if all fail.
+ * Services: TinyURL → is.gd → v.gd
  */
 async function shortenUrl(longUrl) {
-    try {
-        const { data } = await axios.get('https://tinyurl.com/api-create.php', {
-            params:  { url: longUrl },
-            timeout: 5000,
-            responseType: 'text',
-        });
-        const short = (data || '').trim();
-        return (short.startsWith('http') && short.length < longUrl.length) ? short : longUrl;
-    } catch {
-        return longUrl;
+    const services = [
+        () => axios.get('https://tinyurl.com/api-create.php',
+            { params: { url: longUrl }, timeout: 5000, responseType: 'text' })
+            .then(r => r.data?.trim()),
+
+        () => axios.get('https://is.gd/create.php',
+            { params: { format: 'simple', url: longUrl }, timeout: 5000, responseType: 'text' })
+            .then(r => r.data?.trim()),
+
+        () => axios.get('https://v.gd/create.php',
+            { params: { format: 'simple', url: longUrl }, timeout: 5000, responseType: 'text' })
+            .then(r => r.data?.trim()),
+    ];
+
+    for (const attempt of services) {
+        try {
+            const short = await attempt();
+            if (short?.startsWith('http') && short.length < longUrl.length) return short;
+        } catch { /* try next */ }
     }
+    return longUrl;   // all services failed — return original
 }
 
 // ─── Format helpers ───────────────────────────────────────────────────────────
