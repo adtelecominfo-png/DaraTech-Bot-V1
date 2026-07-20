@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { get } = require('../lib/gifted');
+const { callPollinationsAI } = require('../lib/pollinations');
 
 const USER_GROUP_DATA = path.join(__dirname, '../data/userGroupData.json');
 
@@ -61,28 +62,16 @@ async function getAIResponse(userMessage, context) {
     if (userCtx.name) sys += ` The user's name is ${userCtx.name}.`;
     if (userCtx.location) sys += ` They are from ${userCtx.location}.`;
 
-    const fullQuery = `${sys}\n\nUser: ${userMessage}\n\nVelora:`;
-
-    // Primary: GiftedTech overchat (gemini)
+    // Primary: Pollinations openai-fast
     try {
-        const data = await get('/ai/overchat', { q: fullQuery, model: 'gemini' }, 20000);
-        if (!data?.success) throw new Error(data?.message || 'no response');
-        let reply = typeof data.result === 'string'
-            ? data.result
-            : (data.result?.answer || JSON.stringify(data.result));
+        let reply = await callPollinationsAI(userMessage, 'openai-fast', sys, 800, 0.9);
         reply = reply.replace(/^(Velora|Dara|Bot|AI|Assistant):\s*/i, '').trim();
         if (reply && reply.length <= 2000) return reply;
-        throw new Error('empty or oversized');
     } catch {}
 
     // Fallback: Pollinations openai
     try {
-        const res = await fetch(
-            `https://text.pollinations.ai/${encodeURIComponent(fullQuery)}?model=openai`,
-            { headers: { 'User-Agent': 'Daratech-Bot/1.0' } }
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        let reply = (await res.text()).trim();
+        let reply = await callPollinationsAI(userMessage, 'openai', sys, 800, 0.9);
         reply = reply.replace(/^(Velora|Dara|Bot|AI|Assistant):\s*/i, '').trim();
         if (reply && reply.length <= 2000) return reply;
     } catch {}
@@ -92,7 +81,7 @@ async function getAIResponse(userMessage, context) {
 
 // ─── Format a Velora reply ────────────────────────────────────────────────────
 function veloraReply(text) {
-    return `🌸 *Velora:*\n\n${text}`;
+    return `✦ *Velora*\n\n${text}`;
 }
 
 // ─── User info extractor ──────────────────────────────────────────────────────
