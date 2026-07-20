@@ -106,8 +106,17 @@ async function handleTranslateCommand(sock, chatId, message, match) {
                 // the quoted message wasn't stored — give a clear error.
                 const looksLikeLangCode = /^[a-zA-Z]{2,5}$/.test(query);
                 if (looksLikeLangCode) {
+                    // Debug: show what we actually see in the message structure
+                    const mc = message.message || {};
+                    const ci = findContextInfo(mc);
+                    const debugInfo = [
+                        `keys: ${Object.keys(mc).join(', ')}`,
+                        `contextInfo: ${ci ? 'found' : 'null'}`,
+                        ci ? `stanzaId: ${ci.stanzaId || 'none'}` : '',
+                        ci ? `qm keys: ${ci.quotedMessage ? Object.keys(ci.quotedMessage).join(', ') : 'null'}` : '',
+                    ].filter(Boolean).join('\n');
                     return sock.sendMessage(chatId, {
-                        text: `❌ Couldn't read the quoted message.\n\nThe message you replied to may not be in the bot's memory yet.\n\n*Try this instead:*\nCopy the text and use:\n*$translate ${query} | <paste text here>*\n\nOr use the pipe format:\n*$translate نموهمزه | ${query}*`,
+                        text: `❌ Couldn't read the quoted message.\n\n_Debug:_\n${debugInfo}\n\nOr paste directly:\n*$translate text here | ${query}*`,
                     }, { quoted: message });
                 }
 
