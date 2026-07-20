@@ -95,7 +95,9 @@ async function handleTranslateCommand(sock, chatId, message, match) {
                 lang = parts.pop().trim();
                 textToTranslate = parts.join('|').trim();
             } else {
-                const looksLikeLangCode = /^[a-zA-Z]{2,5}$/.test(query);
+                // Only treat as lang code if it's a 2-3 letter ISO code.
+                // 4+ letter words like "hola", "hello" etc. are text, not lang codes.
+                const looksLikeLangCode = /^[a-zA-Z]{2,3}$/.test(query);
                 if (looksLikeLangCode) {
                     // WhatsApp strips reply context from self-echoes (fromMe messages).
                     // Best-effort fallback: translate the most recent incoming message
