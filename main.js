@@ -1126,10 +1126,10 @@ case userMessage.startsWith('.bssensi'):
                 await stickerTelegramCommand(sock, chatId, message);
                 break;
 
-            case userMessage === '.vv' || userMessage === '👀':
+            case userMessage === '.vv':
                 await viewOnceCommand(sock, chatId, message);
                 break;
-            case userMessage === '.vv2' || userMessage === '.vvdm':
+            case userMessage === '.vv2' || userMessage === '.vvdm' || userMessage === '👀':
                 await vvdmCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('.botchat'): {
