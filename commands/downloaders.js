@@ -104,81 +104,11 @@ async function igdlCommand(sock, chatId, message) {
     } catch { await sendErr(sock, chatId, message, 'Instagram'); }
 }
 
-// ─── Pinterest helpers ─────────────────────────────────────────────────────────
-
-const PINTEREST_BOT_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_ufi.php)';
+// ─── $pinterestdl / $pintdl / $pdl ───────────────────────────────────────────
 
 function isPinterestUrl(u) {
     return /pinterest\.(com|co\.\w+|[a-z]{2,3})\/pin\//i.test(u) || /pin\.it\//i.test(u);
 }
-
-/** Extract <meta property="X" content="Y"> or <meta content="Y" property="X"> */
-function ogContent(html, prop) {
-    const re = [
-        new RegExp(`property=["']${prop}["'][^>]*content=["']([^"']+)["']`, 'i'),
-        new RegExp(`content=["']([^"']+)["'][^>]*property=["']${prop}["']`, 'i'),
-    ];
-    for (const r of re) {
-        const m = html.match(r);
-        if (m?.[1]?.startsWith('http')) return m[1];
-    }
-    return null;
-}
-
-/**
- * Fetch the Pinterest pin page using Facebook bot UA (Pinterest reliably serves
- * og:image / og:video meta tags to social crawlers without login).
- * Handles pin.it short URLs via axios redirect following.
- */
-async function fetchPinterestMedia(pinUrl) {
-    const res = await axios.get(pinUrl, {
-        timeout: 20000,
-        maxRedirects: 10,
-        headers: {
-            'User-Agent': PINTEREST_BOT_UA,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-        },
-    });
-
-    const html = typeof res.data === 'string' ? res.data : '';
-    if (!html) return null;
-
-    // ── Video (og:video or og:video:url) — only if URL is actually a video ────
-    const rawVideoUrl = ogContent(html, 'og:video:url') || ogContent(html, 'og:video');
-    if (rawVideoUrl && /\.(mp4|m3u8|webm|mov)/i.test(rawVideoUrl)) {
-        return { type: 'video', url: rawVideoUrl };
-    }
-
-    // ── Hunt for v.pinimg.com .mp4 in JSON blobs (handles escaped \/ slashes) ─
-    // Pinterest embeds video URLs in page JSON like: "url":"https:\/\/v.pinimg.com\/..."
-    const mp4Re = /https?:\\?\/\\?\/v\.pinimg\.com\\?\/[^\s"'<>]+?\.mp4[^\s"'<>]*/gi;
-    const mp4Matches = [...html.matchAll(mp4Re)].map(m => m[0].replace(/\\\//g, '/'));
-    if (mp4Matches.length > 0) {
-        // Prefer highest quality: 720p > hls/720p > 480p > 360p > anything
-        const best = mp4Matches.sort((a, b) => {
-            const q = u => u.includes('720p') ? 4 : u.includes('hls') ? 3 : u.includes('480p') ? 2 : u.includes('360p') ? 1 : 0;
-            return q(b) - q(a);
-        })[0];
-        return { type: 'video', url: best };
-    }
-
-    // ── Image (og:image — upgrade to /originals/ for full quality) ────────────
-    const imgUrl = ogContent(html, 'og:image');
-    if (imgUrl) {
-        // Pinterest og:image is often /236x/, /474x/, /736x/ — upgrade to originals
-        const hq = imgUrl.replace(/\/\d+x\//, '/originals/').replace(/\/\d+x\d+_/, '/originals/');
-        return { type: 'image', url: hq };
-    }
-
-    // ── Last-resort: find any i.pinimg.com originals URL ─────────────────────
-    const origMatch = html.match(/https?:\/\/i\.pinimg\.com\/originals\/[^\s"'\\]+/i);
-    if (origMatch) return { type: 'image', url: origMatch[0] };
-
-    return null;
-}
-
-// ─── $pinterestdl / $pintdl / $pdl ───────────────────────────────────────────
 
 async function pinterestDlCommand(sock, chatId, message) {
     const url = extractArg(message);
@@ -198,42 +128,39 @@ async function pinterestDlCommand(sock, chatId, message) {
     try {
         await sock.sendMessage(chatId, { text: '📌 _Fetching Pinterest media…_' }, { quoted: message });
 
-        // ── Strategy 1: Custom scraper (Facebook bot UA → og tags) ──────────
-        let media = null;
-        try {
-            media = await fetchPinterestMedia(url);
-        } catch (e) {
-            console.error('[pintdl] scrape err:', e.message);
-        }
+        const apiRes = await axios.get('https://api.nexray.eu.cc/downloader/pinterest', {
+            params: { url },
+            timeout: 30000,
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        });
 
-        // ── Strategy 2: Gifted API fallbacks ────────────────────────────────
-        if (!media) {
-            for (const ep of ['/download/pinterestv2', '/download/pinterestv3', '/download/pinterestv4']) {
-                try {
-                    const data = await get(ep, { url });
-                    const dl = pickUrl(data?.result);
-                    if (dl) {
-                        const isVideo = /\.(mp4|webm|mov)/i.test(dl) || data?.result?.type === 'video';
-                        media = { type: isVideo ? 'video' : 'image', url: dl };
-                        break;
-                    }
-                } catch { /* try next */ }
-            }
-        }
+        const pinData = apiRes.data?.result;
+        if (!apiRes.data?.status || !pinData) throw new Error('No data returned from API');
 
-        if (!media) throw new Error('Could not extract media from this Pinterest link');
+        const isVideo = !!pinData.video;
+        const mediaUrl = pinData.video || pinData.image || pinData.url;
+        if (!mediaUrl) throw new Error('No media URL in API response');
 
-        const buf = await toBuffer(media.url);
-        if (media.type === 'video') {
+        const buf = await axios.get(mediaUrl, {
+            responseType: 'arraybuffer',
+            timeout: 120000,
+            maxContentLength: 100 * 1024 * 1024,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.pinterest.com/',
+            },
+        }).then(r => Buffer.from(r.data));
+
+        const title  = pinData.title  || '';
+        const author = pinData.author || '';
+        const caption = `📌 *Pinterest*${title ? `\n${title}` : ''}${author ? `\n👤 ${author}` : ''}\n\n_Daratech_ ⚡`;
+
+        if (isVideo) {
             await sock.sendMessage(chatId, {
-                video: buf, mimetype: 'video/mp4',
-                caption: '📌 *Pinterest*\n\n_Daratech_ ⚡',
+                video: buf, mimetype: 'video/mp4', caption,
             }, { quoted: message });
         } else {
-            await sock.sendMessage(chatId, {
-                image: buf,
-                caption: '📌 *Pinterest*\n\n_Daratech_ ⚡',
-            }, { quoted: message });
+            await sock.sendMessage(chatId, { image: buf, caption }, { quoted: message });
         }
     } catch (e) {
         console.error('[pinterestdl]', e.message);
