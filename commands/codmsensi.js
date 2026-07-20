@@ -59,7 +59,7 @@ function generateCODM(ram, isIOS) {
 
 async function codmSensiCommand(sock, chatId, message, userMessage) {
     try {
-        const args = userMessage.replace(/^\.codmsensi\s*/i, '').trim();
+        const args = userMessage.replace(/^\$codmsensi\s*/i, '').trim();
         if (!args) return sock.sendMessage(chatId, { text: USAGE }, { quoted: message });
 
         const platformMatch = args.match(/\b(android|ios|iphone|ipad)\b/i);

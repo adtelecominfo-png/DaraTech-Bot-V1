@@ -174,11 +174,11 @@ async function sendSearchMenu(sock, chatId, message, query) {
         text: `❌ Usage: *$menu search <command>*\nExample: *$menu search $battle*`
     }, { quoted: message });
 
-    const q = query.toLowerCase().replace(/^\./, '');
+    const q = query.toLowerCase().replace(/^\$/, '');
     const results = [];
 
     for (const cat of CATEGORIES) {
-        const matches = cat.cmds.filter(c => c.toLowerCase().replace(/^\./, '').includes(q));
+        const matches = cat.cmds.filter(c => c.toLowerCase().replace(/^\$/, '').includes(q));
         if (matches.length) {
             results.push(`${cat.emoji} *${cat.title}*`);
             matches.forEach(m => results.push(`  │ ${m.startsWith('$') ? m : '$' + m}`));
@@ -199,11 +199,11 @@ async function sendDetailsMenu(sock, chatId, message, query) {
         text: `❌ Usage: *$menu details <command>*\nExample: *$menu details $battle*`
     }, { quoted: message });
 
-    const q = query.toLowerCase().replace(/^\./, '');
+    const q = query.toLowerCase().replace(/^\$/, '');
     const results = [];
 
     for (const cat of CATEGORIES) {
-        const matches = cat.help.filter(line => line.toLowerCase().replace(/^\./, '').includes(q));
+        const matches = cat.help.filter(line => line.toLowerCase().replace(/^\$/, '').includes(q));
         if (matches.length) {
             results.push(`${cat.emoji} *${cat.title}*`);
             matches.forEach(l => results.push(`  ${l}`));
@@ -331,11 +331,11 @@ async function sendSearchMenu(sock, chatId, message, query) {
         text: `❌ Usage: *$menu search <command>*\nExample: *$menu search $battle*`
     }, { quoted: message });
 
-    const q = query.toLowerCase().replace(/^\./, '');
+    const q = query.toLowerCase().replace(/^\$/, '');
     const results = [];
 
     for (const cat of CATEGORIES) {
-        const matches = cat.cmds.filter(c => c.toLowerCase().replace(/^\./, '').includes(q));
+        const matches = cat.cmds.filter(c => c.toLowerCase().replace(/^\$/, '').includes(q));
         if (matches.length) {
             results.push(`${cat.emoji} *${cat.title}*`);
             matches.forEach(m => results.push(`  │ ${m.startsWith('$') ? m : '$' + m}`));
@@ -356,11 +356,11 @@ async function sendDetailsMenu(sock, chatId, message, query) {
         text: `❌ Usage: *$menu details <command>*\nExample: *$menu details $battle*`
     }, { quoted: message });
 
-    const q = query.toLowerCase().replace(/^\./, '');
+    const q = query.toLowerCase().replace(/^\$/, '');
     const results = [];
 
     for (const cat of CATEGORIES) {
-        const matches = cat.help.filter(line => line.toLowerCase().replace(/^\./, '').includes(q));
+        const matches = cat.help.filter(line => line.toLowerCase().replace(/^\$/, '').includes(q));
         if (matches.length) {
             results.push(`${cat.emoji} *${cat.title}*`);
             matches.forEach(l => results.push(`  ${l}`));

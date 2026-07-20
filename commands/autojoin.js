@@ -20,7 +20,7 @@ async function autojoinCommand(sock, chatId, message, args) {
         if (!args) {
             // Show current status
             return await sock.sendMessage(chatId, {
-                text: `╭━━━━━━━━━━━━━━━━━━┈⊷\n┃✪ *🤖 AUTO-JOIN SETTINGS*\n╰━━━━━━━━━━━━━━━━━━┈⊷\n\n*Status:* ${config.enabled ? '✅ Enabled' : '❌ Disabled'}\n*Channel:* ${config.channel || 'Not set'}\n\n*Usage:*\n.autojoin enable/disable\n.autojoin status`,
+                text: `╭━━━━━━━━━━━━━━━━━━┈⊷\n┃✪ *🤖 AUTO-JOIN SETTINGS*\n╰━━━━━━━━━━━━━━━━━━┈⊷\n\n*Status:* ${config.enabled ? '✅ Enabled' : '❌ Disabled'}\n*Channel:* ${config.channel || 'Not set'}\n\n*Usage:*\n$autojoin enable/disable\n$autojoin status`,
                 contextInfo: {
                 }
             }, { quoted: message });

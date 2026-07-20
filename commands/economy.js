@@ -1390,7 +1390,54 @@ function seedEconomyOwner(ownerJid, ownerLid) {
 // ─── Router ───────────────────────────────────────────────────────────────────
 async function economyCommand(sock, chatId, message, userMessage) {
     const raw = userMessage || message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-    const cmd = raw.trim().split(' ')[0].replace('.', '').toLowerCase();
+    const cmd = raw.trim().split(' ')[0].replace('
+    const q   = raw.trim().split(' ').slice(1).join(' ').trim();
+
+    switch (cmd) {
+        case 'register':                                 return registerCommand(sock, chatId, message, q);
+        case 'balance': case 'bal': case 'wallet':       return balanceCommand(sock, chatId, message);
+        case 'profile': case 'prof':                     return profileCommand(sock, chatId, message);
+        case 'daily':                                    return dailyCommand(sock, chatId, message);
+        case 'work':                                     return workCommand(sock, chatId, message);
+        case 'mine':                                     return mineCommand(sock, chatId, message);
+        case 'fish':                                     return fishCommand(sock, chatId, message);
+        case 'rob':                                      return robCommand(sock, chatId, message);
+        case 'pay': case 'transfer':                     return payCommand(sock, chatId, message, q);
+        case 'gift':                                     return giftCommand(sock, chatId, message, q);
+        case 'deposit': case 'dep':                      return depositCommand(sock, chatId, message, q);
+        case 'withdraw': case 'with':                    return withdrawCommand(sock, chatId, message, q);
+        case 'gamble': case 'bet':                       return gambleCommand(sock, chatId, message, q);
+        case 'slots': case 'slot':                       return slotsCommand(sock, chatId, message, q);
+        case 'coinflip': case 'cf':                      return coinflipEcoCommand(sock, chatId, message, q);
+        case 'store': case 'shop':                       return storeCommand(sock, chatId, message);
+        case 'buy':                                      return buyCommand(sock, chatId, message, q);
+        case 'sell': case 'sellitem':                    return sellCommand(sock, chatId, message, q);
+        case 'inventory': case 'inv': case 'items':      return inventoryCommand(sock, chatId, message);
+        case 'equip':                                    return equipCommand(sock, chatId, message, q);
+        case 'upgrade': case 'up':                       return upgradeCommand(sock, chatId, message, q);
+        case 'use':                                      return useCommand(sock, chatId, message, q);
+        case 'battle': case 'fight': case 'duel':        return battleCommand(sock, chatId, message, q);
+        case 'estats':                                   return statsCommand(sock, chatId, message);
+        case 'level': case 'rank': case 'xp':            return levelCommand(sock, chatId, message);
+        case 'quest':                                    return questCommand(sock, chatId, message);
+        case 'leaderboard': case 'richlist':
+        case 'richest': case 'lb':                       return leaderboardCommand(sock, chatId, message);
+        case 'jail':                                     return jailCommand(sock, chatId, message, q);
+        case 'unjail': case 'freejail':                  return unjailCommand(sock, chatId, message);
+        case 'jailstatus': case 'jailcheck':             return jailStatusCommand(sock, chatId, message);
+        case 'addcoins':                                 return addCoinsCommand(sock, chatId, message, q);
+        case 'removecoins': case 'deductcoins':          return removeCoinsCommand(sock, chatId, message, q);
+        case 'resetuser':                                return resetUserCommand(sock, chatId, message);
+        case 'boostuser': case 'boost':                  return boostUserCommand(sock, chatId, message, q);
+        default:
+            await sock.sendMessage(chatId, { text: `❌ Unknown economy command. Use *$menu economy* to see all.` }, { quoted: message });
+    }
+}
+
+module.exports = economyCommand;
+module.exports.seedEconomyOwner = seedEconomyOwner;
+module.exports.isOwner          = isOwner;
+, '').toLowerCase();
     const q   = raw.trim().split(' ').slice(1).join(' ').trim();
 
     switch (cmd) {

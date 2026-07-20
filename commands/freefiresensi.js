@@ -61,7 +61,7 @@ function generateSensitivity(ram, isIOS) {
 async function freefireSensitivityCommand(sock, chatId, message, userMessage) {
     try {
         // Strip command prefix and get args
-        const args = userMessage.replace(/^\.freefiresensi\s*/i, '').trim();
+        const args = userMessage.replace(/^\$freefiresensi\s*/i, '').trim();
 
         if (!args) {
             return sock.sendMessage(chatId, { text: USAGE }, { quoted: message });
