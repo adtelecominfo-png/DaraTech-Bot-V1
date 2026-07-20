@@ -236,10 +236,7 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
     }
 
     if (!finalQuery) {
-        return sock.sendMessage(chatId, {
-            text: `🌸 *Velora* is listening.\n\n▸ *$velora <your message>*\n▸ Or just mention *Velora* anywhere in a message\n▸ Reply to any message with *$velora* to discuss it\n\n_Daratech_ ⚡`,
-            quoted: message,
-        });
+        finalQuery = 'Hey! Say hi and introduce yourself briefly.';
     }
 
     ensureMemory(senderId);
