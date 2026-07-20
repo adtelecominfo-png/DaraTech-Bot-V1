@@ -123,9 +123,9 @@ const { setGroupDescription, setGroupName, setGroupPhoto } = require('./commands
 const instagramCommand = require('./commands/instagram');
 const facebookCommand = require('./commands/facebook');
 const spotifyCommand = require('./commands/spotify');
-const { playCommand, play2Command, playDocCommand, playChCommand } = require('./commands/play');
+const { ytaudioCommand, ytaudioDocCommand } = require('./commands/play');
 const tiktokCommand = require('./commands/tiktok');
-const songCommand = require('./commands/song');
+// songCommand removed — $song/$play/$music aliases removed
 const aiCommand = require('./commands/ai');
 const {
     letmegptCommand, unlimitedAiCommand, claudeCommand, deepseekCommand,
@@ -143,7 +143,7 @@ const { goodnightCommand } = require('./commands/goodnight');
 const { shayariCommand } = require('./commands/shayari');
 const { rosedayCommand } = require('./commands/roseday');
 const imagineCommand = require('./commands/imagine');
-const { videoCommand, video2Command, videoDocCommand } = require('./commands/video');
+const { ytvideoCommand } = require('./commands/video');
 const {
     twitterDlCommand, igdlCommand, pinterestDlCommand, douyinCommand,
     snackVideoCommand, soundcloudCommand, mediafireCommand, gdriveCommand,
@@ -1272,41 +1272,20 @@ case userMessage.startsWith('$bssensi'):
             case userMessage.startsWith('$fb') || userMessage.startsWith('$facebook') || userMessage.startsWith('$fbdl'):
                 await facebookCommand(sock, chatId, message);
                 break;
-            case userMessage.startsWith('$music'):
-                await playCommand(sock, chatId, message);
-                break;
             case userMessage.startsWith('$spotify'):
                 await spotifyCommand(sock, chatId, message);
                 break;
-            case userMessage === '$playch' || userMessage.startsWith('$playch '):
-                await playChCommand(sock, chatId, message);
+            case userMessage === '$ytaudio' || userMessage.startsWith('$ytaudio '):
+                await ytaudioCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
-            case (userMessage === '$play2' || userMessage.startsWith('$play2 ')):
-                await play2Command(sock, chatId, message);
+            case userMessage === '$ytaudiodoc' || userMessage.startsWith('$ytaudiodoc '):
+                await ytaudioDocCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
-            case (userMessage === '$playdoc' || userMessage.startsWith('$playdoc ')):
-                await playDocCommand(sock, chatId, message);
+            case userMessage === '$ytvideo' || userMessage.startsWith('$ytvideo '):
+                await ytvideoCommand(sock, chatId, message);
                 commandExecuted = true;
-                break;
-            case userMessage.startsWith('$play') || userMessage.startsWith('$mp3') || userMessage.startsWith('$ytmp3') || (userMessage.startsWith('$song') && !userMessage.startsWith('$songgen')):
-                await songCommand(sock, chatId, message);
-                break;
-            case (userMessage === '$videodoc' || userMessage.startsWith('$videodoc ')):
-                await videoDocCommand(sock, chatId, message);
-                commandExecuted = true;
-                break;
-            case (userMessage === '$video2' || userMessage.startsWith('$video2 ')):
-                await video2Command(sock, chatId, message);
-                commandExecuted = true;
-                break;
-            case (userMessage === '$savetube' || userMessage.startsWith('$savetube ')):
-                await video2Command(sock, chatId, message);
-                commandExecuted = true;
-                break;
-            case userMessage.startsWith('$video') || userMessage.startsWith('$ytmp4'):
-                await videoCommand(sock, chatId, message);
                 break;
             case (userMessage.startsWith('$tiktok') || userMessage.startsWith('$tt')) &&
                  !userMessage.startsWith('$tts') &&
@@ -2061,7 +2040,7 @@ case userMessage.startsWith('$bssensi'):
 
             // ── Search commands ─────────────────────────────────────────────
             case userMessage.startsWith('$yts ') || userMessage === '$yts' ||
-                 userMessage.startsWith('$ytsearch') || userMessage.startsWith('$ytvideo'):
+                 userMessage.startsWith('$ytsearch'):
                 await ytsearchCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
