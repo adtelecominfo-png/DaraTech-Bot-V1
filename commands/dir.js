@@ -202,50 +202,45 @@ async function showFullDir(sock, chatId, message) {
     }
 }
 
-// ─── $dir search <query> — search bot commands (open to all) ─────────────────
+// ─── $dir search <query> — find files/folders by name (owner only) ───────────
+function findFiles(dir, query, results = [], depth = 0) {
+    if (depth > 6) return results;
+    let entries;
+    try { entries = fs.readdirSync(dir); } catch { return results; }
+    for (const name of entries) {
+        if (SKIP_ALWAYS.has(name)) continue;
+        const full  = path.join(dir, name);
+        let   isDir = false;
+        try { isDir = fs.statSync(full).isDirectory(); } catch { continue; }
+        if (name.toLowerCase().includes(query)) {
+            results.push({ full, isDir });
+        }
+        if (isDir) findFiles(full, query, results, depth + 1);
+    }
+    return results;
+}
+
 async function searchDirCommand(sock, chatId, message, query) {
     if (!query) return sock.sendMessage(chatId, {
-        text: '🔍 *COMMAND SEARCH*\n\nUsage: *$dir search <keyword>*\nExample: $dir search pin\n\n_Daratech_ ⚡',
+        text: '🔍 *DIR SEARCH*\n\nUsage: *$dir search <filename>*\nExample: $dir search downloaders\n\n_Daratech_ ⚡',
     }, { quoted: message });
 
     const q       = query.toLowerCase();
-    const results = [];
-    const seen    = new Set();
+    const matches = findFiles(ROOT, q);
 
-    for (const cat of CATEGORIES) {
-        for (const line of cat.help) {
-            if (!line.startsWith('$')) continue;
-            if (!line.toLowerCase().includes(q)) continue;
-
-            // Parse: "$cmd <args>   → description"
-            const arrow   = line.indexOf('→');
-            const cmdPart = (arrow >= 0 ? line.slice(0, arrow) : line).trim();
-            const descPart = (arrow >= 0 ? line.slice(arrow + 1) : '').trim();
-
-            // Deduplicate by base command (first word)
-            const base = cmdPart.split(/[\s/]/)[0];
-            if (seen.has(base)) continue;
-            seen.add(base);
-
-            results.push({ cmd: cmdPart, desc: descPart, cat: cat.slug, emoji: cat.emoji });
-        }
-    }
-
-    if (results.length === 0) {
+    if (matches.length === 0) {
         return sock.sendMessage(chatId, {
-            text: `🔍 No commands found matching *"${query}"*.\n\nTip: use *$dir search <keyword>* to find commands.`,
+            text: `🔍 No files or folders found matching *"${query}"*.`,
         }, { quoted: message });
     }
 
-    const lines = [`┌─( 🔍 *SEARCH: ${query}* ) — ${results.length} result${results.length !== 1 ? 's' : ''}`];
-    for (const r of results) {
-        lines.push('│');
-        lines.push(`├─◆ *${r.cmd}*`);
-        if (r.desc) lines.push(`│  ${r.desc}`);
-        lines.push(`│  ${r.emoji} ${r.cat}`);
+    const lines = [`┌─( 🔍 *SEARCH: ${query}* ) — ${matches.length} match${matches.length !== 1 ? 'es' : ''}`];
+    for (const m of matches) {
+        const rel  = path.relative(ROOT, m.full);
+        const icon = m.isDir ? '📁' : fileEmoji(path.extname(m.full).replace('.', ''));
+        lines.push(`├─ ${icon} ${rel}${m.isDir ? '/' : ''}`);
     }
-    lines.push('│');
-    lines.push('└─ _Daratech_ ⚡');
+    lines.push(`└─ _Daratech_ ⚡`);
 
     await sock.sendMessage(chatId, { text: lines.join('\n') }, { quoted: message });
 }
