@@ -68,14 +68,23 @@ setInterval(() => {
     }
 }, 60_000) // every 1 minute
 
-// Memory monitoring - Restart if RAM gets too high (server has ~308MB total)
+// Memory monitoring — only restart on a sustained heap spike, not a single RSS blip.
+// RSS includes shared/cached pages that Node manages itself; heapUsed is the real
+// application allocation. Two consecutive readings above the threshold are required
+// to avoid restarting on a transient spike (e.g. during a large download).
+let _highMemCount = 0;
 setInterval(() => {
-    const used = process.memoryUsage().rss / 1024 / 1024
-    if (used > 250) {
-        console.log('⚠️ RAM too high (>250MB), restarting bot...')
-        process.exit(1) // Panel will auto-restart
+    const heapMB = process.memoryUsage().heapUsed / 1024 / 1024;
+    if (heapMB > 380) {
+        _highMemCount++;
+        if (_highMemCount >= 2) {
+            console.log(`⚠️ Heap sustained above 380 MB (${heapMB.toFixed(0)} MB) — restarting...`);
+            process.exit(1);
+        }
+    } else {
+        _highMemCount = 0; // reset on any normal reading
     }
-}, 30_000) // check every 30 seconds
+}, 30_000);
 
 let phoneNumber = (process.env.OWNER_NUMBER || '').replace(/\D/g, '')
 let owner = JSON.parse(fs.readFileSync('./data/owner.json'))
@@ -234,11 +243,6 @@ async function startXeonBotInc() {
                 if (!isGroup) return // Block DMs in private mode, but allow group messages
             }
             if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return
-
-            // Clear message retry cache to prevent memory bloat
-            if (XeonBotInc?.msgRetryCounterCache) {
-                XeonBotInc.msgRetryCounterCache.clear()
-            }
 
             try {
                 await handleMessages(XeonBotInc, chatUpdate, true)
@@ -549,12 +553,6 @@ async function startXeonBotInc() {
 
     XeonBotInc.ev.on('group-participants.update', async (update) => {
         await handleGroupParticipantUpdate(XeonBotInc, update);
-    });
-
-    XeonBotInc.ev.on('messages.upsert', async (m) => {
-        if (m.messages[0].key && m.messages[0].key.remoteJid === 'status@broadcast') {
-            await handleStatus(XeonBotInc, m);
-        }
     });
 
     XeonBotInc.ev.on('status.update', async (status) => {

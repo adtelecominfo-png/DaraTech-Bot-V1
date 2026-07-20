@@ -182,9 +182,8 @@ function parsePick(pick) {
 }
 
 // ─── Size limits ──────────────────────────────────────────────────────────────
-// All downloads are sent as documents — WhatsApp documents support larger files
-// than video messages and preserve the original filename.
-const DOC_LIMIT = 2 * 1024 * 1024 * 1024; // 2 GB (practical WA document ceiling)
+const VIDEO_LIMIT = 64  * 1024 * 1024; // 64 MB  — WA video message ceiling
+const DOC_LIMIT   = 2   * 1024 * 1024 * 1024; // 2 GB  — WA document ceiling
 
 // ─── Filename builder ──────────────────────────────────────────────────────────
 /**
@@ -214,9 +213,10 @@ function parseSources(data) {
 }
 
 /**
- * sendAsDocument — core sender.
- * Always sends as a document (preserves filename, allows larger files).
- * Falls back to plain-text links if WA rejects the upload.
+ * sendVideoOrFile — core sender.
+ * Tries to send as a proper video message first (shows inline player).
+ * Falls back to document (preserves filename, higher size limit).
+ * Final fallback: plain-text link if WA rejects both.
  *
  * @param epLabel  e.g. "S01E03" — used in filename; pass null for movies
  */
@@ -230,31 +230,43 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
         `_Downloaded by Daratech_`,
     ].filter(l => l !== undefined).join('\n').replace(/\n\n\n+/g, '\n\n');
 
-    // Try buffering the file ourselves first.
-    // CDN URLs are signed with short-lived timestamps — if we hand the URL
-    // directly to WhatsApp's servers they may fetch it after the signature
-    // expires and get a 403. Downloading it ourselves with proper headers
-    // avoids that race condition entirely.
-    const buf = await downloadBuffer(dlUrl, sizeHint);
+    // Download to buffer first — CDN URLs are short-lived signed tokens; passing
+    // them directly to WA's servers often results in a 403 after the signature expires.
+    const buf  = await downloadBuffer(dlUrl, sizeHint);
+    const size = buf?.length || parseInt(sizeHint) || 0;
 
+    // ── Attempt 1: send as video (shows inline player, ≤ VIDEO_LIMIT) ──────────
+    if (buf && size <= VIDEO_LIMIT) {
+        try {
+            await sock.sendMessage(chatId, {
+                video: buf, mimetype: 'video/mp4', caption,
+                fileName,   // some clients show the filename even for videos
+            }, { quoted: message });
+            if (linksText) await sock.sendMessage(chatId, { text: linksText }, { quoted: message });
+            return;
+        } catch (videoErr) {
+            console.warn('[movie:send] video send failed, trying document:', videoErr.message);
+        }
+    }
+
+    // ── Attempt 2: send as document (up to 2 GB, preserves filename) ───────────
     try {
         const docPayload = buf
             ? { document: buf,            mimetype: 'video/mp4', fileName, caption }
             : { document: { url: dlUrl }, mimetype: 'video/mp4', fileName, caption };
-
         await sock.sendMessage(chatId, docPayload, { quoted: message });
-
-        if (linksText) {
-            await sock.sendMessage(chatId, { text: linksText }, { quoted: message });
-        }
-    } catch (e) {
-        // Both buffer and URL-send failed — give the user the direct link
-        const urlLine = `🔗 *Direct download link:*\n${dlUrl}`;
-        const fallback = linksText
-            ? `⚠️ Could not send file directly.\n\n${urlLine}\n\n${linksText}`
-            : `⚠️ Could not send file directly.\n\n${urlLine}`;
-        await sock.sendMessage(chatId, { text: fallback }, { quoted: message });
+        if (linksText) await sock.sendMessage(chatId, { text: linksText }, { quoted: message });
+        return;
+    } catch (docErr) {
+        console.warn('[movie:send] document send failed, sending link:', docErr.message);
     }
+
+    // ── Attempt 3: plain-text link ───────────────────────────────────────────────
+    const urlLine  = `🔗 *Direct download link:*\n${dlUrl}`;
+    const fallback = linksText
+        ? `⚠️ Could not send file directly.\n\n${urlLine}\n\n${linksText}`
+        : `⚠️ Could not send file directly.\n\n${urlLine}`;
+    await sock.sendMessage(chatId, { text: fallback }, { quoted: message });
 }
 
 /**

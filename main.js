@@ -334,9 +334,11 @@ async function handleMessages(sock, messageUpdate, printLog) {
         }
         // Read bot mode once; don't early-return so moderation can still run in private mode
         let isPublic = true;
+        let disabledGroups = [];
         try {
-            const data = JSON.parse(fs.readFileSync('./data/messageCount.json'));
-            if (typeof data.isPublic === 'boolean') isPublic = data.isPublic;
+            const modeData = JSON.parse(fs.readFileSync('./data/messageCount.json'));
+            if (typeof modeData.isPublic === 'boolean') isPublic = modeData.isPublic;
+            if (Array.isArray(modeData.disabledGroups)) disabledGroups = modeData.disabledGroups;
         } catch (error) {
             console.error('Error checking access mode:', error);
             // default isPublic=true on error
@@ -344,6 +346,9 @@ async function handleMessages(sock, messageUpdate, printLog) {
         // Fast check: fromMe covers the bot owner; senderIsSudo covers sudo users.
         // Full isOwnerOrSudo (which may fetch group metadata) is only called for commands.
         const isOwnerOrSudoCheck = message.key.fromMe || senderIsSudo;
+
+        // If this group has been disabled by owner, ignore everything (owner bypasses)
+        if (isGroup && disabledGroups.includes(chatId) && !isOwnerOrSudoCheck) return;
         // Check if user is banned (skip ban check for unban command)
         if (isBanned(senderId) && !userMessage.startsWith('.unban')) {
             // Only respond occasionally to avoid spam
@@ -719,29 +724,74 @@ case userMessage.startsWith('.bssensi'):
                 // If no argument provided, show current status
                 if (!action) {
                     const currentMode = data.isPublic ? 'public' : 'private';
+                    const grpStatus = isGroup
+                        ? ((data.disabledGroups || []).includes(chatId) ? '❌ disabled' : '✅ enabled')
+                        : 'N/A (not a group)';
                     await sock.sendMessage(chatId, {
-                        text: `Current bot mode: *${currentMode}*\n\nUsage: .mode public/private\n\nExample:\n.mode public - Allow everyone to use bot\n.mode private - Restrict to owner only`,
+                        text: `🤖 *BOT MODE*\n\n🌐 Global: *${currentMode}*\n👥 This group: *${grpStatus}*\n\nUsage:\n*.mode public* — allow everyone\n*.mode private* — owner only\n*.mode group off* — disable bot in this group\n*.mode group on* — re-enable bot in this group\n*.mode g off/on* — short alias`,
                         ...channelInfo
                     }, { quoted: message });
                     return;
                 }
 
+                // ── Group mode subcommand ──────────────────────────────────────
+                if (action === 'group' || action === 'g') {
+                    if (!isGroup) {
+                        await sock.sendMessage(chatId, { text: '❌ This subcommand can only be used inside a group.', ...channelInfo }, { quoted: message });
+                        return;
+                    }
+                    const subAction = userMessage.split(' ')[2]?.toLowerCase();
+                    if (!subAction) {
+                        const grpCurrent = (data.disabledGroups || []).includes(chatId) ? '❌ disabled' : '✅ enabled';
+                        await sock.sendMessage(chatId, {
+                            text: `👥 Bot status in this group: *${grpCurrent}*\n\n*.mode group off* — Disable bot in this group\n*.mode group on* — Re-enable bot in this group`,
+                            ...channelInfo
+                        }, { quoted: message });
+                        return;
+                    }
+                    if (subAction !== 'on' && subAction !== 'off') {
+                        await sock.sendMessage(chatId, {
+                            text: '❌ Usage: *.mode group on/off*  or  *.mode g on/off*',
+                            ...channelInfo
+                        }, { quoted: message });
+                        return;
+                    }
+                    const dGroups = Array.isArray(data.disabledGroups) ? data.disabledGroups : [];
+                    try {
+                        if (subAction === 'off') {
+                            if (!dGroups.includes(chatId)) dGroups.push(chatId);
+                            data.disabledGroups = dGroups;
+                            fs.writeFileSync('./data/messageCount.json', JSON.stringify(data, null, 2));
+                            await sock.sendMessage(chatId, {
+                                text: '🔕 Bot has been *disabled* for this group.\n\n_Only the bot owner can re-enable it with_ *.mode group on*',
+                            });
+                        } else {
+                            data.disabledGroups = dGroups.filter(g => g !== chatId);
+                            fs.writeFileSync('./data/messageCount.json', JSON.stringify(data, null, 2));
+                            await sock.sendMessage(chatId, {
+                                text: '✅ Bot has been *re-enabled* for this group.',
+                                ...channelInfo
+                            }, { quoted: message });
+                        }
+                    } catch (err) {
+                        console.error('Error updating group mode:', err);
+                        await sock.sendMessage(chatId, { text: '❌ Failed to update group mode.', ...channelInfo }, { quoted: message });
+                    }
+                    return;
+                }
+
                 if (action !== 'public' && action !== 'private') {
                     await sock.sendMessage(chatId, {
-                        text: 'Usage: .mode public/private\n\nExample:\n.mode public - Allow everyone to use bot\n.mode private - Restrict to owner only',
+                        text: '❌ Usage: *.mode public/private*\nOr for groups: *.mode group off/on*',
                         ...channelInfo
                     }, { quoted: message });
                     return;
                 }
 
                 try {
-                    // Update access mode
                     data.isPublic = action === 'public';
-
-                    // Save updated data
                     fs.writeFileSync('./data/messageCount.json', JSON.stringify(data, null, 2));
-
-                    await sock.sendMessage(chatId, { text: `Bot is now in *${action}* mode`, ...channelInfo });
+                    await sock.sendMessage(chatId, { text: `✅ Bot is now in *${action}* mode`, ...channelInfo });
                 } catch (error) {
                     console.error('Error updating access mode:', error);
                     await sock.sendMessage(chatId, { text: 'Failed to update bot access mode', ...channelInfo });
