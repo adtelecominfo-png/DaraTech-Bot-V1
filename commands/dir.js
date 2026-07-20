@@ -135,9 +135,18 @@ async function showDir(sock, chatId, message, absPath, relPath) {
 
 // ─── Full recursive directory tree ───────────────────────────────────────────
 const SKIP_ALWAYS = new Set([
-    'node_modules', '.git', '.npm', '__pycache__', '.cache',
-    'temp', 'tmp', 'session', 'sessions', 'auth_info', 'auth_info_baileys',
-    'store', 'logs', 'log', 'dist', 'build', '.env', 'creds',
+    // Runtime / auth — not real bot files
+    'node_modules', 'session', 'sessions', 'auth_info', 'auth_info_baileys',
+    'creds', 'store', 'backup',
+    // VCS / tooling
+    '.git', '.npm', '.upm', '.config', '.cache', '__pycache__',
+    'dist', 'build', 'coverage',
+    // Temp / logs
+    'temp', 'tmp', 'logs', 'log',
+    // Secrets
+    '.env',
+    // Replit / agent internals
+    '.agents', 'attached_assets', '.local',
 ]);
 
 function buildTree(dir, prefix = '') {
@@ -226,7 +235,7 @@ function findFiles(dir, query, results = [], depth = 0) {
 
 async function searchDirCommand(sock, chatId, message, query) {
     if (!query) return sock.sendMessage(chatId, {
-        text: '🔍 *DIR SEARCH*\n\nUsage: *$dir search <filename>*\nExample: $dir search downloaders\n\n_Daratech_ ⚡',
+        text: '🔍 *DIR SEARCH*\n\nUsage: *$dir search <filename>*\nExample: $dir search economy\n\n_Daratech_ ⚡',
     }, { quoted: message });
 
     const q       = query.toLowerCase();
@@ -238,14 +247,31 @@ async function searchDirCommand(sock, chatId, message, query) {
         }, { quoted: message });
     }
 
-    const lines = [`┌─( 🔍 *SEARCH: ${query}* ) — ${matches.length} match${matches.length !== 1 ? 'es' : ''}`];
-    for (const m of matches) {
-        const rel  = path.relative(ROOT, m.full);
-        const icon = m.isDir ? '📁' : fileEmoji(path.extname(m.full).replace('.', ''));
-        lines.push(`├─ ${icon} ${rel}${m.isDir ? '/' : ''}`);
-    }
-    lines.push(`└─ _Daratech_ ⚡`);
+    const lines = [`┌─( 🔍 *SEARCH: ${query}* ) — ${matches.length} result${matches.length !== 1 ? 's' : ''}`, `│`];
 
+    for (let i = 0; i < matches.length; i++) {
+        const m      = matches[i];
+        const isLast = i === matches.length - 1;
+        const rel    = path.relative(ROOT, m.full);
+        const name   = path.basename(m.full);
+        const folder = path.dirname(rel).replace(/\\/g, '/');
+        const ext    = m.isDir ? '' : path.extname(m.full).replace('.', '');
+        const icon   = m.isDir ? '📁' : fileEmoji(ext);
+        const type   = m.isDir ? 'Folder' : fileType(ext);
+
+        let sizeStr = '';
+        if (!m.isDir) {
+            try { sizeStr = ` • ${formatSize(fs.statSync(m.full).size)}`; } catch { /* skip */ }
+        }
+
+        const branch = isLast ? '└─' : '├─';
+        lines.push(`${branch}◆ ${icon} *${name}${m.isDir ? '/' : ''}*`);
+        lines.push(`│  📂 ${folder === '.' ? 'root' : folder + '/'}`);
+        lines.push(`│  📋 ${type}${sizeStr}`);
+        lines.push(`│`);
+    }
+
+    lines.push(`_Daratech_ ⚡`);
     await sock.sendMessage(chatId, { text: lines.join('\n') }, { quoted: message });
 }
 
