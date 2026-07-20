@@ -16,11 +16,37 @@
 // Use axios — it correctly preserves Authorization headers through redirects,
 // unlike node-fetch which strips them (causing 403 on shared hosting servers).
 const axios = require('axios');
+const fs     = require('fs');
+const path   = require('path');
 
-const MOVIE_BASE = 'https://runflix-api-v-3263--trumpmax.replit.app/api/v3';
+const MOVIE_BASE   = 'https://runflix-api-v-3263--trumpmax.replit.app/api/v3';
+const CACHE_FILE   = path.join(__dirname, '../data/lastSearches.json');
+const CACHE_MAX    = 200; // max chatIds kept in file (rolling)
 
-// Per-chat search result cache so users can pick by number (e.g. $movie dl 1)
+// ── Persistent search-result cache ───────────────────────────────────────────
+// Survives bot restarts so $movie dl 1 still works after .update
 const lastSearches = new Map();
+
+function _loadCache() {
+    try {
+        const raw = fs.readFileSync(CACHE_FILE, 'utf8');
+        const obj = JSON.parse(raw);
+        for (const [k, v] of Object.entries(obj)) lastSearches.set(k, v);
+    } catch { /* no file yet or parse error — start empty */ }
+}
+
+function _saveCache() {
+    try {
+        // Keep only the most recent CACHE_MAX entries to avoid unbounded growth
+        const entries = [...lastSearches.entries()];
+        const trimmed = entries.slice(-CACHE_MAX);
+        const obj = Object.fromEntries(trimmed);
+        fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+        fs.writeFileSync(CACHE_FILE, JSON.stringify(obj));
+    } catch { /* non-fatal */ }
+}
+
+_loadCache();
 
 async function apiFetch(path) {
     const url = `${MOVIE_BASE}${path}`;
@@ -497,6 +523,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             const top = list.slice(0, 10);
             // Remember results so users can pick by number (e.g. $movie dl 1)
             lastSearches.set(chatId, top);
+            _saveCache();
             const lines = top.map(formatResult);
             return sock.sendMessage(chatId, {
                 text:
@@ -521,14 +548,18 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             // Resolve numeric pick → real ID from last search
             let infoId = query;
             const pickNum = parseInt(query);
-            if (!isNaN(pickNum) && pickNum >= 1 && pickNum <= 10) {
+            if (!isNaN(pickNum) && pickNum >= 1 && pickNum <= 10 && query === String(pickNum)) {
                 const saved = lastSearches.get(chatId) || [];
                 const picked = saved[pickNum - 1];
-                if (picked) {
-                    infoId = picked.subjectId || picked.id || query;
-                } else {
+                if (!picked) {
                     return sock.sendMessage(chatId, {
                         text: `❌ No result #${pickNum} in your last search.\nSearch first: *$movie <title>*`
+                    }, { quoted: message });
+                }
+                infoId = picked.subjectId || picked.id || '';
+                if (!infoId) {
+                    return sock.sendMessage(chatId, {
+                        text: `❌ Could not read the ID for result #${pickNum}. Search again: *$movie <title>*`
                     }, { quoted: message });
                 }
             }
@@ -562,13 +593,18 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             if (!isNaN(dlPickNum) && dlPickNum >= 1 && dlPickNum <= 10 && id === String(dlPickNum)) {
                 const saved = lastSearches.get(chatId) || [];
                 const picked = saved[dlPickNum - 1];
-                if (picked) {
-                    id = picked.subjectId || picked.id || id;
-                } else {
+                if (!picked) {
                     return sock.sendMessage(chatId, {
                         text: `❌ No result #${dlPickNum} in your last search.\nSearch first: *$movie <title>*`
                     }, { quoted: message });
                 }
+                const resolvedId = picked.subjectId || picked.id || '';
+                if (!resolvedId) {
+                    return sock.sendMessage(chatId, {
+                        text: `❌ Could not read the ID for result #${dlPickNum}. Search again: *$movie <title>*`
+                    }, { quoted: message });
+                }
+                id = resolvedId;
             }
 
             await sock.sendMessage(chatId, { react: { text: '📥', key: message.key } });
