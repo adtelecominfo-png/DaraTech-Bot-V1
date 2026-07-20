@@ -239,16 +239,14 @@ function parseSources(data) {
 }
 
 /**
- * sendVideoOrFile — core sender.
- * Tries to send as a proper video message first (shows inline player).
- * Falls back to document (preserves filename, higher size limit).
- * Final fallback: plain-text link if WA rejects both.
+ * sendAsDocument — core sender.
+ * Tries to send as a video message (inline player, ≤ VIDEO_LIMIT).
+ * If that fails or the file is too large, sends a plain-text link instead.
  *
- * @param epLabel  e.g. "S01E03" — used in filename; pass null for movies
+ * @param epLabel  e.g. "S01E03" — used in caption; pass null for movies
  */
 async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLabel, linksText, sizeHint) {
-    const fileName = buildFileName(title, epLabel, quality);
-    const caption  = [
+    const caption = [
         `🎬 *${title || 'Movie'}*`,
         epLabel ? `📺 *Episode:* ${epLabel}` : '',
         `🎞 *Quality:* ${quality || 'Unknown'}`,
@@ -256,42 +254,32 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
         `_Downloaded by Daratech_`,
     ].filter(l => l !== undefined).join('\n').replace(/\n\n\n+/g, '\n\n');
 
-    // Download to buffer first — CDN URLs are short-lived signed tokens; passing
-    // them directly to WA's servers often results in a 403 after the signature expires.
+    // Download to buffer — CDN URLs are short-lived signed tokens; passing
+    // them directly to WA's servers often results in a 403 after expiry.
     const buf  = await downloadBuffer(dlUrl, sizeHint);
     const size = buf?.length || parseInt(sizeHint) || 0;
 
-    // ── Attempt 1: send as video (shows inline player, ≤ VIDEO_LIMIT) ──────────
+    // ── Attempt: send as video (inline player, ≤ VIDEO_LIMIT) ───────────────────
     if (buf && size <= VIDEO_LIMIT) {
         try {
             await sock.sendMessage(chatId, {
                 video: buf, mimetype: 'video/mp4', caption,
-                fileName,   // some clients show the filename even for videos
             }, { quoted: message });
             if (linksText) await sock.sendMessage(chatId, { text: linksText }, { quoted: message });
             return;
         } catch (videoErr) {
-            console.warn('[movie:send] video send failed, trying document:', videoErr.message);
+            console.warn('[movie:send] video send failed, falling back to link:', videoErr.message);
         }
     }
 
-    // ── Attempt 2: send as document (up to 2 GB, preserves filename) ───────────
-    try {
-        const docPayload = buf
-            ? { document: buf,            mimetype: 'video/mp4', fileName, caption }
-            : { document: { url: dlUrl }, mimetype: 'video/mp4', fileName, caption };
-        await sock.sendMessage(chatId, docPayload, { quoted: message });
-        if (linksText) await sock.sendMessage(chatId, { text: linksText }, { quoted: message });
-        return;
-    } catch (docErr) {
-        console.warn('[movie:send] document send failed, sending link:', docErr.message);
-    }
-
-    // ── Attempt 3: plain-text link ───────────────────────────────────────────────
+    // ── Fallback: plain-text link ────────────────────────────────────────────────
     const urlLine  = `🔗 *Direct download link:*\n${dlUrl}`;
-    const fallback = linksText
-        ? `⚠️ Could not send file directly.\n\n${urlLine}\n\n${linksText}`
-        : `⚠️ Could not send file directly.\n\n${urlLine}`;
+    const fallback = [
+        `⚠️ *Couldn't send the video directly.*`,
+        ``,
+        urlLine,
+        linksText ? `\n${linksText}` : '',
+    ].filter(l => l !== undefined).join('\n').replace(/\n\n\n+/g, '\n\n');
     await sock.sendMessage(chatId, { text: fallback }, { quoted: message });
 }
 
