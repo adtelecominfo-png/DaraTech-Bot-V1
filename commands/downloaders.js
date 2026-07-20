@@ -144,13 +144,24 @@ async function fetchPinterestMedia(pinUrl) {
     const html = typeof res.data === 'string' ? res.data : '';
     if (!html) return null;
 
-    // ── Video (og:video or og:video:url) ──────────────────────────────────────
-    const videoUrl = ogContent(html, 'og:video:url') || ogContent(html, 'og:video');
-    if (videoUrl) return { type: 'video', url: videoUrl };
+    // ── Video (og:video or og:video:url) — only if URL is actually a video ────
+    const rawVideoUrl = ogContent(html, 'og:video:url') || ogContent(html, 'og:video');
+    if (rawVideoUrl && /\.(mp4|m3u8|webm|mov)/i.test(rawVideoUrl)) {
+        return { type: 'video', url: rawVideoUrl };
+    }
 
-    // ── Also hunt for v.pinimg.com .mp4 embedded in JSON blobs ───────────────
-    const mp4Match = html.match(/https?:\/\/v\.pinimg\.com\/[^\s"'\\]+\.mp4[^\s"'\\]*/i);
-    if (mp4Match) return { type: 'video', url: mp4Match[0] };
+    // ── Hunt for v.pinimg.com .mp4 in JSON blobs (handles escaped \/ slashes) ─
+    // Pinterest embeds video URLs in page JSON like: "url":"https:\/\/v.pinimg.com\/..."
+    const mp4Re = /https?:\\?\/\\?\/v\.pinimg\.com\\?\/[^\s"'<>]+?\.mp4[^\s"'<>]*/gi;
+    const mp4Matches = [...html.matchAll(mp4Re)].map(m => m[0].replace(/\\\//g, '/'));
+    if (mp4Matches.length > 0) {
+        // Prefer highest quality: 720p > hls/720p > 480p > 360p > anything
+        const best = mp4Matches.sort((a, b) => {
+            const q = u => u.includes('720p') ? 4 : u.includes('hls') ? 3 : u.includes('480p') ? 2 : u.includes('360p') ? 1 : 0;
+            return q(b) - q(a);
+        })[0];
+        return { type: 'video', url: best };
+    }
 
     // ── Image (og:image — upgrade to /originals/ for full quality) ────────────
     const imgUrl = ogContent(html, 'og:image');
