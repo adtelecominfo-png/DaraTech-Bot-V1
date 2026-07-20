@@ -152,7 +152,7 @@ function saveSessionToEnv() {
         const credsFile = path.join(process.cwd(), 'session', 'creds.json');
         if (!fs.existsSync(credsFile)) return;
         const encoded = Buffer.from(fs.readFileSync(credsFile, 'utf8')).toString('base64');
-        const envPath = path.join(process.cwd(), '$env');
+        const envPath = path.join(process.cwd(), '.env');
         let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
         if (/^SESSION_ID=/m.test(content)) {
             content = content.replace(/^SESSION_ID=.*/m, `SESSION_ID=${encoded}`);

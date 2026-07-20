@@ -91,7 +91,7 @@ async function showDir(sock, chatId, message, absPath, relPath) {
     catch (e) { return sock.sendMessage(chatId, { text: `❌ Cannot read folder: ${e.message}` }, { quoted: message }); }
 
     // Skip clutter
-    const skip = new Set(['node_modules', '.git', '__pycache__', '.cache']);
+    const skip = new Set(['node_modules', '.git', '.npm', '__pycache__', '.cache', 'temp', 'tmp']);
     entries = entries.filter(e => !skip.has(e)).sort();
 
     const lines = [];
@@ -123,7 +123,7 @@ async function showDir(sock, chatId, message, absPath, relPath) {
 }
 
 // ─── Full recursive directory tree ───────────────────────────────────────────
-const SKIP_ALWAYS = new Set(['node_modules', '.git', '__pycache__', '.cache']);
+const SKIP_ALWAYS = new Set(['node_modules', '.git', '.npm', '__pycache__', '.cache', 'temp', 'tmp']);
 
 function buildTree(dir, prefix = '') {
     let entries;
@@ -201,7 +201,7 @@ async function showFullDir(sock, chatId, message) {
 async function dirCommand(sock, chatId, message, userMessage) {
     const arg = userMessage.slice(4).trim(); // strip "$dir"
 
-    if (!arg) return showFullDir(sock, chatId, message);
+    if (!arg) return showDir(sock, chatId, message, ROOT, '.');
 
     const absPath = safePath(arg);
     if (!absPath) {
