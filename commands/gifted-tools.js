@@ -52,10 +52,14 @@ async function ttpCommand(sock, chatId, message) {
     if (!q) return sock.sendMessage(chatId, { text: '🖼️ Usage: $ttp <text>\nExample: $ttp Hello World' }, { quoted: message });
     await processing(sock, message, chatId, '🖼️ Generating image……');
     try {
-        const data = await toolsGet('ttp', { query: q });
-        if (!data?.success || !data?.image_url) throw new Error(data?.message || 'No image returned');
+        const data = await toolsGet('ttp', { text: q });
+        const imageUrl = data?.image_url || data?.result?.image_url || data?.url;
+        if (!imageUrl) throw new Error(data?.message || data?.error || 'No image returned');
+        const imgRes = await require('axios').get(imageUrl, {
+            responseType: 'arraybuffer', timeout: 20000, headers: { 'User-Agent': 'Mozilla/5.0' },
+        });
         await sock.sendMessage(chatId, {
-            image: { url: data.image_url },
+            image: Buffer.from(imgRes.data),
             caption: `🖼️ *TEXT TO IMAGE*\n"${q}"\n\n_Daratech_ ⚡`,
         }, { quoted: message });
         await react(sock, message, '✅');
@@ -516,6 +520,32 @@ const SHORTENERS = {
     ssur:      { label: 'Ssur.cc',    cmd: '$ssur' },
 };
 
+// Direct shortener backends (no Gifted API dependency)
+async function _shortenDirect(service, url) {
+    const axios = require('axios');
+    if (service === 'vgd') {
+        const { data } = await axios.get(
+            `https://v.gd/create.php?format=json&url=${encodeURIComponent(url)}`,
+            { timeout: 15000 }
+        );
+        if (data?.shorturl) return data.shorturl;
+        throw new Error(data?.errormessage || 'v.gd failed');
+    }
+    if (service === 'ssur') {
+        // ssur.cc has no free API; fall through to tinyurl as reliable fallback
+        const { data } = await axios.get(
+            `https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`,
+            { timeout: 15000 }
+        );
+        if (typeof data === 'string' && data.startsWith('http')) return data.trim();
+        throw new Error('TinyURL fallback failed');
+    }
+    // Others: tinyurl / cleanuri remain on Gifted API
+    const data = await toolsGet(service, { url });
+    if (!data?.success || !data?.result) throw new Error(data?.message || 'Failed to shorten URL');
+    return data.result;
+}
+
 function makeShortener(service) {
     return async function (sock, chatId, message) {
         const q = getQ(message);
@@ -525,12 +555,11 @@ function makeShortener(service) {
 
         await processing(sock, message, chatId, '🔗 Shortening URL……');
         try {
-            const data = await toolsGet(service, { url: q });
-            if (!data?.success || !data?.result) throw new Error(data?.message || 'Failed to shorten URL');
-
-            const txt = `🔗 *URL SHORTENER — ${SHORTENERS[service].label}*\n\n`
+            const shortened = await _shortenDirect(service, q);
+            const label = service === 'ssur' ? 'TinyURL (ssur.cc fallback)' : SHORTENERS[service].label;
+            const txt = `🔗 *URL SHORTENER — ${label}*\n\n`
                 + `📎 Original:\n${q}\n\n`
-                + `✂️ Shortened:\n*${data.result}*\n\n_Daratech_ ⚡`;
+                + `✂️ Shortened:\n*${shortened}*\n\n_Daratech_ ⚡`;
             await sock.sendMessage(chatId, { text: txt }, { quoted: message });
             await react(sock, message, '✅');
         } catch (err) {

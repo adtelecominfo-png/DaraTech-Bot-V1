@@ -290,13 +290,6 @@ async function linkgcCommand(sock, chatId, message) {
     if (!groupOnly(sock, chatId, message)) return;
     try {
         const meta = await sock.groupMetadata(chatId);
-        const botJid = getBotJid(sock);
-        const isBotAdmin = meta.participants.some(p =>
-            p.id === botJid && (p.admin === 'admin' || p.admin === 'superadmin')
-        );
-        if (!isBotAdmin) {
-            return sock.sendMessage(chatId, { text: '❌ Bot must be an admin to get the group link.' }, { quoted: message });
-        }
         const code = await sock.groupInviteCode(chatId);
         const link = `https://chat.whatsapp.com/${code}`;
         await sock.sendMessage(chatId, {
@@ -304,7 +297,10 @@ async function linkgcCommand(sock, chatId, message) {
         }, { quoted: message });
     } catch (e) {
         console.error('[linkgc]', e.message);
-        await sock.sendMessage(chatId, { text: '❌ Failed to get group link.' }, { quoted: message });
+        const hint = e.message?.includes('not-admin') || e.message?.includes('admin')
+            ? '❌ Bot must be an admin to fetch the group link.'
+            : '❌ Failed to get group link.';
+        await sock.sendMessage(chatId, { text: hint }, { quoted: message });
     }
 }
 
@@ -354,12 +350,16 @@ async function creategcCommand(sock, chatId, senderId, userMessage, message) {
 
         await sock.sendMessage(chatId, { text: '⏳ Creating group……' }, { quoted: message });
         const gc = await sock.groupCreate(groupName, participants);
+        const gcId = gc?.id || gc?.gid || 'unknown';
         await sock.sendMessage(chatId, {
-            text: `✅ *Group Created!*\n\n📌 Name: *${groupName}*\n👥 Members: ${participants.length}\n🔗 ID: ${gc.id}`
+            text: `✅ *Group Created!*\n\n📌 Name: *${groupName}*\n👥 Members: ${participants.length}\n🔗 ID: ${gcId}`
         }, { quoted: message });
     } catch (e) {
-        console.error('[creategc]', e.message);
-        await sock.sendMessage(chatId, { text: '❌ Failed to create group.' }, { quoted: message });
+        console.error('[creategc]', e.message, e.stack);
+        const hint = e.message?.includes('not-authorized') ? '\n\n_Make sure all members have your number saved._'
+                   : e.message?.includes('bad-param')      ? '\n\n_One or more phone numbers may be invalid._'
+                   : '';
+        await sock.sendMessage(chatId, { text: `❌ Failed to create group.${hint}\n\n_${e.message}_` }, { quoted: message });
     }
 }
 

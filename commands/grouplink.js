@@ -9,15 +9,6 @@ async function grouplinkCommand(sock, chatId, message) {
         }
 
         const meta = await sock.groupMetadata(chatId);
-        const botId = sock.user?.id;
-        const isAdmin = meta.participants.some(p =>
-            p.id === botId && (p.admin === 'admin' || p.admin === 'superadmin')
-        );
-
-        if (!isAdmin) {
-            return sock.sendMessage(chatId, { text: '❌ Bot must be an admin to get the group link.' }, { quoted: message });
-        }
-
         const inviteCode = await sock.groupInviteCode(chatId);
         const link = `https://chat.whatsapp.com/${inviteCode}`;
 

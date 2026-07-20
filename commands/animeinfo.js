@@ -43,7 +43,12 @@ async function animeinfoCommand(sock, chatId, message) {
 
         const imgUrl = anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url;
         if (imgUrl) {
-            await sock.sendMessage(chatId, { image: { url: imgUrl }, caption: txt }, { quoted: message });
+            try {
+                const imgRes = await axios.get(imgUrl, { responseType: 'arraybuffer', timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+                await sock.sendMessage(chatId, { image: Buffer.from(imgRes.data), caption: txt }, { quoted: message });
+            } catch {
+                await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+            }
         } else {
             await sock.sendMessage(chatId, { text: txt }, { quoted: message });
         }
@@ -70,7 +75,12 @@ async function trendingAnimeCommand(sock, chatId, message) {
 
         const imgUrl = list[0]?.images?.jpg?.large_image_url;
         if (imgUrl) {
-            await sock.sendMessage(chatId, { image: { url: imgUrl }, caption: txt }, { quoted: message });
+            try {
+                const imgRes = await axios.get(imgUrl, { responseType: 'arraybuffer', timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+                await sock.sendMessage(chatId, { image: Buffer.from(imgRes.data), caption: txt }, { quoted: message });
+            } catch {
+                await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+            }
         } else {
             await sock.sendMessage(chatId, { text: txt }, { quoted: message });
         }

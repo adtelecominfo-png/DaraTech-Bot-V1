@@ -560,6 +560,11 @@ case userMessage.startsWith('$unmute-user'):
         commandExecuted = true;
         break;
 
+case userMessage.startsWith('$pinterest'):
+    await pinterestCommand(sock, chatId, message);
+    commandExecuted = true;
+    break;
+
 case userMessage.startsWith('$pin') && !userMessage.startsWith('$pinterest'):
     await pinCommand(sock, chatId, message);
     commandExecuted = true;
@@ -1125,7 +1130,7 @@ case userMessage.startsWith('$bssensi'):
                     await sock.sendMessage(chatId, { text: 'This command can only be used in groups!', ...channelInfo }, { quoted: message });
                     return;
                 }
-                await resetlinkCommand(sock, chatId, senderId);
+                await resetlinkCommand(sock, chatId, senderId, message);
                 break;
             case userMessage === '$staff' || userMessage === '$admins' || userMessage === '$listadmin':
                 if (!isGroup) {
