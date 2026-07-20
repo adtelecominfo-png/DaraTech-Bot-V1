@@ -1,4 +1,4 @@
 {
   "enabled": true,
-  "interval": 6
+  "intervalSec": 21600
 }

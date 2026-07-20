@@ -34,7 +34,7 @@ function run(cmd) {
 // ── Git helpers ──────────────────────────────────────────────────────────────
 
 async function hasGit() {
-    if (!fs.existsSync(path.join(process.cwd(), '$git'))) return false;
+    if (!fs.existsSync(path.join(process.cwd(), '.git'))) return false;
     try { await run('git --version'); return true; } catch { return false; }
 }
 
@@ -59,7 +59,7 @@ async function detectBranch() {
 
 function snapshotEnvAndSession() {
     const snap = { env: null, creds: null, economy: null };
-    const envPath   = path.join(process.cwd(), '$env');
+    const envPath   = path.join(process.cwd(), '.env');
     const credsPath = path.join(process.cwd(), 'session', 'creds.json');
     const econPath  = path.join(process.cwd(), 'data', 'economy.json');
     try { if (fs.existsSync(envPath))   snap.env     = fs.readFileSync(envPath,   'utf8'); } catch {}
@@ -69,7 +69,7 @@ function snapshotEnvAndSession() {
 }
 
 function restoreEnvAndSession(snap) {
-    const envPath    = path.join(process.cwd(), '$env');
+    const envPath    = path.join(process.cwd(), '.env');
     const sessionDir = path.join(process.cwd(), 'session');
     const credsPath  = path.join(sessionDir, 'creds.json');
     const dataDir    = path.join(process.cwd(), 'data');
@@ -214,7 +214,7 @@ async function updateViaZip(zipOverride) {
             botOwner = s.botOwner    ? String(s.botOwner)    : null;
         } catch {}
 
-        copyDir(srcRoot, process.cwd(), ['node_modules', '$git', 'session', 'tmp', 'temp', 'data', 'baileys_store.json']);
+        copyDir(srcRoot, process.cwd(), ['node_modules', '.git', 'session', 'tmp', 'temp', 'data', 'baileys_store.json']);
 
         if (owner) {
             try {
