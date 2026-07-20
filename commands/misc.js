@@ -187,11 +187,12 @@ async function miscCommand(sock, chatId, message, args) {
             case 'comrade':
             case 'gay':
             case 'glass':
-            case 'jail':
+            case 'prison':
             case 'passed':
             case 'triggered': {
                 const avatarUrl = await getQuotedOrOwnImageUrl(sock, message);
-                const overlay = sub; // same name for path
+                // .prison maps to the "jail" overlay on the API
+                const overlay = sub === 'prison' ? 'jail' : sub;
                 const url = `https://api.some-random-api.com/canvas/overlay/${overlay}?avatar=${encodeURIComponent(avatarUrl)}`;
                 const response = await axios.get(url, { responseType: 'arraybuffer' });
                 await sock.sendMessage(chatId, { image: Buffer.from(response.data) }, { quoted: message });

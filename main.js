@@ -1539,6 +1539,7 @@ case userMessage.startsWith('.bssensi'):
             case userMessage.startsWith('.comrade'):
             case userMessage.startsWith('.gay'):
             case userMessage.startsWith('.glass'):
+            case userMessage.startsWith('.prison'):
             case userMessage.startsWith('.passed'):
             case userMessage.startsWith('.triggered'):
                 {
