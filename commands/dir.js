@@ -64,7 +64,7 @@ async function showFile(sock, chatId, message, absPath, relPath) {
 
     if (isBinary(ext)) {
         return sock.sendMessage(chatId, {
-            text: `${header}\n\n_Binary file — content not displayed._`,
+            text: `${header}\n\n_Binary file — content not displayed._\n\n_Daratech_ ⚡`,
         }, { quoted: message });
     }
 
@@ -80,7 +80,7 @@ async function showFile(sock, chatId, message, absPath, relPath) {
         content = `_(could not read: ${e.message})_`;
     }
 
-    const text = `${header}\n\n📝 *CONTENT :*\n${'─'.repeat(28)}\n\`\`\`\n${content}\n\`\`\``;
+    const text = `${header}\n\n📝 *CONTENT :*\n${'─'.repeat(28)}\n\`\`\`\n${content}\n\`\`\`\n\n_Daratech_ ⚡`;
     await sock.sendMessage(chatId, { text }, { quoted: message });
 }
 
@@ -117,6 +117,8 @@ async function showDir(sock, chatId, message, absPath, relPath) {
         ``,
         `*📂 Contents:*`,
         lines.join('\n') || '_Empty folder_',
+        ``,
+        `_Daratech_ ⚡`,
     ].join('\n');
 
     await sock.sendMessage(chatId, { text }, { quoted: message });
