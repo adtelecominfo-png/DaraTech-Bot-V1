@@ -26,13 +26,19 @@ async function fetchImgBuf(url) {
 }
 
 /**
- * loremflickr.com — free, keyword-based, real photos, no API key needed.
- * Returns a redirect to a Flickr CDN image.
- * e.g. https://loremflickr.com/640/480/giant+panda
+ * loremflickr.com JSON endpoint — returns a direct Flickr CDN URL (no redirect).
+ * rawFileUrl is a live.staticflickr.com link that axios can download without issues.
+ * e.g. GET https://loremflickr.com/json/g/640/480/panda
+ *   → { rawFileUrl: "https://live.staticflickr.com/..." }
  */
-function flickrUrl(keyword) {
-    // Cache-bust so we get a different image each call
-    return `https://loremflickr.com/640/480/${encodeURIComponent(keyword)}?random=${Date.now()}`;
+async function flickrImg(keyword) {
+    const { data } = await axios.get(
+        `https://loremflickr.com/json/g/640/480/${encodeURIComponent(keyword)}`,
+        { timeout: 15000 }
+    );
+    const url = data?.rawFileUrl || data?.file;
+    if (!url) throw new Error('No URL from loremflickr');
+    return fetchImgBuf(url);
 }
 
 async function catfactCommand(sock, chatId, message) {
@@ -52,7 +58,7 @@ async function catimageCommand(sock, chatId, message) {
             imgBuf = await fetchImgBuf(data.image);
             fact   = data.fact || '';
         } catch {
-            imgBuf = await fetchImgBuf(flickrUrl('cat'));
+            imgBuf = await flickrImg('cat');
         }
         await sock.sendMessage(chatId, {
             image: imgBuf,
@@ -102,7 +108,7 @@ async function foxImageCommand(sock, chatId, message) {
             const { data } = await axios.get('https://randomfox.ca/floof/', { timeout: 10000 });
             imgBuf = await fetchImgBuf(data.image);
         } catch {
-            imgBuf = await fetchImgBuf(flickrUrl('fox'));
+            imgBuf = await flickrImg('fox');
         }
         await sock.sendMessage(chatId, {
             image: imgBuf,
@@ -119,8 +125,8 @@ async function pandaImageCommand(sock, chatId, message) {
     try {
         let imgBuf, fact = '';
         try {
-            // loremflickr returns real panda photos reliably (no CF issues)
-            imgBuf = await fetchImgBuf(flickrUrl('giant panda'));
+            // loremflickr JSON endpoint — direct Flickr CDN URL, no redirect issues
+            imgBuf = await flickrImg('panda');
         } catch {
             const { data } = await axios.get(`${SRA}/panda`, { timeout: 12000, headers: SRA_HEADERS });
             imgBuf = await fetchImgBuf(data.image);
@@ -143,7 +149,7 @@ async function koalaImageCommand(sock, chatId, message) {
             imgBuf = await fetchImgBuf(data.image);
             fact   = data.fact || '';
         } catch {
-            imgBuf = await fetchImgBuf(flickrUrl('koala'));
+            imgBuf = await flickrImg('koala');
         }
         await sock.sendMessage(chatId, {
             image: imgBuf,
@@ -164,7 +170,7 @@ async function birbCommand(sock, chatId, message) {
             if (!Array.isArray(data) || !data[0]) throw new Error('No bird URL');
             imgBuf = await fetchImgBuf(data[0]);
         } catch {
-            imgBuf = await fetchImgBuf(flickrUrl('bird'));
+            imgBuf = await flickrImg('bird');
         }
         await sock.sendMessage(chatId, {
             image: imgBuf,
