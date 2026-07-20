@@ -24,7 +24,7 @@ async function imgscanCommand(sock, chatId, message) {
         const msgToScan = quoted || message.message;
         const imgMsg = msgToScan?.imageMessage;
         if (!imgMsg) {
-            return sock.sendMessage(chatId, { text: '🔍 Usage: Reply to an image with *.imgscan* or send image with caption $imgscan' }, { quoted: message });
+            return sock.sendMessage(chatId, { text: '🔍 Usage: Reply to an image with *$imgscan* or send image with caption $imgscan' }, { quoted: message });
         }
         await sock.sendMessage(chatId, {
             text: `╭━═ 『 *SCANNING* 』 ═━╮\n┃ 🤖 AI Image Analysis\n┃ ⏳ Processing...\n╰━━━━━━━━━━━━━━━━╯`,

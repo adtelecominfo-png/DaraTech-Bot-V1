@@ -9,7 +9,7 @@ async function handleTranslateCommand(sock, chatId, message, match) {
         let textToTranslate = '';
         let lang = '';
 
-        const USAGE = `*TRANSLATOR*\n\nUsage:\n1. Reply to a message: *.translate <lang>*\n2. Direct: *.translate <text> | <lang>*\n\nExamples:\n_.translate hello | fr_\n_.translate buenos días | en_\n\nLanguage codes:\nen - English\nfr - French\nes - Spanish\nde - German\nit - Italian\npt - Portuguese\nru - Russian\nja - Japanese\nko - Korean\nzh - Chinese\nar - Arabic\nhi - Hindi\nha - Hausa\nyo - Yoruba\nig - Igbo\ntpi - Tok Pisin`;
+        const USAGE = `*TRANSLATOR*\n\nUsage:\n1. Reply to a message: *$translate <lang>*\n2. Direct: *$translate <text> | <lang>*\n\nExamples:\n_$translate hello | fr_\n_$translate buenos días | en_\n\nLanguage codes:\nen - English\nfr - French\nes - Spanish\nde - German\nit - Italian\npt - Portuguese\nru - Russian\nja - Japanese\nko - Korean\nzh - Chinese\nar - Arabic\nhi - Hindi\nha - Hausa\nyo - Yoruba\nig - Igbo\ntpi - Tok Pisin`;
 
         // Check if it's a reply to another message
         const quotedMessage = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
@@ -88,7 +88,7 @@ async function handleTranslateCommand(sock, chatId, message, match) {
     } catch (error) {
         console.error('❌ Error in translate command:', error);
         await sock.sendMessage(chatId, {
-            text: '❌ Failed to translate. Try: *.translate hello | fr*\n\nOr reply to a message with: *.translate fr*',
+            text: '❌ Failed to translate. Try: *$translate hello | fr*\n\nOr reply to a message with: *$translate fr*',
             quoted: message
         });
     }

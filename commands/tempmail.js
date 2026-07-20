@@ -24,7 +24,7 @@ async function tempmailCommand(sock, chatId, message) {
             const email = args[1] || emailStore.get(message.key.participant || message.key.remoteJid);
             if (!email) {
                 return sock.sendMessage(chatId, {
-                    text: '❌ No email found. Generate one first with *.tempmail*',
+                    text: '❌ No email found. Generate one first with *$tempmail*',
                 }, { quoted: message });
             }
 
@@ -67,8 +67,8 @@ async function tempmailCommand(sock, chatId, message) {
             `▸ 📩 *Address:*\n\`${r.email}\`\n\n` +
             `▸ ⏳ *Expires:* ${r.expiresIn || '10 minutes'}\n` +
             `▸ 🎲 *Modes:* ${modes}\n\n` +
-            `📥 Check inbox: *.tempmail inbox*\n` +
-            `📥 Or specify: *.tempmail inbox ${r.email}*\n\n` +
+            `📥 Check inbox: *$tempmail inbox*\n` +
+            `📥 Or specify: *$tempmail inbox ${r.email}*\n\n` +
             `_Daratech_ ⚡`;
         await sock.sendMessage(chatId, { text: reply }, { quoted: message });
 

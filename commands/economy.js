@@ -123,7 +123,7 @@ async function requireRegistered(sock, chatId, message, u, jid) {
     await sock.sendMessage(chatId, {
         text:
             `❌ *You need to register first!*\n\n` +
-            `Use *.register <your name>* to create your economy account.\n\n` +
+            `Use *$register <your name>* to create your economy account.\n\n` +
             `_Example: $register Dara_`,
     }, { quoted: message });
     return false;
@@ -641,7 +641,7 @@ async function payCommand(sock, chatId, message, q) {
     if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const mentioned = resolveTarget(message);
     const amount    = parseInt((q || '').replace(/[^0-9]/g, '')) || 0;
-    if (!mentioned || !amount) return sock.sendMessage(chatId, { text: `❌ Usage: *.pay @user amount* or reply to a message` }, { quoted: message });
+    if (!mentioned || !amount) return sock.sendMessage(chatId, { text: `❌ Usage: *$pay @user amount* or reply to a message` }, { quoted: message });
     if (numFromJid(mentioned) === numFromJid(uid)) return sock.sendMessage(chatId, { text: `❌ Can't pay yourself!` }, { quoted: message });
     const tgt = getUser(db, mentioned);
     if (!tgt.registered) return sock.sendMessage(chatId, { text: `❌ That user hasn't registered yet!` }, { quoted: message });
@@ -664,7 +664,7 @@ async function giftCommand(sock, chatId, message, q) {
     if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const mentioned = resolveTarget(message);
     const amount    = parseInt((q || '').replace(/[^0-9]/g, '')) || 0;
-    if (!mentioned || !amount) return sock.sendMessage(chatId, { text: `❌ Usage: *.gift @user amount* or reply to a message` }, { quoted: message });
+    if (!mentioned || !amount) return sock.sendMessage(chatId, { text: `❌ Usage: *$gift @user amount* or reply to a message` }, { quoted: message });
     const tgt = getUser(db, mentioned);
     if (!tgt.registered) return sock.sendMessage(chatId, { text: `❌ That user hasn't registered yet!` }, { quoted: message });
     if (u.wallet < amount && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!\n👛 Wallet: *🪙 ${fmt(u.wallet)}*` }, { quoted: message });
@@ -685,7 +685,7 @@ async function depositCommand(sock, chatId, message, q) {
     if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const amount = q?.toLowerCase() === 'all' ? u.wallet : parseInt(q) || 0;
-    if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *.deposit <amount/all>*` }, { quoted: message });
+    if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *$deposit <amount/all>*` }, { quoted: message });
     if (u.wallet < amount) return sock.sendMessage(chatId, { text: `❌ Not enough in wallet!` }, { quoted: message });
     u.wallet -= amount; u.bank += amount; saveDB(db);
     await sock.sendMessage(chatId, { text: `🏦 Deposited *🪙 ${fmt(amount)}*\n👛 Wallet: *🪙 ${fmt(u.wallet)}*  |  🏦 Bank: *🪙 ${fmt(u.bank)}*` }, { quoted: message });
@@ -699,7 +699,7 @@ async function withdrawCommand(sock, chatId, message, q) {
     if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const amount = q?.toLowerCase() === 'all' ? u.bank : parseInt(q) || 0;
-    if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *.withdraw <amount/all>*` }, { quoted: message });
+    if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *$withdraw <amount/all>*` }, { quoted: message });
     if (u.bank < amount) return sock.sendMessage(chatId, { text: `❌ Not enough in bank!` }, { quoted: message });
     u.bank -= amount; u.wallet += amount; saveDB(db);
     await sock.sendMessage(chatId, { text: `🏦 Withdrew *🪙 ${fmt(amount)}*\n👛 Wallet: *🪙 ${fmt(u.wallet)}*  |  🏦 Bank: *🪙 ${fmt(u.bank)}*` }, { quoted: message });
@@ -713,7 +713,7 @@ async function gambleCommand(sock, chatId, message, q) {
     if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const amount = q?.toLowerCase() === 'all' ? u.wallet : parseInt(q) || 0;
-    if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *.gamble <amount/all>*` }, { quoted: message });
+    if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *$gamble <amount/all>*` }, { quoted: message });
     if (u.wallet < amount && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!` }, { quoted: message });
     const luckBonus = (getStats(u).luck || 0) / 100;
     const win = Math.random() < (0.45 + luckBonus) || isOwner(uid);
@@ -735,7 +735,7 @@ async function slotsCommand(sock, chatId, message, q) {
     if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const amount = q?.toLowerCase() === 'all' ? u.wallet : parseInt(q) || 0;
-    if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *.slots <amount>*` }, { quoted: message });
+    if (!amount || amount <= 0) return sock.sendMessage(chatId, { text: `❌ Usage: *$slots <amount>*` }, { quoted: message });
     if (u.wallet < amount && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!` }, { quoted: message });
     const sym = ['🍒', '🍋', '🍊', '🍇', '⭐', '💎'];
     const s   = [sym[Math.floor(Math.random() * sym.length)], sym[Math.floor(Math.random() * sym.length)], sym[Math.floor(Math.random() * sym.length)]];
@@ -762,7 +762,7 @@ async function coinflipEcoCommand(sock, chatId, message, q) {
     const parts  = (q || '').trim().split(' ');
     const amount = parseInt(parts[0]) || 0;
     const side   = (parts[1] || '').toLowerCase();
-    if (!amount || !['heads','tails','h','t'].includes(side)) return sock.sendMessage(chatId, { text: `❌ Usage: *.coinflip <amount> <heads/tails>*` }, { quoted: message });
+    if (!amount || !['heads','tails','h','t'].includes(side)) return sock.sendMessage(chatId, { text: `❌ Usage: *$coinflip <amount> <heads/tails>*` }, { quoted: message });
     if (u.wallet < amount && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!` }, { quoted: message });
     const result = isOwner(uid) ? (side.startsWith('h') ? 'heads' : 'tails') : (Math.random() < 0.5 ? 'heads' : 'tails');
     const chosen = side.startsWith('h') ? 'heads' : 'tails';
@@ -812,7 +812,7 @@ async function buyCommand(sock, chatId, message, q) {
     if (!await requireNotJailed(sock, chatId, message, u, uid, db)) return;
     const key  = (q || '').trim().toLowerCase().replace(/\s+/g, '');
     const item = STORE[key];
-    if (!item) return sock.sendMessage(chatId, { text: `❌ Item not found! Use *.store* to see available items.` }, { quoted: message });
+    if (!item) return sock.sendMessage(chatId, { text: `❌ Item not found! Use *$store* to see available items.` }, { quoted: message });
     if (u.wallet < item.price && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Not enough coins!\n🪙 Need: ${fmt(item.price)}  |  👛 Have: ${fmt(u.wallet)}` }, { quoted: message });
     if (!isOwner(uid)) { u.wallet -= item.price; u.totalSpent = (u.totalSpent || 0) + item.price; }
     u.inventory = u.inventory || [];
@@ -855,7 +855,7 @@ async function inventoryCommand(sock, chatId, message) {
     saveDB(db);
     const inv = u.inventory || [];
     const upgrades = u.upgrades || {};
-    if (!inv.length) return sock.sendMessage(chatId, { text: `🎒 Your inventory is empty!\nUse *.store* to buy items.` }, { quoted: message });
+    if (!inv.length) return sock.sendMessage(chatId, { text: `🎒 Your inventory is empty!\nUse *$store* to buy items.` }, { quoted: message });
     const counts = {};
     inv.forEach(k => { counts[k] = (counts[k] || 0) + 1; });
     const rows = Object.entries(counts).map(([k, c]) => {
@@ -881,10 +881,10 @@ async function equipCommand(sock, chatId, message, q) {
     if (!await requireRegistered(sock, chatId, message, u, uid)) return;
     const key = (q || '').trim().toLowerCase();
     const item = STORE[key];
-    if (!item) return sock.sendMessage(chatId, { text: `❌ Item not found! Check *.inventory*` }, { quoted: message });
+    if (!item) return sock.sendMessage(chatId, { text: `❌ Item not found! Check *$inventory*` }, { quoted: message });
     const inv = u.inventory || [];
-    if (!inv.includes(key) && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ You don't own *${item.name}*!\nBuy it with *.buy ${key}*` }, { quoted: message });
-    if (item.consumable) return sock.sendMessage(chatId, { text: `❌ Consumables can't be equipped!\nUse *.use ${key}* instead.` }, { quoted: message });
+    if (!inv.includes(key) && !isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ You don't own *${item.name}*!\nBuy it with *$buy ${key}*` }, { quoted: message });
+    if (item.consumable) return sock.sendMessage(chatId, { text: `❌ Consumables can't be equipped!\nUse *$use ${key}* instead.` }, { quoted: message });
     u.equipped           = u.equipped || {};
     u.equipped[item.type] = key;
     saveDB(db);
@@ -905,16 +905,16 @@ async function upgradeCommand(sock, chatId, message, q) {
     const key = (q || '').trim().toLowerCase().replace(/\s+/g, '');
 
     if (!key) return sock.sendMessage(chatId, {
-        text: `🔧 *UPGRADE SYSTEM*\n\nUpgrade your gear to boost its stats by *+10% per level* (max +${MAX_UPGRADE}).\n\n_Usage: $upgrade <item key>_\n_Example: $upgrade dragonsword_\n\nSee your items: *.inventory*`
+        text: `🔧 *UPGRADE SYSTEM*\n\nUpgrade your gear to boost its stats by *+10% per level* (max +${MAX_UPGRADE}).\n\n_Usage: $upgrade <item key>_\n_Example: $upgrade dragonsword_\n\nSee your items: *$inventory*`
     }, { quoted: message });
 
     const item = STORE[key];
-    if (!item) return sock.sendMessage(chatId, { text: `❌ Item not found! Check *.store* or *.inventory*` }, { quoted: message });
+    if (!item) return sock.sendMessage(chatId, { text: `❌ Item not found! Check *$store* or *$inventory*` }, { quoted: message });
     if (item.consumable) return sock.sendMessage(chatId, { text: `❌ Consumables can't be upgraded!` }, { quoted: message });
 
     const inv = u.inventory || [];
     if (!inv.includes(key) && !isOwner(uid)) return sock.sendMessage(chatId, {
-        text: `❌ You don't own *${item.name}*! Buy it first with *.buy ${key}*`
+        text: `❌ You don't own *${item.name}*! Buy it first with *$buy ${key}*`
     }, { quoted: message });
 
     u.upgrades = u.upgrades || {};
@@ -970,18 +970,18 @@ async function useCommand(sock, chatId, message, q) {
     const key = (q || '').trim().toLowerCase();
 
     if (!key) return sock.sendMessage(chatId, {
-        text: `❌ Usage: *.use <item>*\n_Example: $use xpboost_\n\nSee consumables in *.inventory*`
+        text: `❌ Usage: *$use <item>*\n_Example: $use xpboost_\n\nSee consumables in *$inventory*`
     }, { quoted: message });
 
     const item = STORE[key];
     if (!item || !item.consumable) return sock.sendMessage(chatId, {
-        text: `❌ *${key}* is not a usable consumable! Check *.inventory*`
+        text: `❌ *${key}* is not a usable consumable! Check *$inventory*`
     }, { quoted: message });
 
     const inv = u.inventory || [];
     const idx = inv.indexOf(key);
     if (idx === -1 && !isOwner(uid)) return sock.sendMessage(chatId, {
-        text: `❌ You don't have *${item.name}*! Buy it with *.buy ${key}*`
+        text: `❌ You don't have *${item.name}*! Buy it with *$buy ${key}*`
     }, { quoted: message });
 
     if (!isOwner(uid)) inv.splice(idx, 1);
@@ -1210,7 +1210,7 @@ async function addCoinsCommand(sock, chatId, message, q) {
     const db        = loadDB();
     const mentioned = resolveTarget(message);
     const amount    = parseInt((q || '').replace(/\D/g, '')) || 0;
-    if (!mentioned || !amount) return sock.sendMessage(chatId, { text: `❌ Usage: *.addcoins @user amount* or reply to a message` }, { quoted: message });
+    if (!mentioned || !amount) return sock.sendMessage(chatId, { text: `❌ Usage: *$addcoins @user amount* or reply to a message` }, { quoted: message });
     const target = getUser(db, mentioned);
     target.wallet += amount;
     saveDB(db);
@@ -1223,7 +1223,7 @@ async function removeCoinsCommand(sock, chatId, message, q) {
     const db        = loadDB();
     const mentioned = resolveTarget(message);
     const amount    = parseInt((q || '').replace(/\D/g, '')) || 0;
-    if (!mentioned || !amount) return sock.sendMessage(chatId, { text: `❌ Usage: *.removecoins @user amount* or reply to a message` }, { quoted: message });
+    if (!mentioned || !amount) return sock.sendMessage(chatId, { text: `❌ Usage: *$removecoins @user amount* or reply to a message` }, { quoted: message });
     const target  = getUser(db, mentioned);
     target.wallet = Math.max(0, target.wallet - amount);
     saveDB(db);
@@ -1235,7 +1235,7 @@ async function resetUserCommand(sock, chatId, message) {
     if (!isOwner(uid)) return sock.sendMessage(chatId, { text: `❌ Owner only!` }, { quoted: message });
     const db        = loadDB();
     const mentioned = resolveTarget(message);
-    if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Usage: *.resetuser @user* or reply to a message` }, { quoted: message });
+    if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Usage: *$resetuser @user* or reply to a message` }, { quoted: message });
     delete db[mentioned];
     saveDB(db);
     await sock.sendMessage(chatId, { text: `✅ Economy data reset for ${mention(mentioned)}`, mentions: [mentioned] }, { quoted: message });
@@ -1247,7 +1247,7 @@ async function boostUserCommand(sock, chatId, message, q) {
     const db        = loadDB();
     const mentioned = resolveTarget(message);
     if (!mentioned) return sock.sendMessage(chatId, {
-        text: `❌ Usage:\n*.boost @user* — full boost\n*.boost @user atk 500* — boost ATK only\n*.boost @user atk 300 def 100 luck 25* — pick any combo`,
+        text: `❌ Usage:\n*$boost @user* — full boost\n*$boost @user atk 500* — boost ATK only\n*$boost @user atk 300 def 100 luck 25* — pick any combo`,
     }, { quoted: message });
 
     const raw    = (q || '').toLowerCase();
@@ -1430,7 +1430,7 @@ async function economyCommand(sock, chatId, message, userMessage) {
         case 'resetuser':                                return resetUserCommand(sock, chatId, message);
         case 'boostuser': case 'boost':                  return boostUserCommand(sock, chatId, message, q);
         default:
-            await sock.sendMessage(chatId, { text: `❌ Unknown economy command. Use *.menu economy* to see all.` }, { quoted: message });
+            await sock.sendMessage(chatId, { text: `❌ Unknown economy command. Use *$menu economy* to see all.` }, { quoted: message });
     }
 }
 

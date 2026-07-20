@@ -11,7 +11,7 @@ const { isKnownBrand } = require('../lib/brandCheck');
 
 const USAGE =
     `🎮 *FREE FIRE SENSITIVITY*\n\n` +
-    `Usage: *.freefiresensi <device> [RAM]GB <Android|iOS>*\n\n` +
+    `Usage: *$freefiresensi <device> [RAM]GB <Android|iOS>*\n\n` +
     `Examples:\n` +
     `• $freefiresensi Samsung S23 Ultra 12GB Android\n` +
     `• $freefiresensi iPhone 15 Pro Max iOS\n` +

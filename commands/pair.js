@@ -20,7 +20,7 @@ async function pairCommand(sock, chatId, message, q) {
                 return await sock.sendMessage(chatId, {
                     text:
                         `⚠️ *Cannot pair the bot's own number*\n\n` +
-                        `Running *.pair* with the bot's own number will disconnect it.\n\n` +
+                        `Running *$pair* with the bot's own number will disconnect it.\n\n` +
                         `To generate a session for a *different* WhatsApp number, visit:\n` +
                         `🌐 ${SESSION_SITE}`,
                 }, { quoted: message });
@@ -55,7 +55,7 @@ async function pairCommand(sock, chatId, message, q) {
                 `│ ✅ After linking, your SESSION_ID is sent\n` +
                 `│    to your WhatsApp automatically\n` +
                 `│ 📋 Copy the SESSION_ID\n` +
-                `│ 📝 Open your bot's *.env* file\n` +
+                `│ 📝 Open your bot's *$env* file\n` +
                 `│ 📌 Set it: SESSION_ID=<paste here>\n` +
                 `│ 🔄 Restart the bot — done!\n` +
                 `╰─────────────────────\n\n` +

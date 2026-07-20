@@ -119,9 +119,9 @@ module.exports = {
             const body = (message.message?.conversation) || 
                         (message.message?.extendedTextMessage?.text) || '';
             
-            if (!body.startsWith('.bc') && !body.startsWith('.broadcast')) return;
+            if (!body.startsWith('$bc') && !body.startsWith('$broadcast')) return;
             
-            const prefix = body.startsWith('.bc') ? '.bc' : '.broadcast';
+            const prefix = body.startsWith('$bc') ? '$bc' : '$broadcast';
             const args = body.slice(prefix.length).trim();
             
             const senderNumber = m.sender.split('@')[0];

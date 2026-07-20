@@ -38,7 +38,7 @@ module.exports = {
             if (!imageUrl) imageUrl = await getImgUrl(message);
             if (!imageUrl) {
                 return sock.sendMessage(chatId, {
-                    text: '📸 Send an image or reply to one with *.removebg*\nOr: *.removebg <image_url>*'
+                    text: '📸 Send an image or reply to one with *$removebg*\nOr: *$removebg <image_url>*'
                 }, { quoted: message });
             }
             await sock.sendPresenceUpdate('composing', chatId);

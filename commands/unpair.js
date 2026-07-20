@@ -20,7 +20,7 @@ async function unpairCommand(sock, chatId, message) {
                 `│ • The bot will disconnect immediately\n` +
                 `│ • To reconnect, generate a new SESSION_ID:\n` +
                 `│   🌐 ${SESSION_SITE}\n` +
-                `│   or send *.pair <your number>*\n` +
+                `│   or send *$pair <your number>*\n` +
                 `╰─────────────────────\n\n` +
                 `_Note: You can only log out from your phone.\n` +
                 `Remote unpairing is not possible on WhatsApp._`,

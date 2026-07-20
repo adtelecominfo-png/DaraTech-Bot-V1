@@ -49,7 +49,7 @@ function formatResult(n) {
 }
 
 async function calcCommand(sock, chatId, message, userMessage) {
-    const expr = userMessage.slice(5).trim(); // strip ".calc"
+    const expr = userMessage.slice(5).trim(); // strip "$calc"
 
     if (!expr) {
         await sock.sendMessage(chatId, {

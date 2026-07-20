@@ -1,7 +1,7 @@
 module.exports = [
   ["vocalremover", "/tools/vocalremover", ["url"]],
   ["vocalremoverv2", "/tools/vocalremoverv2", ["url"]],
-  // photoeditor family: usage .photoeditor <image-url> | <prompt>
+  // photoeditor family: usage $photoeditor <image-url> | <prompt>
   ["photoeditor", "/tools/photoeditor", ["url", "prompt"]],
   ["photoeditorv2", "/tools/photoeditorv2", ["url", "prompt", "model"]],
   ["photoeditorv3", "/tools/photoeditorv3", ["url", "prompt", "model", "resolution"]],
@@ -10,7 +10,7 @@ module.exports = [
   ["imageupscaler", "/tools/imageupscaler", ["url", "model"]],
   ["imageenhancer", "/tools/imageenhancer", ["url"]],
   ["nanobanana", "/tools/nanobanana", ["url", "prompt"]],
-  // imgeditor: usage .imgeditor <image-url> | <prompt>
+  // imgeditor: usage $imgeditor <image-url> | <prompt>
   ["imgeditor", "/tools/imgeditor", ["url", "prompt"]],
   // canvas: title is the required first param
   ["canvas", "/tools/canvas", ["title", "text", "type", "watermark"]],

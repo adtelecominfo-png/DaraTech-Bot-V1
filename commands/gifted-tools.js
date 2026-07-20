@@ -78,9 +78,9 @@ async function canvasCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
         text: `🎨 *CANVAS CARD*\n\n` +
-              `Usage: *.canvas <type> <title>*\n` +
-              `Example: *.canvas spotify Blinding Lights - The Weeknd*\n` +
-              `Example: *.canvas youtube Lo-fi Hip Hop Mix*\n\n` +
+              `Usage: *$canvas <type> <title>*\n` +
+              `Example: *$canvas spotify Blinding Lights - The Weeknd*\n` +
+              `Example: *$canvas youtube Lo-fi Hip Hop Mix*\n\n` +
               `*Available types:*\n${CANVAS_TYPES.join(', ')}`,
     }, { quoted: message });
 
@@ -96,7 +96,7 @@ async function canvasCommand(sock, chatId, message) {
     }
 
     if (!title) return sock.sendMessage(chatId, {
-        text: `❌ Please provide a title after the type.\nExample: *.canvas ${type} Your Title Here*`,
+        text: `❌ Please provide a title after the type.\nExample: *$canvas ${type} Your Title Here*`,
     }, { quoted: message });
 
     await processing(sock, message, chatId, '🎨 Creating canvas card……');
@@ -412,7 +412,7 @@ async function rcCommand(sock, chatId, message) {
         if (!imageUrl) {
             await react(sock, message, '❌');
             return sock.sendMessage(chatId, {
-                text: '👙 *Usage:*\n• Reply to an image with *.rc*\n• Send an image with caption *.rc*\n• *.rc <image url>*',
+                text: '👙 *Usage:*\n• Reply to an image with *$rc*\n• Send an image with caption *$rc*\n• *$rc <image url>*',
             }, { quoted: message });
         }
 
@@ -505,13 +505,13 @@ async function obfuscate2Command(sock, chatId, message) {
 
 // ─── URL Shorteners ──────────────────────────────────────────────────────────
 const SHORTENERS = {
-    tinyurl:   { label: 'TinyURL',    cmd: '.tinyurl' },
-    cleanuri:  { label: 'CleanURI',   cmd: '.cleanuri' },
-    vgd:       { label: 'v.gd',       cmd: '.vgd' },
-    rebrandly: { label: 'Rebrandly',  cmd: '.rebrandly' },
-    vurl:      { label: 'Vurl',       cmd: '.vurl' },
-    adfoc:     { label: 'Adf.ly',     cmd: '.adfoc' },
-    ssur:      { label: 'Ssur.cc',    cmd: '.ssur' },
+    tinyurl:   { label: 'TinyURL',    cmd: '$tinyurl' },
+    cleanuri:  { label: 'CleanURI',   cmd: '$cleanuri' },
+    vgd:       { label: 'v.gd',       cmd: '$vgd' },
+    rebrandly: { label: 'Rebrandly',  cmd: '$rebrandly' },
+    vurl:      { label: 'Vurl',       cmd: '$vurl' },
+    adfoc:     { label: 'Adf.ly',     cmd: '$adfoc' },
+    ssur:      { label: 'Ssur.cc',    cmd: '$ssur' },
 };
 
 function makeShortener(service) {

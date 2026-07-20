@@ -10,7 +10,7 @@ async function reminiCommand(sock, chatId, message) {
 
         if (!imageMsg) {
             return sock.sendMessage(chatId, {
-                text: '📸 *REMINI / ENHANCE*\n\nReply to an image with *.remini* to enhance/upscale it.\n\n_Daratech_ ⚡',
+                text: '📸 *REMINI / ENHANCE*\n\nReply to an image with *$remini* to enhance/upscale it.\n\n_Daratech_ ⚡',
             }, { quoted: message });
         }
 

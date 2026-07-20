@@ -77,7 +77,7 @@ ${arr.slice(6).join('')}
             if (text) room.name = text;
 
             await sock.sendMessage(chatId, { 
-                text: `⏳ *Waiting for opponent*\nType *.ttt ${text || ''}* to join!`
+                text: `⏳ *Waiting for opponent*\nType *$ttt ${text || ''}* to join!`
             });
 
             games[room.id] = room;

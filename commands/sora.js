@@ -11,7 +11,7 @@ async function soraCommand(sock, chatId, message) {
 
         if (!prompt) {
             return sock.sendMessage(chatId, {
-                text: '🎬 Usage: *.sora <describe the scene>*\nExample: *.sora an eagle soaring over snowy mountains*'
+                text: '🎬 Usage: *$sora <describe the scene>*\nExample: *$sora an eagle soaring over snowy mountains*'
             }, { quoted: message });
         }
 

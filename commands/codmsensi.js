@@ -13,7 +13,7 @@ const { isKnownBrand } = require('../lib/brandCheck');
 
 const USAGE =
     `🎮 *CALL OF DUTY MOBILE SENSITIVITY*\n\n` +
-    `Usage: *.codmsensi <device> [RAM]GB <Android|iOS>*\n\n` +
+    `Usage: *$codmsensi <device> [RAM]GB <Android|iOS>*\n\n` +
     `Examples:\n` +
     `• $codmsensi Samsung S23 Ultra 12GB Android\n` +
     `• $codmsensi iPhone 15 Pro Max iOS\n` +

@@ -7,14 +7,14 @@ async function reactCommand(sock, chatId, message, userMessage) {
 
         if (!emoji) {
             return sock.sendMessage(chatId, {
-                text: '❌ Provide an emoji to react with.\nExample: *.react ❤️*'
+                text: '❌ Provide an emoji to react with.\nExample: *$react ❤️*'
             }, { quoted: message });
         }
 
         const ctx = message.message?.extendedTextMessage?.contextInfo;
         if (!ctx?.stanzaId) {
             return sock.sendMessage(chatId, {
-                text: '❌ Reply to a message first, then use *.react <emoji>*'
+                text: '❌ Reply to a message first, then use *$react <emoji>*'
             }, { quoted: message });
         }
 

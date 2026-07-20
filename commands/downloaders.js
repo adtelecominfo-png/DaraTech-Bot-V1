@@ -317,7 +317,7 @@ async function aioCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
         text: [
-            '🔗 *.aio <URL>* — All-in-one downloader',
+            '🔗 *$aio <URL>* — All-in-one downloader',
             '',
             'Supports: Twitter/X, Facebook, Bilibili, and more.',
             'For YouTube use $play / $video',

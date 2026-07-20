@@ -42,11 +42,11 @@ async function konachanCommand(sock, chatId, message) {
 }
 
 // ─── $kusonime ────────────────────────────────────────────────────────────────
-/** Search KusoNime for anime downloads (.kusonime <query>) */
+/** Search KusoNime for anime downloads ($kusonime <query>) */
 async function kusonimeCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: `🔍 Usage: *.kusonime <anime name>*\nExample: *.kusonime one piece*`,
+        text: `🔍 Usage: *$kusonime <anime name>*\nExample: *$kusonime one piece*`,
     }, { quoted: message });
 
     await react(sock, message, '⏳');
@@ -109,11 +109,11 @@ async function animenewCommand(sock, chatId, message) {
 }
 
 // ─── $charquote ──────────────────────────────────────────────────────────────
-/** Random quote by an anime character (.charquote <character name>) */
+/** Random quote by an anime character ($charquote <character name>) */
 async function charquoteCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: `💬 Usage: *.charquote <character name>*\nExample: *.charquote naruto*`,
+        text: `💬 Usage: *$charquote <character name>*\nExample: *$charquote naruto*`,
     }, { quoted: message });
 
     await react(sock, message, '⏳');
@@ -135,11 +135,11 @@ async function charquoteCommand(sock, chatId, message) {
 }
 
 // ─── $showquote ───────────────────────────────────────────────────────────────
-/** Random quote from an anime show (.showquote <show name>) */
+/** Random quote from an anime show ($showquote <show name>) */
 async function showquoteCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: `💬 Usage: *.showquote <anime title>*\nExample: *.showquote attack on titan*`,
+        text: `💬 Usage: *$showquote <anime title>*\nExample: *$showquote attack on titan*`,
     }, { quoted: message });
 
     await react(sock, message, '⏳');

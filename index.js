@@ -141,7 +141,7 @@ function restoreSessionFromEnv() {
         const decoded = Buffer.from(sessionId, 'base64').toString('utf8');
         JSON.parse(decoded); // validate it's real JSON before writing
         fs.writeFileSync(credsFile, decoded);
-        console.log('[session] Restored creds.json from SESSION_ID in .env');
+        console.log('[session] Restored creds.json from SESSION_ID in $env');
     } catch (e) {
         console.error('[session] Failed to restore from SESSION_ID:', e.message);
     }
@@ -152,7 +152,7 @@ function saveSessionToEnv() {
         const credsFile = path.join(process.cwd(), 'session', 'creds.json');
         if (!fs.existsSync(credsFile)) return;
         const encoded = Buffer.from(fs.readFileSync(credsFile, 'utf8')).toString('base64');
-        const envPath = path.join(process.cwd(), '.env');
+        const envPath = path.join(process.cwd(), '$env');
         let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
         if (/^SESSION_ID=/m.test(content)) {
             content = content.replace(/^SESSION_ID=.*/m, `SESSION_ID=${encoded}`);
@@ -170,11 +170,11 @@ async function startXeonBotInc() {
         let { version, isLatest } = await fetchLatestBaileysVersion()
         // Ensure session dir exists (gitignored, so absent on fresh deploys)
         if (!fs.existsSync('./session')) fs.mkdirSync('./session', { recursive: true });
-        // Restore creds from .env SESSION_ID if session folder is empty (e.g. after .update)
+        // Restore creds from $env SESSION_ID if session folder is empty (e.g. after .update)
         restoreSessionFromEnv();
         const { state, saveCreds } = await useMultiFileAuthState(`./session`)
 
-        // Only write SESSION_ID to .env after a real successful connection —
+        // Only write SESSION_ID to $env after a real successful connection —
         // never during initial pairing (where creds are partial/empty)
         let sessionConnected = false;
         const msgRetryCounterCache = new NodeCache()
@@ -203,7 +203,7 @@ async function startXeonBotInc() {
         })
 
         // Save credentials when they update.
-        // Only sync SESSION_ID to .env after a real successful connection —
+        // Only sync SESSION_ID to $env after a real successful connection —
         // never during initial pairing where creds are still empty/partial.
         XeonBotInc.ev.on('creds.update', async () => {
             await saveCreds();
@@ -350,7 +350,7 @@ async function startXeonBotInc() {
         }
 
         if (connection == "open") {
-            // Mark session as truly connected — now safe to write SESSION_ID to .env
+            // Mark session as truly connected — now safe to write SESSION_ID to $env
             sessionConnected = true;
             // Clear stored phone number so it doesn't interfere with future fresh starts
             global.phoneNumber = null;
@@ -403,7 +403,7 @@ async function startXeonBotInc() {
                     const dateStr = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getFullYear()}`;
                     const connSettings = require('./settings');
 
-                    // ── Check if this restart was triggered by .update / autoupdate ──
+                    // ── Check if this restart was triggered by $update / autoupdate ──
                     const updateFlagPath = path.join(process.cwd(), 'data', 'update_done.json');
                     let updateFlag = null;
                     if (fs.existsSync(updateFlagPath)) {
@@ -425,10 +425,10 @@ async function startXeonBotInc() {
                             `╰─────────────────────`,
                             ``,
                             `╭── CMDS`,
-                            `│ .menu → all`,
-                            `│ .help → list`,
-                            `│ .update → check`,
-                            `│ .owner → contact`,
+                            `│ $menu → all`,
+                            `│ $help → list`,
+                            `│ $update → check`,
+                            `│ $owner → contact`,
                             `╰─────────────────────`,
                             ``,
                             `🤖 Online & Ready`,
@@ -454,10 +454,10 @@ async function startXeonBotInc() {
                             `╰──────────────────────────────────`,
                             ``,
                             `╭──⚡ *QUICK START*`,
-                            `│ *.menu* → see all 350+ commands`,
-                            `│ *.help* → commands with descriptions`,
-                            `│ *.update* → check for updates`,
-                            `│ *.owner* → contact bot owner`,
+                            `│ *$menu* → see all 350+ commands`,
+                            `│ *$help* → commands with descriptions`,
+                            `│ *$update* → check for updates`,
+                            `│ *$owner* → contact bot owner`,
                             `╰──────────────────────────────────`,
                             ``,
                             `> 🤖 *Daratech Bot* is now online and ready!`,
@@ -477,15 +477,15 @@ async function startXeonBotInc() {
             console.log(chalk.magenta(`${global.themeemoji || '•'} CREDIT: Daratech`))
             console.log(chalk.magenta(`${global.themeemoji || '•'} WA NUMBER: ${owner}`))
             console.log(chalk.green(`${global.themeemoji || '•'} 🤖 Bot Connected Successfully! ✅`))
-            // Warn if the connected number doesn't match OWNER_NUMBER in .env
+            // Warn if the connected number doesn't match OWNER_NUMBER in $env
             const connectedNum = XeonBotInc.user?.id?.split(':')[0] || '';
             const ownerNum     = (process.env.OWNER_NUMBER || '').replace(/\D/g, '');
             if (ownerNum && connectedNum && connectedNum !== ownerNum) {
                 console.log(chalk.yellow(
-                    `⚠️  NOTE: Bot is connected as +${connectedNum} but OWNER_NUMBER in .env is set to ${ownerNum}.\n` +
+                    `⚠️  NOTE: Bot is connected as +${connectedNum} but OWNER_NUMBER in $env is set to ${ownerNum}.\n` +
                     `   OWNER_NUMBER only controls which number receives the pairing code on a fresh start.\n` +
                     `   The connected account is determined by SESSION_ID. To connect a different number:\n` +
-                    `   1. Remove SESSION_ID from .env\n` +
+                    `   1. Remove SESSION_ID from $env\n` +
                     `   2. Set OWNER_NUMBER to the desired number\n` +
                     `   3. Restart the bot`
                 ));
@@ -518,8 +518,8 @@ async function startXeonBotInc() {
             }
 
             // If connection closed before we were ever registered (pairing expired/failed),
-            // the SESSION_ID in .env was never written (sessionConnected stayed false), so
-            // .env is clean — nothing to worry about. The reconnect above will request a
+            // the SESSION_ID in $env was never written (sessionConnected stayed false), so
+            // $env is clean — nothing to worry about. The reconnect above will request a
             // fresh pairing code automatically using global.phoneNumber.
         }
     })

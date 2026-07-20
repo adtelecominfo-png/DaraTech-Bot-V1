@@ -3,7 +3,7 @@ const settings = {
   botName: "Daratech",
   botOwner: 'Daratech', // Your name
   ownerNumber: '2348152077346', // Set your number here without + symbol
-  ownerContact: '2348152077346', // Number shown when someone uses .owner command
+  ownerContact: '2348152077346', // Number shown when someone uses $owner command
   giphyApiKey: 'NrSjG6var2uiuSYDm0xTqCX0xcFgGj4s',
   commandMode: "private",
   maxStoreMessages: 20,

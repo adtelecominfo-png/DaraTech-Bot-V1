@@ -4,7 +4,7 @@ const { toolsBuf } = require('../lib/gifted');
 async function handleSsCommand(sock, chatId, message, match) {
     if (!match || !match.trim()) {
         return sock.sendMessage(chatId, {
-            text: `📸 *SCREENSHOT TOOL*\n\n*.ss <url>*\n*.ssweb <url>*\n*.screenshot <url>*\n\nExample:\n.ss https://google.com`,
+            text: `📸 *SCREENSHOT TOOL*\n\n*$ss <url>*\n*$ssweb <url>*\n*$screenshot <url>*\n\nExample:\n.ss https://google.com`,
         }, { quoted: message });
     }
     const url = match.trim();

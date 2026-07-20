@@ -130,8 +130,8 @@ function formatInfo(data) {
     const id = d.subjectId || d.id;
     if (id) {
         msg += `\n\n🆔 *ID:* \`${id}\``;
-        msg += `\n💡 *.movie dl ${id}* — Resolution picker & download`;
-        if (d.trailer?.VideoAddress?.url) msg += `\n🎬 *.movietrailer ${id}* — Watch official trailer`;
+        msg += `\n💡 *$movie dl ${id}* — Resolution picker & download`;
+        if (d.trailer?.VideoAddress?.url) msg += `\n🎬 *$movietrailer ${id}* — Watch official trailer`;
     }
     return msg;
 }
@@ -196,7 +196,7 @@ function buildFileName(title, epLabel, quality) {
     if (epLabel) parts.push(epLabel.replace(/\s+/g, ''));   // "S01E03" already clean
     if (quality)  parts.push(safe(quality));
     parts.push('Daratech');
-    return parts.filter(Boolean).join('.') + '.mp4';
+    return parts.filter(Boolean).join('.') + '$mp4';
 }
 
 /**
@@ -352,7 +352,7 @@ function showResolutionPicker(sock, chatId, message, sorted, audioTracks, subtit
         msg += `_${dlCmd}1080p audio:2_ — 1080p + dub #2\n`;
     }
 
-    if (hasTrailer)        msg += `\n🎬 *.movietrailer ${id}* — Watch trailer first`;
+    if (hasTrailer)        msg += `\n🎬 *$movietrailer ${id}* — Watch trailer first`;
     if (subtitles && subtitles.length) msg += `\n📜 *Subs:* ${subtitles.map(s => s.language || s.languageCode).join(', ')}`;
 
     return sock.sendMessage(chatId, { text: msg }, { quoted: message });
@@ -409,50 +409,50 @@ async function resolveAndSend(sock, chatId, message, sorted, srcData, parsed, ti
 const HELP_TEXT = `🎬 *MOVIE COMMANDS*
 
 *🔍 Search*
-▸ *.movie <title>*          — Search movies & shows
-▸ *.movie details <id>*     — Full info + poster
-▸ *.movie dl <id>*          — Download (auto-detects movie or series)
-▸ *.movietrailer <id>*      — Watch official trailer 🎬
+▸ *$movie <title>*          — Search movies & shows
+▸ *$movie details <id>*     — Full info + poster
+▸ *$movie dl <id>*          — Download (auto-detects movie or series)
+▸ *$movietrailer <id>*      — Watch official trailer 🎬
 
 *📺 Series / Shows*
-▸ *.movie dl <id>*          — Shows all seasons + episode count
-▸ *.movie dl <id> s1*       — Episode list for Season 1
-▸ *.movie dl <id> s1e3*     — Download S1 Episode 3 (quality picker)
-▸ *.movie dl <id> s1e3 720p* — Download S1 Ep3 at 720p directly
+▸ *$movie dl <id>*          — Shows all seasons + episode count
+▸ *$movie dl <id> s1*       — Episode list for Season 1
+▸ *$movie dl <id> s1e3*     — Download S1 Episode 3 (quality picker)
+▸ *$movie dl <id> s1e3 720p* — Download S1 Ep3 at 720p directly
 
 *🌐 Dubs (different audio languages)*
 ▸ Each dub has its own ID shown in the season list
-▸ *.movie dl <dub-id> s1e1* — Download that dub's episode
+▸ *$movie dl <dub-id> s1e1* — Download that dub's episode
 
 *🎬 Movies*
-▸ *.movie dl <id>*          — Shows quality picker
-▸ *.movie dl <id> 1*        — Download quality #1 directly
-▸ *.movie dl <id> 720p*     — Download by quality name
+▸ *$movie dl <id>*          — Shows quality picker
+▸ *$movie dl <id> 1*        — Download quality #1 directly
+▸ *$movie dl <id> 720p*     — Download by quality name
 
 *📊 Browse*
-▸ *.trending*               — What's hot right now 🔥
-▸ *.upcoming*               — Upcoming seasons 🗓
-▸ *.schedule*               — Weekly airing schedule 📅
-▸ *.schedule daily/monthly* — Change schedule period
+▸ *$trending*               — What's hot right now 🔥
+▸ *$upcoming*               — Upcoming seasons 🗓
+▸ *$schedule*               — Weekly airing schedule 📅
+▸ *$schedule daily/monthly* — Change schedule period
 
 *🎌 Anime*
-▸ *.anime <title>*          — Search anime
-▸ *.anime dl <id>*          — Shows seasons + episode count
-▸ *.anime dl <id> s1*       — Episode list for Season 1
-▸ *.anime dl <id> s1e3*     — Download S1 Episode 3
-▸ *.anime dl <id> s1e3 1080p* — Specific quality
+▸ *$anime <title>*          — Search anime
+▸ *$anime dl <id>*          — Shows seasons + episode count
+▸ *$anime dl <id> s1*       — Episode list for Season 1
+▸ *$anime dl <id> s1e3*     — Download S1 Episode 3
+▸ *$anime dl <id> s1e3 1080p* — Specific quality
 
 *📡 Live TV*
-▸ *.live*                   — Browse live channels
-▸ *.livesearch <name>*      — Search live TV channels
-▸ *.livestream <id>*        — Get stream link
-▸ *.livecats*               — Browse categories
+▸ *$live*                   — Browse live channels
+▸ *$livesearch <name>*      — Search live TV channels
+▸ *$livestream <id>*        — Get stream link
+▸ *$livecats*               — Browse categories
 
 *🔎 Filter & More*
-▸ *.moviefilter <genre>*    — e.g. $moviefilter action
-▸ *.moviefilter action,1*   — genre + type (1=Movie, 2=Series)
-▸ *.moviecaptions <id>*     — Subtitles & audio info
-▸ *.moviehome*              — Featured content
+▸ *$moviefilter <genre>*    — e.g. $moviefilter action
+▸ *$moviefilter action,1*   — genre + type (1=Movie, 2=Series)
+▸ *$moviecaptions <id>*     — Subtitles & audio info
+▸ *$moviehome*              — Featured content
 
 _✅ = file small enough to send directly in chat_
 _💡 IDs come from search results — copy the full ID_`;
@@ -483,7 +483,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
 
         // ── SEARCH ──────────────────────────────────────────────────────────
         if (!subcommand || subcommand === 'search') {
-            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a title.\n*Example:* _.movie avengers_' }, { quoted: message });
+            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a title.\n*Example:* _$movie avengers_' }, { quoted: message });
             await sock.sendMessage(chatId, { react: { text: '🔍', key: message.key } });
 
             const data = await apiFetch(`/search/${encodeURIComponent(query)}`);
@@ -491,7 +491,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             const list = data.results?.items || [];
             if (!list.length) {
                 return sock.sendMessage(chatId, {
-                    text: `⚠️ No results for "*${query}*"\n\nTry a different spelling or use *.trending* to see what's popular.`
+                    text: `⚠️ No results for "*${query}*"\n\nTry a different spelling or use *$trending* to see what's popular.`
                 }, { quoted: message });
             }
             const top = list.slice(0, 10);
@@ -504,8 +504,8 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                     lines.join('\n\n') +
                     `\n\n` +
                     `💡 *Quick pick by number:*\n` +
-                    `  *.movie dl 1* — download result 1\n` +
-                    `  *.movie details 2* — info for result 2`
+                    `  *$movie dl 1* — download result 1\n` +
+                    `  *$movie details 2* — info for result 2`
             }, { quoted: message });
         }
 
@@ -513,7 +513,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
         if (subcommand === 'info') {
             if (!query) {
                 return sock.sendMessage(chatId, {
-                    text: '❌ Provide a movie ID or pick number.\n*Example:* _.movie details 1234376946650333432_\n*Quick pick:* _.movie details 2_ (from last search)\n\n💡 Get IDs by searching first: *.movie <title>*'
+                    text: '❌ Provide a movie ID or pick number.\n*Example:* _$movie details 1234376946650333432_\n*Quick pick:* _$movie details 2_ (from last search)\n\n💡 Get IDs by searching first: *$movie <title>*'
                 }, { quoted: message });
             }
             await sock.sendMessage(chatId, { react: { text: '🎬', key: message.key } });
@@ -528,7 +528,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                     infoId = picked.subjectId || picked.id || query;
                 } else {
                     return sock.sendMessage(chatId, {
-                        text: `❌ No result #${pickNum} in your last search.\nSearch first: *.movie <title>*`
+                        text: `❌ No result #${pickNum} in your last search.\nSearch first: *$movie <title>*`
                     }, { quoted: message });
                 }
             }
@@ -553,7 +553,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
 
             if (!id) {
                 return sock.sendMessage(chatId, {
-                    text: '❌ Provide a movie/series ID or pick number.\n*Example:* _.movie dl 1234376946650333432_\n*Quick pick:* _.movie dl 2_ (result #2 from last search)\n\n💡 Get IDs by searching first: *.movie <title>*'
+                    text: '❌ Provide a movie/series ID or pick number.\n*Example:* _$movie dl 1234376946650333432_\n*Quick pick:* _$movie dl 2_ (result #2 from last search)\n\n💡 Get IDs by searching first: *$movie <title>*'
                 }, { quoted: message });
             }
 
@@ -566,7 +566,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                     id = picked.subjectId || picked.id || id;
                 } else {
                     return sock.sendMessage(chatId, {
-                        text: `❌ No result #${dlPickNum} in your last search.\nSearch first: *.movie <title>*`
+                        text: `❌ No result #${dlPickNum} in your last search.\nSearch first: *$movie <title>*`
                     }, { quoted: message });
                 }
             }
@@ -606,8 +606,8 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                             `The API did not return season info for this title.`,
                             `Please specify the episode directly:`,
                             ``,
-                            `_.movie dl ${id} s1e1_ — S1 Episode 1`,
-                            `_.movie dl ${id} s1e1 720p_ — specific quality`,
+                            `_$movie dl ${id} s1e1_ — S1 Episode 1`,
+                            `_$movie dl ${id} s1e1 720p_ — specific quality`,
                         ].join('\n')
                     }, { quoted: message });
                 }
@@ -628,8 +628,8 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                         msg += `${NUMS[i] || `${i + 1}.`}  *Season ${s.season}*  —  ${epStr}\n`;
                     });
 
-                    msg += `\n💬 *Pick a season:*\n_.movie dl ${id} s1_ — Season 1 episodes\n_.movie dl ${id} s2_ — Season 2 episodes`;
-                    msg += `\n_.movie dl ${id} s1e1_ — Download S1 Episode 1 directly`;
+                    msg += `\n💬 *Pick a season:*\n_$movie dl ${id} s1_ — Season 1 episodes\n_$movie dl ${id} s2_ — Season 2 episodes`;
+                    msg += `\n_$movie dl ${id} s1e1_ — Download S1 Episode 1 directly`;
 
                     // Show dub options if any non-original dubs exist
                     const dubs = dubList.filter(d => !d.original && d.subjectId && d.subjectId !== id);
@@ -640,7 +640,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                         dubs.forEach(d => {
                             msg += `  • *${d.lanName || d.lanCode}*  🆔 \`${d.subjectId}\`\n`;
                         });
-                        msg += `\n💡 *.movie dl <dub-id> s1e1* — download that dub`;
+                        msg += `\n💡 *$movie dl <dub-id> s1e1* — download that dub`;
                     }
 
                     return sock.sendMessage(chatId, { text: msg }, { quoted: message });
@@ -674,7 +674,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                         msg += `  _...try higher numbers if there are more_\n`;
                     }
 
-                    msg += `\n💡 Add quality to download directly:\n_.movie dl ${id} s${parsed.season}e1 720p_`;
+                    msg += `\n💡 Add quality to download directly:\n_$movie dl ${id} s${parsed.season}e1 720p_`;
                     return sock.sendMessage(chatId, { text: msg }, { quoted: message });
                 }
 
@@ -707,7 +707,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             const { sources, subtitles, audioTracks } = parseSources(srcData);
 
             if (!sources.length) {
-                const trailerHint = hasTrailer ? `\n\n🎬 *.movietrailer ${id}* — Watch trailer instead` : '';
+                const trailerHint = hasTrailer ? `\n\n🎬 *$movietrailer ${id}* — Watch trailer instead` : '';
                 return sock.sendMessage(chatId, {
                     text: `⚠️ No download sources found for *${title || id}*.\n\n_The movie may not have links yet._${trailerHint}`
                 }, { quoted: message });
@@ -728,7 +728,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             const id = args[0] || query;
             if (!id) {
                 return sock.sendMessage(chatId, {
-                    text: '❌ Provide a movie ID.\n*Example:* _.movietrailer 1234376946650333432_\n\n💡 Get IDs from *.movie <title>* search'
+                    text: '❌ Provide a movie ID.\n*Example:* _$movietrailer 1234376946650333432_\n\n💡 Get IDs from *$movie <title>* search'
                 }, { quoted: message });
             }
             await sock.sendMessage(chatId, { react: { text: '🎬', key: message.key } });
@@ -739,7 +739,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
 
             if (!trailer?.VideoAddress?.url) {
                 return sock.sendMessage(chatId, {
-                    text: `⚠️ No trailer found for *${title || id}*.\n\n💡 *.movie dl ${id}* — Download links\n💡 *.movie details ${id}* — Full info`
+                    text: `⚠️ No trailer found for *${title || id}*.\n\n💡 *$movie dl ${id}* — Download links\n💡 *$movie details ${id}* — Full info`
                 }, { quoted: message });
             }
 
@@ -775,7 +775,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             if (!list.length) return sock.sendMessage(chatId, { text: '⚠️ No trending content found.' }, { quoted: message });
             const lines = list.slice(0, 12).map(formatResult);
             return sock.sendMessage(chatId, {
-                text: `🔥 *Trending Now*\n\n${lines.join('\n\n')}\n\n💡 *.movie details <id>* — Full info`
+                text: `🔥 *Trending Now*\n\n${lines.join('\n\n')}\n\n💡 *$movie details <id>* — Full info`
             }, { quoted: message });
         }
 
@@ -808,7 +808,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
 
             if (!list.length) {
                 return sock.sendMessage(chatId, {
-                    text: `📅 No schedule entries found for *${period}*.\n\nTry *.schedule daily* or *.schedule monthly*`
+                    text: `📅 No schedule entries found for *${period}*.\n\nTry *$schedule daily* or *$schedule monthly*`
                 }, { quoted: message });
             }
             const lines = list.slice(0, 12).map(formatResult);
@@ -838,13 +838,13 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                 const cats    = ch.categories ? ch.categories.slice(0, 2).join(', ') : '';
                 msg += `*${i + 1}.* ${name}${country ? ` 🌍 ${country}` : ''}${cats ? ` (${cats})` : ''}\n    🆔 \`${id}\`\n\n`;
             });
-            msg += '💡 *.livestream <id>* — Get stream link\n💡 *.livesearch <name>* — Search channels\n💡 *.livecats* — Browse by category';
+            msg += '💡 *$livestream <id>* — Get stream link\n💡 *$livesearch <name>* — Search channels\n💡 *$livecats* — Browse by category';
             return sock.sendMessage(chatId, { text: msg }, { quoted: message });
         }
 
         // ── LIVE SEARCH ──────────────────────────────────────────────────────
         if (subcommand === 'livesearch') {
-            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a channel name.\n*Example:* _.livesearch CNN_' }, { quoted: message });
+            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a channel name.\n*Example:* _$livesearch CNN_' }, { quoted: message });
             await sock.sendMessage(chatId, { react: { text: '📡', key: message.key } });
 
             const data = await apiFetch(`/live/search/${encodeURIComponent(query)}`);
@@ -859,7 +859,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                 const country = ch.country || '';
                 msg += `*${i + 1}.* ${name}${country ? ` 🌍 ${country}` : ''}\n    🆔 \`${id}\`\n\n`;
             });
-            msg += '💡 Copy the ID exactly and use *.livestream <id>* to get the stream link';
+            msg += '💡 Copy the ID exactly and use *$livestream <id>* to get the stream link';
             return sock.sendMessage(chatId, { text: msg }, { quoted: message });
         }
 
@@ -867,7 +867,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
         if (subcommand === 'livestream') {
             if (!query) {
                 return sock.sendMessage(chatId, {
-                    text: '❌ Provide a channel ID.\n*Example:* _.livestream CNN.us_\n\n💡 Get exact IDs from *.live* or *.livesearch <name>*'
+                    text: '❌ Provide a channel ID.\n*Example:* _$livestream CNN.us_\n\n💡 Get exact IDs from *$live* or *$livesearch <name>*'
                 }, { quoted: message });
             }
             await sock.sendMessage(chatId, { react: { text: '📡', key: message.key } });
@@ -877,13 +877,13 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                 data = await apiFetch(`/live/stream/${encodeURIComponent(query)}`);
             } catch (_fetchErr) {
                 return sock.sendMessage(chatId, {
-                    text: `⚠️ Channel *${query}* was not found or is unavailable.\n\n💡 Use *.livesearch <name>* to find the exact channel ID.\n💡 Use *.live* to browse all channels.`
+                    text: `⚠️ Channel *${query}* was not found or is unavailable.\n\n💡 Use *$livesearch <name>* to find the exact channel ID.\n💡 Use *$live* to browse all channels.`
                 }, { quoted: message });
             }
 
             if (!data.success) {
                 return sock.sendMessage(chatId, {
-                    text: `⚠️ Channel *${query}* was not found.\n\n💡 Use *.livesearch <name>* to find the exact channel ID.`
+                    text: `⚠️ Channel *${query}* was not found.\n\n💡 Use *$livesearch <name>* to find the exact channel ID.`
                 }, { quoted: message });
             }
 
@@ -914,7 +914,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
 
             const list = cats.slice(0, 20).map((c, i) => `*${i + 1}.* ${c.name}  _(${c.count} channels)_`).join('\n');
             return sock.sendMessage(chatId, {
-                text: `📡 *Live TV Categories*\n\n${list}\n\n💡 *.live <category>* — Browse by category name`
+                text: `📡 *Live TV Categories*\n\n${list}\n\n💡 *$live <category>* — Browse by category name`
             }, { quoted: message });
         }
 
@@ -927,7 +927,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                 const animeId = args[1] || '';
                 const pick    = args.slice(2).join(' ').trim().toLowerCase();
 
-                if (!animeId) return sock.sendMessage(chatId, { text: '❌ Provide an anime ID.\n*Example:* _.anime dl <id>_\n*Season/ep:* _.anime dl <id> s1e3_' }, { quoted: message });
+                if (!animeId) return sock.sendMessage(chatId, { text: '❌ Provide an anime ID.\n*Example:* _$anime dl <id>_\n*Season/ep:* _$anime dl <id> s1e3_' }, { quoted: message });
                 await sock.sendMessage(chatId, { react: { text: '📥', key: message.key } });
 
                 // Fetch info first — contains seasonDetails if this is a series
@@ -953,7 +953,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                             const eps = s.totalEpisodes || '?';
                             msg += `${NUMS[i] || `${i + 1}.`}  *Season ${s.season}*  —  ${eps} episode${eps !== 1 ? 's' : ''}\n`;
                         });
-                        msg += `\n💬 *Pick a season:*\n_.anime dl ${animeId} s1_ — Season 1 episodes\n_.anime dl ${animeId} s1e1_ — Download S1 Ep1 directly`;
+                        msg += `\n💬 *Pick a season:*\n_$anime dl ${animeId} s1_ — Season 1 episodes\n_$anime dl ${animeId} s1e1_ — Download S1 Ep1 directly`;
 
                         const dubs = dubList.filter(d => !d.original && d.subjectId && d.subjectId !== animeId);
                         if (dubs.length) {
@@ -963,7 +963,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                             dubs.forEach(d => {
                                 msg += `  • *${d.lanName || d.lanCode}*  🆔 \`${d.subjectId}\`\n`;
                             });
-                            msg += `\n💡 *.anime dl <dub-id> s1e1* — download that language`;
+                            msg += `\n💡 *$anime dl <dub-id> s1e1* — download that language`;
                         }
                         return sock.sendMessage(chatId, { text: msg }, { quoted: message });
                     }
@@ -985,7 +985,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                             msg += `  *Ep ${ep}*  →  \`$anime dl ${animeId} s${parsed.season}e${ep}\`\n`;
                         }
                         if (totalEps > showMax) msg += `  _...and ${totalEps - showMax} more_\n`;
-                        msg += `\n💡 Add quality: _.anime dl ${animeId} s${parsed.season}e1 1080p_`;
+                        msg += `\n💡 Add quality: _$anime dl ${animeId} s${parsed.season}e1 1080p_`;
                         return sock.sendMessage(chatId, { text: msg }, { quoted: message });
                     }
 
@@ -1040,12 +1040,12 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                     msg += `${NUMS[i] || `${i + 1}.`}  *${s.quality}*  —  ${sz}${codec}${canSend}\n`;
                 });
                 msg += `\n✅ _= can be sent as video/file in chat_\n`;
-                msg += `\n💬 *Pick a resolution:*\n_.anime dl ${animeId} 1_ — by number\n_.anime dl ${animeId} 1080p_ — by name`;
+                msg += `\n💬 *Pick a resolution:*\n_$anime dl ${animeId} 1_ — by number\n_$anime dl ${animeId} 1080p_ — by name`;
                 if (subtitles.length) msg += `\n📜 *Subs:* ${subtitles.map(s => s.language || s.languageCode).join(', ')}`;
                 return sock.sendMessage(chatId, { text: msg }, { quoted: message });
             }
 
-            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide an anime title.\n*Example:* _.anime naruto_' }, { quoted: message });
+            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide an anime title.\n*Example:* _$anime naruto_' }, { quoted: message });
             await sock.sendMessage(chatId, { react: { text: '🎌', key: message.key } });
 
             const data = await apiFetch(`/anime/search/${encodeURIComponent(query)}`);
@@ -1054,7 +1054,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             if (!list.length) return sock.sendMessage(chatId, { text: `⚠️ No anime found for "*${query}*"` }, { quoted: message });
             const lines = list.slice(0, 8).map(formatResult);
             return sock.sendMessage(chatId, {
-                text: `🎌 *Anime: ${query}*\n\n${lines.join('\n\n')}\n\n💡 *.movie details <id>* — Full info\n💡 *.anime dl <id>* — Download links`
+                text: `🎌 *Anime: ${query}*\n\n${lines.join('\n\n')}\n\n💡 *$movie details <id>* — Full info\n💡 *$anime dl <id>* — Download links`
             }, { quoted: message });
         }
 
@@ -1062,7 +1062,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
         if (subcommand === 'filter') {
             if (!query) {
                 return sock.sendMessage(chatId, {
-                    text: '❌ Provide a genre or platform.\n\n*Examples:*\n_.moviefilter action_\n_.moviefilter bollywood_\n_.moviefilter comedy,1_ (1=Movie, 2=Series)'
+                    text: '❌ Provide a genre or platform.\n\n*Examples:*\n_$moviefilter action_\n_$moviefilter bollywood_\n_$moviefilter comedy,1_ (1=Movie, 2=Series)'
                 }, { quoted: message });
             }
             await sock.sendMessage(chatId, { react: { text: '🔎', key: message.key } });
@@ -1087,13 +1087,13 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             const label     = isPlatform ? `Platform: ${genre}` : `Genre: ${genre}`;
             const typeLabel = typeStr ? ` (${typeStr === '1' ? 'Movies' : 'Series'})` : '';
             return sock.sendMessage(chatId, {
-                text: `🔎 *Filter — ${label}${typeLabel}*\n\n${lines.join('\n\n')}\n\n💡 *.movie details <id>* — Full info`
+                text: `🔎 *Filter — ${label}${typeLabel}*\n\n${lines.join('\n\n')}\n\n💡 *$movie details <id>* — Full info`
             }, { quoted: message });
         }
 
         // ── CAPTIONS / SUBTITLES ─────────────────────────────────────────────
         if (subcommand === 'captions') {
-            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a movie ID.\n*Example:* _.moviecaptions <id>_' }, { quoted: message });
+            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a movie ID.\n*Example:* _$moviecaptions <id>_' }, { quoted: message });
             await sock.sendMessage(chatId, { react: { text: '📜', key: message.key } });
 
             // Sources endpoint provides subtitles + audioTracks alongside download links
@@ -1150,7 +1150,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                 });
                 msg += '\n';
             }
-            msg += '💡 *.movie details <id>* — Full info';
+            msg += '💡 *$movie details <id>* — Full info';
             return sock.sendMessage(chatId, { text: msg }, { quoted: message });
         }
 

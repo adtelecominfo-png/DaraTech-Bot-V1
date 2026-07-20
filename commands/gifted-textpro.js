@@ -91,8 +91,8 @@ async function textproCommand(sock, chatId, message) {
         return sock.sendMessage(chatId, {
             text:
                 `✨ *TEXTPRO STYLES*\n\n` +
-                `Usage: *.textpro <style> <your text>*\n` +
-                `Example: *.textpro neon Daratech*\n\n` +
+                `Usage: *$textpro <style> <your text>*\n` +
+                `Example: *$textpro neon Daratech*\n\n` +
                 `*Available styles:*\n${STYLE_MENU}\n\n` +
                 `_Daratech_ ⚡`,
         }, { quoted: message });

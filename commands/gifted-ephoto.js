@@ -138,8 +138,8 @@ async function ephotoCommand(sock, chatId, message) {
         const styleList = Object.keys(SINGLE_STYLES).join(' · ');
         return sock.sendMessage(chatId, {
             text: `🎨 *EPHOTO TEXT EFFECTS*\n\n`
-                + `Usage: *.ephoto <style> <text>*\n`
-                + `Example: *.ephoto neon DARATECH*\n\n`
+                + `Usage: *$ephoto <style> <text>*\n`
+                + `Example: *$ephoto neon DARATECH*\n\n`
                 + `*Available styles:*\n${styleList}\n\n`
                 + `_For dual-text styles use $ephoto2_`,
         }, { quoted: message });
@@ -185,8 +185,8 @@ async function ephoto2Command(sock, chatId, message) {
         const styleList = Object.keys(DUAL_STYLES).join(' · ');
         return sock.sendMessage(chatId, {
             text: `🎨 *EPHOTO DUAL-TEXT EFFECTS*\n\n`
-                + `Usage: *.ephoto2 <style> <text1> | <text2>*\n`
-                + `Example: *.ephoto2 deadpool DARATECH | BOT*\n\n`
+                + `Usage: *$ephoto2 <style> <text1> | <text2>*\n`
+                + `Example: *$ephoto2 deadpool DARATECH | BOT*\n\n`
                 + `*Available styles:*\n${styleList}`,
         }, { quoted: message });
     }
@@ -205,7 +205,7 @@ async function ephoto2Command(sock, chatId, message) {
 
     if (!t1 || !t2) {
         return sock.sendMessage(chatId, {
-            text: `❌ Provide both texts separated by *|*\nExample: *.ephoto2 ${style} DARATECH | BOT*`,
+            text: `❌ Provide both texts separated by *|*\nExample: *$ephoto2 ${style} DARATECH | BOT*`,
         }, { quoted: message });
     }
 
@@ -235,8 +235,8 @@ async function ephotolistCommand(sock, chatId, message) {
     const dual   = Object.keys(DUAL_STYLES).join(' · ');
     const text   = `🎨 *EPHOTO STYLE LIST*\n`
         + `${'─'.repeat(32)}\n\n`
-        + `*Single-text (.ephoto <style> <text>):*\n${single}\n\n`
-        + `*Dual-text (.ephoto2 <style> <t1> | <t2>):*\n${dual}\n\n`
+        + `*Single-text ($ephoto <style> <text>):*\n${single}\n\n`
+        + `*Dual-text ($ephoto2 <style> <t1> | <t2>):*\n${dual}\n\n`
         + `_Daratech_ ⚡`;
     await sock.sendMessage(chatId, { text }, { quoted: message });
 }

@@ -16,10 +16,10 @@ async function aliveCommand(sock, chatId, message) {
             `▸ ⏱️ *Uptime:*  ${h}h ${m}m ${s}s`,
             `▸ 🔧 *Version:* v${ver}`,
             `▸ ⚙️ *Mode:*    ${mode}\n`,
-            `🎬 Movie search  →  *.movie*`,
-            `🤖 AI assistant  →  *.gpt*`,
-            `📋 All commands  →  *.menu*`,
-            `📖 Descriptions  →  *.help*\n`,
+            `🎬 Movie search  →  *$movie*`,
+            `🤖 AI assistant  →  *$gpt*`,
+            `📋 All commands  →  *$menu*`,
+            `📖 Descriptions  →  *$help*\n`,
             `_Daratech_ ⚡`,
         ].join('\n');
 

@@ -48,8 +48,8 @@ async function tempphoneCommand(sock, chatId, message) {
             `▸ ⏳ *Expires:* ${r.expiresIn || '10 minutes'}\n\n` +
             `🌍 *Available Countries:*\n${countries}\n\n` +
             `💡 Check incoming SMS:\n` +
-            `*.smsinbox* — uses your saved number\n` +
-            `*.smsinbox <number>* — specific number\n\n` +
+            `*$smsinbox* — uses your saved number\n` +
+            `*$smsinbox <number>* — specific number\n\n` +
             `_Daratech_ ⚡`;
         await sock.sendMessage(chatId, { text: txt }, { quoted: message });
         await react(sock, message, '✅');
@@ -67,7 +67,7 @@ async function smsinboxCommand(sock, chatId, message) {
 
     if (!number) {
         return sock.sendMessage(chatId, {
-            text: '📲 No number found. Generate one first with *.tempphone*\nOr specify: *.smsinbox <number>*',
+            text: '📲 No number found. Generate one first with *$tempphone*\nOr specify: *$smsinbox <number>*',
         }, { quoted: message });
     }
 

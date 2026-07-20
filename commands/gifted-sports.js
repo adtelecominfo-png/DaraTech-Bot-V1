@@ -156,7 +156,7 @@ async function fstreamCommand(sock, chatId, message) {
 async function fplayerCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: `⚽ Usage: *.fplayer <name>*\nExample: *.fplayer messi*`,
+        text: `⚽ Usage: *$fplayer <name>*\nExample: *$fplayer messi*`,
     }, { quoted: message });
 
     await react(sock, message, '⏳');
@@ -201,7 +201,7 @@ async function fplayerCommand(sock, chatId, message) {
 async function fteamCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: `🏟️ Usage: *.fteam <name>*\nExample: *.fteam arsenal*`,
+        text: `🏟️ Usage: *$fteam <name>*\nExample: *$fteam arsenal*`,
     }, { quoted: message });
 
     await react(sock, message, '⏳');
@@ -242,7 +242,7 @@ async function fteamCommand(sock, chatId, message) {
 async function fvenueCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: `🏟️ Usage: *.fvenue <stadium name>*\nExample: *.fvenue wembley*`,
+        text: `🏟️ Usage: *$fvenue <stadium name>*\nExample: *$fvenue wembley*`,
     }, { quoted: message });
 
     await react(sock, message, '⏳');

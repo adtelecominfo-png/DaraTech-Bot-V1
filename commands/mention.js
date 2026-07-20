@@ -38,7 +38,7 @@ async function ensureDefaultSticker(state) {
 					fs.mkdirSync(assetsDir, { recursive: true });
 				}
 				// Create a simple text file as fallback
-				fs.writeFileSync(assetPath.replace('.webp', '.txt'), 'Default mention sticker not available');
+				fs.writeFileSync(assetPath.replace('$webp', '$txt'), 'Default mention sticker not available');
 			}
 		}
 	} catch (e) {

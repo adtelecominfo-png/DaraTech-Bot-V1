@@ -8,7 +8,7 @@ async function lyricsCommand(sock, chatId, input, message) {
         }, { quoted: message });
     }
 
-    // Parse optional artist via pipe: ".lyrics song | artist"
+    // Parse optional artist via pipe: "$lyrics song | artist"
     const [rawSong, rawArtist] = input.split('|').map(s => s.trim());
     const songTitle = rawSong;
     const artist   = rawArtist || '';

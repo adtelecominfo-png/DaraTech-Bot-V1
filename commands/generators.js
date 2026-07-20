@@ -53,7 +53,7 @@ async function genemailCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const name = text.split(' ').slice(1).join('').toLowerCase().replace(/[^a-z0-9]/g, '') || 'user';
     const domains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'proton.me', 'icloud.com'];
-    const suffixes = ['', '123', '99', '_2', '.biz', '007', String(Math.floor(Math.random() * 999))];
+    const suffixes = ['', '123', '99', '_2', '$biz', '007', String(Math.floor(Math.random() * 999))];
     const domain = domains[Math.floor(Math.random() * domains.length)];
     const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
     const email = `${name}${suffix}@${domain}`;

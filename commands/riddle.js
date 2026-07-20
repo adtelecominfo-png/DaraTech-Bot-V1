@@ -30,13 +30,13 @@ async function riddleCommand(sock, chatId, message) {
     const riddle = RIDDLES[Math.floor(Math.random() * RIDDLES.length)];
     active[chatId] = riddle.a.toLowerCase();
     await sock.sendMessage(chatId, {
-        text: `🧩 *RIDDLE TIME!*\n\n${riddle.q}\n\n_Reply with your answer! Type_ *.riddleanswer* _to reveal._\n\n_Daratech_ ⚡`
+        text: `🧩 *RIDDLE TIME!*\n\n${riddle.q}\n\n_Reply with your answer! Type_ *$riddleanswer* _to reveal._\n\n_Daratech_ ⚡`
     }, { quoted: message });
 }
 
 async function riddleAnswerCommand(sock, chatId, message) {
     const answer = active[chatId];
-    if (!answer) return sock.sendMessage(chatId, { text: '❓ No active riddle. Start one with *.riddle*' }, { quoted: message });
+    if (!answer) return sock.sendMessage(chatId, { text: '❓ No active riddle. Start one with *$riddle*' }, { quoted: message });
     delete active[chatId];
     await sock.sendMessage(chatId, { text: `💡 *RIDDLE ANSWER:*\n\n${answer.charAt(0).toUpperCase() + answer.slice(1)}\n\n_Daratech_ ⚡` }, { quoted: message });
 }

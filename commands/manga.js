@@ -649,7 +649,7 @@ async function handleBrowse(sock, chatId, message, args) {
 // ─── Main dispatcher ──────────────────────────────────────────────────────────
 
 async function mangaCommand(sock, chatId, message, userMessage) {
-    const body  = userMessage.slice('.manga'.length).trim();
+    const body  = userMessage.slice('$manga'.length).trim();
     const parts = body.split(/\s+/);
     const sub   = parts[0]?.toLowerCase() || '';
     const rest  = parts.slice(1);
@@ -660,17 +660,17 @@ async function mangaCommand(sock, chatId, message, userMessage) {
             return sock.sendMessage(chatId, {
                 text:
                     `╭━═『 📖 MANGA COMMANDS 』═━╮\n\n` +
-                    `🔍 *.manga <title>*            — search\n` +
-                    `📖 *.manga details <slug>*     — full info + chapters\n` +
-                    `👁️ *.manga read <ch-slug>*     — chapter page URLs\n` +
-                    `💾 *.manga dl <ch-slug>*       — chapter as ZIP\n` +
-                    `📦 *.manga dls <slug> <f> <t>* — chapter range ZIP\n` +
-                    `🔥 *.manga popular [page]*     — popular titles\n` +
-                    `🆕 *.manga latest [page]*      — latest releases\n` +
-                    `🏷️ *.manga genres*             — genre list\n` +
-                    `🏷️ *.manga genre <slug> [pg]*  — browse by genre\n` +
-                    `🏠 *.manga home*               — homepage\n` +
-                    `🔎 *.manga browse [filters]*   — advanced filter\n\n` +
+                    `🔍 *$manga <title>*            — search\n` +
+                    `📖 *$manga details <slug>*     — full info + chapters\n` +
+                    `👁️ *$manga read <ch-slug>*     — chapter page URLs\n` +
+                    `💾 *$manga dl <ch-slug>*       — chapter as ZIP\n` +
+                    `📦 *$manga dls <slug> <f> <t>* — chapter range ZIP\n` +
+                    `🔥 *$manga popular [page]*     — popular titles\n` +
+                    `🆕 *$manga latest [page]*      — latest releases\n` +
+                    `🏷️ *$manga genres*             — genre list\n` +
+                    `🏷️ *$manga genre <slug> [pg]*  — browse by genre\n` +
+                    `🏠 *$manga home*               — homepage\n` +
+                    `🔎 *$manga browse [filters]*   — advanced filter\n\n` +
                     `_Example: $manga Jujutsu Kaisen_\n` +
                     `_Example: $manga browse genre=action status=ongoing_\n` +
                     `╰━━━━━━━━━━━━━━━━━━━━━━━━╯`
@@ -717,9 +717,9 @@ async function mangaCommand(sock, chatId, message, userMessage) {
                 return sock.sendMessage(chatId, {
                     text:
                         `❌ Usage:\n` +
-                        `  *.manga read <manga-slug> <chapter-number>*\n` +
-                        `  *.manga read <chapter-slug>*\n\n` +
-                        `Example: *.manga read accidental-love 88*`
+                        `  *$manga read <manga-slug> <chapter-number>*\n` +
+                        `  *$manga read <chapter-slug>*\n\n` +
+                        `Example: *$manga read accidental-love 88*`
                 }, { quoted: message });
             }
             // If the last token is a plain number → number-based lookup mode
@@ -740,9 +740,9 @@ async function mangaCommand(sock, chatId, message, userMessage) {
                 return sock.sendMessage(chatId, {
                     text:
                         `❌ Usage:\n` +
-                        `  *.manga dl <manga-slug> <chapter-number>*\n` +
-                        `  *.manga dl <chapter-slug>*\n\n` +
-                        `Example: *.manga dl accidental-love 88*`
+                        `  *$manga dl <manga-slug> <chapter-number>*\n` +
+                        `  *$manga dl <chapter-slug>*\n\n` +
+                        `Example: *$manga dl accidental-love 88*`
                 }, { quoted: message });
             }
             // If the last token is a plain number → number-based lookup mode

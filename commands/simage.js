@@ -23,7 +23,7 @@ const convertStickerToImage = async (sock, quotedMessage, chatId) => {
     try {
         const stickerMessage = quotedMessage.stickerMessage;
         if (!stickerMessage) {
-            return sock.sendMessage(chatId, { text: '↩️ Reply to a sticker with *.simage* to convert it to an image.' });
+            return sock.sendMessage(chatId, { text: '↩️ Reply to a sticker with *$simage* to convert it to an image.' });
         }
 
         // Download the sticker

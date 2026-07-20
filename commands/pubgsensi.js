@@ -13,7 +13,7 @@ const { isKnownBrand } = require('../lib/brandCheck');
 
 const USAGE =
     `🎮 *PUBG MOBILE SENSITIVITY*\n\n` +
-    `Usage: *.pubgsensi <device> [RAM]GB <Android|iOS>*\n\n` +
+    `Usage: *$pubgsensi <device> [RAM]GB <Android|iOS>*\n\n` +
     `Examples:\n` +
     `• $pubgsensi Samsung S23 Ultra 12GB Android\n` +
     `• $pubgsensi iPhone 15 Pro Max iOS\n` +

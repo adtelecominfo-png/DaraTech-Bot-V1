@@ -23,11 +23,11 @@ async function sendOverview(sock, chatId, message) {
         const count = cat.help.filter(l => l.startsWith('.')).length;
         if (count === 0 && cat.cmds.length === 0) continue;
         const desc = CAT_DESCRIPTIONS[cat.slug] || '';
-        lines.push(`${cat.emoji} *.help ${cat.slug.padEnd(10)}* — ${desc}`);
+        lines.push(`${cat.emoji} *$help ${cat.slug.padEnd(10)}* — ${desc}`);
     }
 
-    lines.push(`\n📋 *.menu movies*  — quick command list`);
-    lines.push(`📖 *.help movies*  — full descriptions`);
+    lines.push(`\n📋 *$menu movies*  — quick command list`);
+    lines.push(`📖 *$help movies*  — full descriptions`);
     lines.push(`\n_Daratech_ ⚡`);
 
     return sock.sendMessage(chatId, { text: lines.join('\n') }, { quoted: message });
@@ -59,7 +59,7 @@ const CAT_DESCRIPTIONS = {
 async function sendCategoryHelp(sock, chatId, message, input) {
     const cat = findCategory(input);
     if (!cat) {
-        const slugList = CATEGORIES.map(c => `*.help ${c.slug}*`).join('  ');
+        const slugList = CATEGORIES.map(c => `*$help ${c.slug}*`).join('  ');
         return sock.sendMessage(chatId, {
             text: `❌ Category "*${input}*" not found.\n\nAvailable:\n${slugList}`
         }, { quoted: message });
@@ -70,8 +70,8 @@ async function sendCategoryHelp(sock, chatId, message, input) {
     const text = [
         `${cat.emoji} *${cat.title}*\n`,
         rows,
-        `\n📋 *.menu ${cat.slug}* — quick command list`,
-        `🏠 *.help* — back to categories`,
+        `\n📋 *$menu ${cat.slug}* — quick command list`,
+        `🏠 *$help* — back to categories`,
         `\n_Daratech_ ⚡`,
     ].join('\n');
 

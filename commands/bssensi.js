@@ -13,7 +13,7 @@ const { isKnownBrand } = require('../lib/brandCheck');
 
 const USAGE =
     `🎮 *BLOOD STRIKE SENSITIVITY*\n\n` +
-    `Usage: *.bssensi <device> [RAM]GB <Android|iOS>*\n\n` +
+    `Usage: *$bssensi <device> [RAM]GB <Android|iOS>*\n\n` +
     `Examples:\n` +
     `• $bssensi Samsung S23 Ultra 12GB Android\n` +
     `• $bssensi iPhone 15 Pro Max iOS\n` +

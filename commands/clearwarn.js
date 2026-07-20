@@ -32,7 +32,7 @@ async function clearwarnCommand(sock, chatId, message) {
 
         let target = mentioned[0] || (quoted?.participant ? quoted.participant : null);
         if (!target) {
-            return sock.sendMessage(chatId, { text: '❌ Mention or reply to a user.\nExample: *.clearwarn @user*' }, { quoted: message });
+            return sock.sendMessage(chatId, { text: '❌ Mention or reply to a user.\nExample: *$clearwarn @user*' }, { quoted: message });
         }
 
         const warnings = loadWarnings();

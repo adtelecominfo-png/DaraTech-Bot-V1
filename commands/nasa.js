@@ -12,7 +12,7 @@ async function apodCommand(sock, chatId, message) {
             `${(data.explanation || '').slice(0, 600)}${data.explanation?.length > 600 ? '...' : ''}\n\n` +
             `_Daratech_ ⚡`;
         const imgUrl = data.url;
-        if (imgUrl && (imgUrl.endsWith('.jpg') || imgUrl.endsWith('.png') || imgUrl.endsWith('.jpeg'))) {
+        if (imgUrl && (imgUrl.endsWith('$jpg') || imgUrl.endsWith('$png') || imgUrl.endsWith('$jpeg'))) {
             await sock.sendMessage(chatId, { image: { url: imgUrl }, caption: txt }, { quoted: message });
         } else {
             await sock.sendMessage(chatId, { text: txt + (imgUrl ? `\n\n🔗 ${imgUrl}` : '') }, { quoted: message });

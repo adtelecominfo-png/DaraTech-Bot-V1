@@ -57,13 +57,13 @@ async function quranCommand(sock, chatId, message) {
             text: [
                 `📿 *QURAN Command Usage*`,
                 ``,
-                `*.quran <surah>:<ayah>*  — fetch a specific verse`,
+                `*$quran <surah>:<ayah>*  — fetch a specific verse`,
                 `  e.g.  $quran 2:255`,
                 ``,
-                `*.quran <surah>*         — surah info + first verse`,
+                `*$quran <surah>*         — surah info + first verse`,
                 `  e.g.  $quran 18`,
                 ``,
-                `*.dailyayah*             — random daily ayah`,
+                `*$dailyayah*             — random daily ayah`,
             ].join('\n'),
         }, { quoted: message });
     }
@@ -87,8 +87,8 @@ async function quranCommand(sock, chatId, message) {
                 `┃ 📊 Ayahs: ${s.numberOfAyahs}`,
                 `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
                 ``,
-                `_Use *.quran ${surahNum}:1* to read the first verse._`,
-                `_Use *.quran ${surahNum}:<ayah>* to read any verse._`,
+                `_Use *$quran ${surahNum}:1* to read the first verse._`,
+                `_Use *$quran ${surahNum}:<ayah>* to read any verse._`,
                 ``,
                 `_Daratech_ ⚡`,
             ].join('\n');

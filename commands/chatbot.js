@@ -135,7 +135,7 @@ async function handleChatbotCommand(sock, chatId, message, match) {
         await showTyping(sock, chatId);
         await stopTyping(sock, chatId);
         return sock.sendMessage(chatId, {
-            text: `🤖 *CHATBOT SETUP*\n\n*.chatbot on* - Enable auto-reply in this group\n*.chatbot off* - Disable auto-reply in this group\n*.chatbot status* - Check status\n\n💡 *Tip:* Use *.botchat <message>* anytime to chat with the bot directly — no need to @mention.`,
+            text: `🤖 *CHATBOT SETUP*\n\n*$chatbot on* - Enable auto-reply in this group\n*$chatbot off* - Disable auto-reply in this group\n*$chatbot status* - Check status\n\n💡 *Tip:* Use *$botchat <message>* anytime to chat with the bot directly — no need to @mention.`,
             quoted: message
         });
     }
@@ -192,7 +192,7 @@ async function handleChatbotCommand(sock, chatId, message, match) {
         } else {
             data.chatbot[chatId] = true;
             saveUserGroupData(data);
-            await sock.sendMessage(chatId, { text: '✅ Chatbot enabled\n\n💡 Members can now @mention the bot or use *.botchat <message>* to chat.', quoted: message });
+            await sock.sendMessage(chatId, { text: '✅ Chatbot enabled\n\n💡 Members can now @mention the bot or use *$botchat <message>* to chat.', quoted: message });
         }
     } else if (match === 'off') {
         if (!data.chatbot[chatId]) {
@@ -223,7 +223,7 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
         const data = loadUserGroupData();
         if (!data.chatbot[chatId]) {
             return sock.sendMessage(chatId, {
-                text: '❌ Chatbot is not enabled in this group.\n\nAsk an admin to run *.chatbot on* first.',
+                text: '❌ Chatbot is not enabled in this group.\n\nAsk an admin to run *$chatbot on* first.',
                 quoted: message
             });
         }
@@ -272,7 +272,7 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
 
     if (!finalQuery) {
         return sock.sendMessage(chatId, {
-            text: '🤖 *BOTCHAT*\n\nUsage:\n▸ *.botchat <your message>*\n▸ Reply to any text/image/video with *.botchat* to discuss it\n▸ Reply with *.botchat <question>* to ask about it\n\nExample: *.botchat What is the capital of Nigeria?*\n\n_You can also @mention the bot or reply to any of its messages_ ⚡',
+            text: '🤖 *BOTCHAT*\n\nUsage:\n▸ *$botchat <your message>*\n▸ Reply to any text/image/video with *$botchat* to discuss it\n▸ Reply with *$botchat <question>* to ask about it\n\nExample: *$botchat What is the capital of Nigeria?*\n\n_You can also @mention the bot or reply to any of its messages_ ⚡',
             quoted: message
         });
     }

@@ -10,7 +10,7 @@ for (const l of leagues) {
 module.exports = [
   ["sportslive", "/sports/live", ["category"]],
   ["sportsall", "/sports/all", ["category"]],
-  // sportsstream: usage .sportsstream <source> | <id>  (both required)
+  // sportsstream: usage $sportsstream <source> | <id>  (both required)
   ["sportsstream", "/sports/stream", ["source", "id"]],
   ["sportscategories", "/sports/categories", []],
   ["predictions", "/football/predictions", []],
@@ -28,7 +28,7 @@ module.exports = [
   ["playerid", "/football/player-id", ["id"]],
   ["teamsearch", "/football/team-search", ["query"]],
   ["venuesearch", "/football/venue-search", ["query"]],
-  // gameevents: usage .gameevents Arsenal_vs_Chelsea
+  // gameevents: usage $gameevents Arsenal_vs_Chelsea
   ["gameevents", "/football/game-events", ["match"]],
   ["leagues", "/football/leagues", []],
   ["basketlivescore", "/basketball/livescore", []],

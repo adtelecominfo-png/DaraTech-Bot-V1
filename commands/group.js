@@ -316,7 +316,7 @@ async function creategcCommand(sock, chatId, senderId, userMessage, message) {
             return sock.sendMessage(chatId, { text: '❌ Only the owner can create groups.' }, { quoted: message });
         }
 
-        // Parse everything after ".creategc"
+        // Parse everything after "$creategc"
         const afterCmd = userMessage.slice(9).trim();
 
         // Extract phone numbers (pure digit tokens, 7–15 chars)
@@ -339,14 +339,14 @@ async function creategcCommand(sock, chatId, senderId, userMessage, message) {
 
         if (!groupName) {
             return sock.sendMessage(chatId, {
-                text: '❌ Usage:\n*.creategc GroupName @member*  (in groups)\n*.creategc GroupName 2348012345678*  (in DMs, use full number)',
+                text: '❌ Usage:\n*$creategc GroupName @member*  (in groups)\n*$creategc GroupName 2348012345678*  (in DMs, use full number)',
             }, { quoted: message });
         }
 
         const allMembers = [...new Set([...mentioned, ...phoneNumbers])];
         if (allMembers.length === 0) {
             return sock.sendMessage(chatId, {
-                text: '❌ You must provide at least one member.\n\n📌 Usage:\n*.creategc GroupName @member*  (in groups)\n*.creategc GroupName 2348012345678*  (in DMs, use full number)',
+                text: '❌ You must provide at least one member.\n\n📌 Usage:\n*$creategc GroupName @member*  (in groups)\n*$creategc GroupName 2348012345678*  (in DMs, use full number)',
             }, { quoted: message });
         }
         // Do NOT add the bot's own JID — WhatsApp auto-adds the creator

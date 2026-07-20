@@ -321,7 +321,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
             ''
         ).toLowerCase().replace(/\.\s+/g, '.').trim();
 
-        // Preserve raw message for commands like .tag that need original casing
+        // Preserve raw message for commands like $tag that need original casing
         const rawText = message.message?.conversation?.trim() ||
             message.message?.extendedTextMessage?.text?.trim() ||
             message.message?.imageMessage?.caption?.trim() ||
@@ -370,7 +370,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
         /*  // Basic message response in private chat
           if (!isGroup && (userMessage === 'hi' || userMessage === 'hello' || userMessage === 'bot' || userMessage === 'hlo' || userMessage === 'hey' || userMessage === 'bro')) {
               await sock.sendMessage(chatId, {
-                  text: 'Hi, How can I help you?\nYou can use .menu for more info and commands.',
+                  text: 'Hi, How can I help you?\nYou can use $menu for more info and commands.',
                   ...channelInfo
               });
               return;
@@ -403,7 +403,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
         }
 
         // Then check for command prefix
-        // 👀 is a non-dot trigger for .vv2 — let it fall through to the switch
+        // 👀 is a non-dot trigger for $vv2 — let it fall through to the switch
         if (userMessage === '👀') {
             await vvdmCommand(sock, chatId, message, true); // noReact — no ✅ on emoji trigger
             return;
@@ -629,7 +629,7 @@ case userMessage.startsWith('$bssensi'):
                 if (quotedMessage?.stickerMessage) {
                     await simageCommand(sock, quotedMessage, chatId);
                 } else {
-                    await sock.sendMessage(chatId, { text: 'Please reply to a sticker with the .simage command to convert it.', ...channelInfo }, { quoted: message });
+                    await sock.sendMessage(chatId, { text: 'Please reply to a sticker with the $simage command to convert it.', ...channelInfo }, { quoted: message });
                 }
                 commandExecuted = true;
                 break;
@@ -648,7 +648,7 @@ case userMessage.startsWith('$bssensi'):
                     const muteArg = parts[1];
                     const muteDuration = muteArg !== undefined ? parseInt(muteArg, 10) : undefined;
                     if (muteArg !== undefined && (isNaN(muteDuration) || muteDuration <= 0)) {
-                        await sock.sendMessage(chatId, { text: 'Please provide a valid number of minutes or use .mute with no number to mute immediately.', ...channelInfo }, { quoted: message });
+                        await sock.sendMessage(chatId, { text: 'Please provide a valid number of minutes or use $mute with no number to mute immediately.', ...channelInfo }, { quoted: message });
                     } else {
                         await muteCommand(sock, chatId, senderId, message, muteDuration);
                     }
@@ -660,7 +660,7 @@ case userMessage.startsWith('$bssensi'):
             case userMessage.startsWith('$ban'):
                 if (!isGroup) {
                     if (!message.key.fromMe && !senderIsSudo) {
-                        await sock.sendMessage(chatId, { text: 'Only owner/sudo can use .ban in private chat.' }, { quoted: message });
+                        await sock.sendMessage(chatId, { text: 'Only owner/sudo can use $ban in private chat.' }, { quoted: message });
                         break;
                     }
                 }
@@ -669,7 +669,7 @@ case userMessage.startsWith('$bssensi'):
             case userMessage.startsWith('$unban'):
                 if (!isGroup) {
                     if (!message.key.fromMe && !senderIsSudo) {
-                        await sock.sendMessage(chatId, { text: 'Only owner/sudo can use .unban in private chat.' }, { quoted: message });
+                        await sock.sendMessage(chatId, { text: 'Only owner/sudo can use $unban in private chat.' }, { quoted: message });
                         break;
                     }
                 }
@@ -734,7 +734,7 @@ case userMessage.startsWith('$bssensi'):
                         ? ((data.disabledGroups || []).includes(chatId) ? '❌ disabled' : '✅ enabled')
                         : 'N/A (not a group)';
                     await sock.sendMessage(chatId, {
-                        text: `🤖 *BOT MODE*\n\n🌐 Global: *${currentMode}*\n👥 This group: *${grpStatus}*\n\nUsage:\n*.mode public* — allow everyone\n*.mode private* — owner only\n*.mode group off* — disable bot in this group\n*.mode group on* — re-enable bot in this group\n*.mode g off/on* — short alias`,
+                        text: `🤖 *BOT MODE*\n\n🌐 Global: *${currentMode}*\n👥 This group: *${grpStatus}*\n\nUsage:\n*$mode public* — allow everyone\n*$mode private* — owner only\n*$mode group off* — disable bot in this group\n*$mode group on* — re-enable bot in this group\n*$mode g off/on* — short alias`,
                         ...channelInfo
                     }, { quoted: message });
                     return;
@@ -750,14 +750,14 @@ case userMessage.startsWith('$bssensi'):
                     if (!subAction) {
                         const grpCurrent = (data.disabledGroups || []).includes(chatId) ? '❌ disabled' : '✅ enabled';
                         await sock.sendMessage(chatId, {
-                            text: `👥 Bot status in this group: *${grpCurrent}*\n\n*.mode group off* — Disable bot in this group\n*.mode group on* — Re-enable bot in this group`,
+                            text: `👥 Bot status in this group: *${grpCurrent}*\n\n*$mode group off* — Disable bot in this group\n*$mode group on* — Re-enable bot in this group`,
                             ...channelInfo
                         }, { quoted: message });
                         return;
                     }
                     if (subAction !== 'on' && subAction !== 'off') {
                         await sock.sendMessage(chatId, {
-                            text: '❌ Usage: *.mode group on/off*  or  *.mode g on/off*',
+                            text: '❌ Usage: *$mode group on/off*  or  *$mode g on/off*',
                             ...channelInfo
                         }, { quoted: message });
                         return;
@@ -769,7 +769,7 @@ case userMessage.startsWith('$bssensi'):
                             data.disabledGroups = dGroups;
                             fs.writeFileSync('./data/messageCount.json', JSON.stringify(data, null, 2));
                             await sock.sendMessage(chatId, {
-                                text: '🔕 Bot has been *disabled* for this group.\n\n_Only the bot owner can re-enable it with_ *.mode group on*',
+                                text: '🔕 Bot has been *disabled* for this group.\n\n_Only the bot owner can re-enable it with_ *$mode group on*',
                             });
                         } else {
                             data.disabledGroups = dGroups.filter(g => g !== chatId);
@@ -788,7 +788,7 @@ case userMessage.startsWith('$bssensi'):
 
                 if (action !== 'public' && action !== 'private') {
                     await sock.sendMessage(chatId, {
-                        text: '❌ Usage: *.mode public/private*\nOr for groups: *.mode group off/on*',
+                        text: '❌ Usage: *$mode public/private*\nOr for groups: *$mode group off/on*',
                         ...channelInfo
                     }, { quoted: message });
                     return;
@@ -892,7 +892,7 @@ case userMessage.startsWith('$bssensi'):
                 if (city) {
                     await weatherCommand(sock, chatId, message, city);
                 } else {
-                    await sock.sendMessage(chatId, { text: 'Please specify a city, e.g., .weather London', ...channelInfo }, { quoted: message });
+                    await sock.sendMessage(chatId, { text: 'Please specify a city, e.g., $weather London', ...channelInfo }, { quoted: message });
                 }
                 break;
             case userMessage === '$news':
@@ -921,7 +921,7 @@ case userMessage.startsWith('$bssensi'):
                 if (guessedLetter) {
                     guessLetter(sock, chatId, guessedLetter);
                 } else {
-                    sock.sendMessage(chatId, { text: 'Please guess a letter using .guess <letter>', ...channelInfo }, { quoted: message });
+                    sock.sendMessage(chatId, { text: 'Please guess a letter using $guess <letter>', ...channelInfo }, { quoted: message });
                 }
                 break;
             case userMessage.startsWith('$trivia'):
@@ -932,7 +932,7 @@ case userMessage.startsWith('$bssensi'):
                 if (answer) {
                     answerTrivia(sock, chatId, answer);
                 } else {
-                    sock.sendMessage(chatId, { text: 'Please provide an answer using .answer <answer>', ...channelInfo }, { quoted: message });
+                    sock.sendMessage(chatId, { text: 'Please provide an answer using $answer <answer>', ...channelInfo }, { quoted: message });
                 }
                 break;
             case userMessage.startsWith('$compliment'):
@@ -1731,7 +1731,7 @@ case userMessage.startsWith('$bssensi'):
                 else if (userMessage === '$livecats')                                    mSub = 'livecats';
                 else if (userMessage.startsWith('$live'))                                mSub = 'live';
                 else if (userMessage.startsWith('$anime'))                               mSub = 'anime';
-                // .movie <title> / .movie details <id> / .movie dl <id> / .movie dl <id> <quality> handled inside movieCommand
+                // $movie <title> / $movie details <id> / $movie dl <id> / $movie dl <id> <quality> handled inside movieCommand
 
                 const cmdPrefixLen = mUserMsg.split(' ')[0].length;
                 const mArgs = mUserMsg.slice(cmdPrefixLen).trim().split(' ').filter(Boolean);
@@ -2884,7 +2884,7 @@ case userMessage.startsWith('$bssensi'):
             await showTypingAfterCommand(sock, chatId);
         }
 
-        // Function to handle .groupjid command
+        // Function to handle $groupjid command
         async function groupJidCommand(sock, chatId, message) {
             const groupJid = message.key.remoteJid;
 
