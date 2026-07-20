@@ -119,14 +119,14 @@ async function handleTranslateCommand(sock, chatId, message, match) {
                             text: `❌ Couldn't find a recent message to translate.\n\nPaste the text directly:\n*$translate <text> | ${query}*`,
                         }, { quoted: message });
                     }
+                } else {
+                    const args = query.split(/\s+/);
+                    if (args.length < 2) {
+                        return sock.sendMessage(chatId, { text: USAGE }, { quoted: message });
+                    }
+                    lang = args.pop();
+                    textToTranslate = args.join(' ');
                 }
-
-                const args = query.split(/\s+/);
-                if (args.length < 2) {
-                    return sock.sendMessage(chatId, { text: USAGE }, { quoted: message });
-                }
-                lang = args.pop();
-                textToTranslate = args.join(' ');
             }
         }
 
