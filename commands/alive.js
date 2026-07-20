@@ -32,4 +32,14 @@ async function aliveCommand(sock, chatId, message) {
     }
 }
 
-module.exports = aliveCommand;
+async function communityCommand(sock, chatId, message) {
+    await sock.sendMessage(chatId, {
+        text:
+            `👥 *DARATECH COMMUNITY*\n\n` +
+            `Join our WhatsApp community to get updates, tips, and connect with other users!\n\n` +
+            `🔗 *Link:*\nhttps://chat.whatsapp.com/D1OaGKmTvrOGfb5E7w8nZJ\n\n` +
+            `_Daratech_ ⚡`,
+    }, { quoted: message });
+}
+
+module.exports = { aliveCommand, communityCommand };
