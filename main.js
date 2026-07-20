@@ -403,6 +403,12 @@ async function handleMessages(sock, messageUpdate, printLog) {
         }
 
         // Then check for command prefix
+        // 👀 is a non-dot trigger for .vv2 — let it fall through to the switch
+        if (userMessage === '👀') {
+            await vvdmCommand(sock, chatId, message);
+            return;
+        }
+
         if (!userMessage.startsWith('.')) {
             // Show typing indicator if autotyping is enabled
             await handleAutotypingForMessage(sock, chatId, userMessage);
