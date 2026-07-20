@@ -122,57 +122,79 @@ async function showDir(sock, chatId, message, absPath, relPath) {
     await sock.sendMessage(chatId, { text }, { quoted: message });
 }
 
-// ─── Full directory tree (top-level only + one level deep) ───────────────────
-async function showFullDir(sock, chatId, message) {
-    const skip = new Set(['node_modules', '.git', '__pycache__', '.cache', 'tmp', 'temp']);
-    let topLevel;
-    try { topLevel = fs.readdirSync(ROOT).filter(e => !skip.has(e)).sort(); }
-    catch (e) { return sock.sendMessage(chatId, { text: `❌ ${e.message}` }, { quoted: message }); }
+// ─── Full recursive directory tree ───────────────────────────────────────────
+const SKIP_ALWAYS = new Set(['node_modules', '.git', '__pycache__', '.cache']);
+
+function buildTree(dir, prefix = '') {
+    let entries;
+    try { entries = fs.readdirSync(dir).filter(e => !SKIP_ALWAYS.has(e)).sort(); }
+    catch { return []; }
 
     const lines = [];
-    for (let i = 0; i < topLevel.length; i++) {
-        const name   = topLevel[i];
-        const full   = path.join(ROOT, name);
-        const isLast = i === topLevel.length - 1;
-        const pre    = isLast ? '└─' : '├─';
-        const isDir  = fs.statSync(full).isDirectory();
-        const ext    = path.extname(name).replace('.', '');
-        const icon   = isDir ? '📁' : fileEmoji(ext);
-        lines.push(`${pre} ${icon} ${name}${isDir ? '/' : ''}`);
+    for (let i = 0; i < entries.length; i++) {
+        const name   = entries[i];
+        const full   = path.join(dir, name);
+        const isLast = i === entries.length - 1;
+        const branch = isLast ? '└─' : '├─';
+        const child  = isLast ? '   ' : '│  ';
+
+        let isDir = false;
+        try { isDir = fs.statSync(full).isDirectory(); } catch { continue; }
+
+        const ext  = path.extname(name).replace('.', '');
+        const icon = isDir ? '📁' : fileEmoji(ext);
+        lines.push(`${prefix}${branch} ${icon} ${name}${isDir ? '/' : ''}`);
 
         if (isDir) {
-            try {
-                const sub = fs.readdirSync(full).filter(e => !skip.has(e)).sort().slice(0, 8);
-                for (let j = 0; j < sub.length; j++) {
-                    const sName  = sub[j];
-                    const sFull  = path.join(full, sName);
-                    const sIsDir = fs.statSync(sFull).isDirectory();
-                    const sExt   = path.extname(sName).replace('.', '');
-                    const sIcon  = sIsDir ? '📁' : fileEmoji(sExt);
-                    const sPre   = isLast ? '   ' : '│  ';
-                    const sEnd   = j === sub.length - 1 ? '└─' : '├─';
-                    lines.push(`${sPre}${sEnd} ${sIcon} ${sName}${sIsDir ? '/' : ''}`);
-                }
-                const rest = fs.readdirSync(full).filter(e => !skip.has(e)).length - 8;
-                if (rest > 0) lines.push(`${isLast ? '   ' : '│  '}   … +${rest} more`);
-            } catch {}
+            const sub = buildTree(full, prefix + child);
+            lines.push(...sub);
         }
     }
+    return lines;
+}
 
-    const text = [
+async function showFullDir(sock, chatId, message) {
+    const lines = buildTree(ROOT);
+    const rootName = ROOT.split('/').pop() || 'bot';
+
+    const header = [
         `╭${'─'.repeat(38)}╮`,
         `│  🗂️  *BOT DIRECTORY TREE* 🗂️${' '.repeat(7)}│`,
         `├${'─'.repeat(38)}┤`,
-        `│  📋 *ROOT :* ${ROOT.split('/').pop() || '/'}`,
+        `│  📋 *ROOT :* ${rootName}`,
+        `│  📦 *FILES:* ${lines.length} entries`,
         `╰${'─'.repeat(38)}╯`,
         ``,
-        `*📂 Structure:*`,
-        lines.join('\n'),
-        ``,
-        `_Tip: \`$dir <path>\` to explore deeper_`,
+        `*📂 Full Structure:*`,
     ].join('\n');
 
-    await sock.sendMessage(chatId, { text }, { quoted: message });
+    const tree = lines.join('\n');
+    const footer = `\n\n_Tip: \`$dir <path>\` to view a folder or file_`;
+
+    // WhatsApp cap ~65k chars — split if needed
+    const MAX = 60000;
+    const full = `${header}\n${tree}${footer}`;
+
+    if (full.length <= MAX) {
+        await sock.sendMessage(chatId, { text: full }, { quoted: message });
+    } else {
+        // Send header + first chunk, then continuation messages
+        const chunks = [];
+        let cur = header + '\n';
+        for (const line of lines) {
+            if ((cur + line + '\n').length > MAX) {
+                chunks.push(cur);
+                cur = '';
+            }
+            cur += line + '\n';
+        }
+        if (cur) chunks.push(cur + footer);
+        for (let i = 0; i < chunks.length; i++) {
+            await sock.sendMessage(chatId, {
+                text: i === 0 ? chunks[i] : `📂 _(continued ${i + 1}/${chunks.length})_\n\n${chunks[i]}`,
+            }, { quoted: message });
+        }
+    }
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
