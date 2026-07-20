@@ -37,7 +37,7 @@ async function aiCommand(sock, chatId, message, userMessage) {
     const isImage = ['imagine', 'txt2img', 'text2img', 'flux', 'dalle', 'animegen', 'sora', 'veo3'].includes(cmd);
     if (isImage) {
         if (!query) {
-            return sock.sendMessage(chatId, { text: `🎨 Usage: ${cmd} <describe the image you want>` }, { quoted: message });
+            return sock.sendMessage(chatId, { text: `🎨 Usage: $${cmd} <describe the image you want>` }, { quoted: message });
         }
         try {
             await sock.sendMessage(chatId, { react: { text: '⏳', key: message.key } });
@@ -61,7 +61,7 @@ async function aiCommand(sock, chatId, message, userMessage) {
     const polModel  = MODELS[modelKey] || 'openai';
 
     if (!query) {
-        return sock.sendMessage(chatId, { text: `🤖 Usage: ${cmd} <your question>` }, { quoted: message });
+        return sock.sendMessage(chatId, { text: `🤖 Usage: $${cmd} <your question>` }, { quoted: message });
     }
 
     try {
@@ -100,7 +100,7 @@ module.exports = aiCommand;
     const isImage = ['imagine', 'txt2img', 'text2img', 'flux', 'dalle', 'animegen', 'sora', 'veo3'].includes(cmd);
     if (isImage) {
         if (!query) {
-            return sock.sendMessage(chatId, { text: `🎨 Usage: ${cmd} <describe the image you want>` }, { quoted: message });
+            return sock.sendMessage(chatId, { text: `🎨 Usage: $${cmd} <describe the image you want>` }, { quoted: message });
         }
         try {
             await sock.sendMessage(chatId, { react: { text: '⏳', key: message.key } });
@@ -124,7 +124,7 @@ module.exports = aiCommand;
     const polModel  = MODELS[modelKey] || 'openai';
 
     if (!query) {
-        return sock.sendMessage(chatId, { text: `🤖 Usage: ${cmd} <your question>` }, { quoted: message });
+        return sock.sendMessage(chatId, { text: `🤖 Usage: $${cmd} <your question>` }, { quoted: message });
     }
 
     try {

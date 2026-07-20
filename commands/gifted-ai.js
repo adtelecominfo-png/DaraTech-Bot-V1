@@ -40,8 +40,9 @@ async function react(sock, message, emoji) {
 async function giftedTextReply(sock, chatId, message, endpoint, params, label) {
     const query = extractQuery(message);
     if (!query) {
+        const usageCmd = (message.message?.conversation || message.message?.extendedTextMessage?.text || '').trim().split(' ')[0] || '$ai';
         return sock.sendMessage(chatId,
-            { text: `🤖 Usage: ${endpoint.replace(/\s.*/, '')} <your question>` },
+            { text: `🤖 Usage: ${usageCmd} <your question>` },
             { quoted: message });
     }
     try {
