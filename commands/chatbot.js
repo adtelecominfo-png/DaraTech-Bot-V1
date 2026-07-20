@@ -2,7 +2,6 @@
 const fs = require('fs');
 const path = require('path');
 const { get } = require('../lib/gifted');
-const { callPollinationsAI } = require('../lib/pollinations');
 
 const USER_GROUP_DATA = path.join(__dirname, '../data/userGroupData.json');
 
@@ -62,16 +61,27 @@ async function getAIResponse(userMessage, context) {
     if (userCtx.name) sys += ` The user's name is ${userCtx.name}.`;
     if (userCtx.location) sys += ` They are from ${userCtx.location}.`;
 
-    // Primary: Pollinations openai-fast
+    const fullQuery = `${sys}\n\nUser: ${userMessage}\n\nVelora:`;
+
+    // Primary: Gifted /ai/pollinations with openai-fast
     try {
-        let reply = await callPollinationsAI(userMessage, 'openai-fast', sys, 800, 0.9);
+        const data = await get('/ai/pollinations', { q: fullQuery, model: 'openai-fast' }, 20000);
+        if (!data?.success) throw new Error(data?.message || 'no response');
+        let reply = typeof data.result === 'string'
+            ? data.result
+            : (data.result?.answer || JSON.stringify(data.result));
         reply = reply.replace(/^(Velora|Dara|Bot|AI|Assistant):\s*/i, '').trim();
         if (reply && reply.length <= 2000) return reply;
+        throw new Error('empty or oversized');
     } catch {}
 
-    // Fallback: Pollinations openai
+    // Fallback: Gifted /ai/overchat with gpt4
     try {
-        let reply = await callPollinationsAI(userMessage, 'openai', sys, 800, 0.9);
+        const data = await get('/ai/overchat', { q: fullQuery, model: 'gpt4' }, 25000);
+        if (!data?.success) throw new Error(data?.message || 'no response');
+        let reply = typeof data.result === 'string'
+            ? data.result
+            : (data.result?.answer || JSON.stringify(data.result));
         reply = reply.replace(/^(Velora|Dara|Bot|AI|Assistant):\s*/i, '').trim();
         if (reply && reply.length <= 2000) return reply;
     } catch {}
