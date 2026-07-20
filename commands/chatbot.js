@@ -229,9 +229,50 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
         }
     }
 
-    if (!query) {
+    // Extract quoted message content if this is a reply
+    const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    let quotedText = '';
+    let quotedType = '';
+    if (quoted) {
+        quotedText = quoted.conversation
+            || quoted.extendedTextMessage?.text
+            || quoted.imageMessage?.caption
+            || quoted.videoMessage?.caption
+            || quoted.documentMessage?.caption
+            || '';
+        if (!quotedText) {
+            if (quoted.imageMessage)    quotedType = 'image';
+            else if (quoted.videoMessage)   quotedType = 'video';
+            else if (quoted.stickerMessage) quotedType = 'sticker';
+            else if (quoted.audioMessage)   quotedType = 'audio';
+            else if (quoted.documentMessage) quotedType = 'document';
+        }
+    }
+
+    // Build final query:
+    // - reply with no extra text   → use quoted content
+    // - reply + extra text         → "extra text" + context about quoted
+    // - no reply, no text          → show usage
+    let finalQuery = query;
+    if (quoted) {
+        if (query && quotedText) {
+            // User typed something AND replied to text → combine
+            finalQuery = `${query}\n\n(replying to: "${quotedText}")`;
+        } else if (query && !quotedText) {
+            // Replied to media with extra text
+            finalQuery = `${query}\n\n(replying to a ${quotedType || 'message'})`;
+        } else if (!query && quotedText) {
+            // Just replied to text with no extra input → use quoted text as the prompt
+            finalQuery = quotedText;
+        } else if (!query && !quotedText) {
+            // Replied to media with no extra text → ask about it
+            finalQuery = `What can you tell me about a ${quotedType || 'message'} someone shared?`;
+        }
+    }
+
+    if (!finalQuery) {
         return sock.sendMessage(chatId, {
-            text: '🤖 *BOTCHAT*\n\nUsage: *.botchat <your message>*\nExample: *.botchat What is the capital of Nigeria?*\n\n_You can also @mention the bot or reply to any of its messages_ ⚡',
+            text: '🤖 *BOTCHAT*\n\nUsage:\n▸ *.botchat <your message>*\n▸ Reply to any text/image/video with *.botchat* to discuss it\n▸ Reply with *.botchat <question>* to ask about it\n\nExample: *.botchat What is the capital of Nigeria?*\n\n_You can also @mention the bot or reply to any of its messages_ ⚡',
             quoted: message
         });
     }
@@ -243,19 +284,19 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
     }
 
     // Extract user info
-    const userInfo = extractUserInfo(query, senderId);
+    const userInfo = extractUserInfo(finalQuery, senderId);
     if (Object.keys(userInfo).length > 0) {
         chatMemory.userInfo.set(senderId, { ...chatMemory.userInfo.get(senderId), ...userInfo });
     }
 
     // Add to message history
     const msgs = chatMemory.messages.get(senderId);
-    msgs.push({ role: 'user', content: query });
+    msgs.push({ role: 'user', content: finalQuery });
     if (msgs.length > 20) msgs.splice(0, msgs.length - 20);
 
     await showTyping(sock, chatId);
 
-    const response = await getAIResponse(query, {
+    const response = await getAIResponse(finalQuery, {
         messages: chatMemory.messages.get(senderId),
         userInfo: chatMemory.userInfo.get(senderId),
         chatType: chatId.endsWith('@g.us') ? 'group' : 'private',
