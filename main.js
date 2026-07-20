@@ -95,7 +95,7 @@ const githubCommand = require('./commands/github');
 const { handleAntiBadwordCommand, handleBadwordDetection } = require('./lib/antibadword');
 const antibadwordCommand = require('./commands/antibadword');
 const { handleChatbotCommand, handleChatbotResponse, handleBotchatCommand, handleVeloraNameTrigger } = require('./commands/chatbot');
-const dirCommand = require('./commands/dir');
+const { dirCommand, searchDirCommand } = require('./commands/dir');
 const takeCommand = require('./commands/take');
 const { flirtCommand } = require('./commands/flirt');
 const characterCommand = require('./commands/character');
@@ -565,7 +565,11 @@ case userMessage.startsWith('$pinterest'):
     commandExecuted = true;
     break;
 
-case userMessage.startsWith('$pin') && !userMessage.startsWith('$pinterest'):
+case userMessage.startsWith('$pin') &&
+     !userMessage.startsWith('$pinterest') &&
+     !userMessage.startsWith('$pindl') &&
+     !userMessage.startsWith('$pintdl') &&
+     !userMessage.startsWith('$pdl'):
     await pinCommand(sock, chatId, message);
     commandExecuted = true;
     break;
@@ -1914,6 +1918,11 @@ case userMessage.startsWith('$bssensi'):
                 commandExecuted = true;
                 break;
 
+
+            case userMessage.startsWith('$dir search'):
+                await searchDirCommand(sock, chatId, message, userMessage.slice(11).trim());
+                commandExecuted = true;
+                break;
 
             case userMessage === '$dir' || userMessage.startsWith('$dir '):
                 if (!await getSenderIsOwnerOrSudo()) {
