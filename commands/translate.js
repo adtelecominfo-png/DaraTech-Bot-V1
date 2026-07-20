@@ -29,7 +29,6 @@ async function handleTranslateCommand(sock, chatId, message, match) {
                 mc.viewOnceMessage?.message?.extendedTextMessage?.contextInfo ||
                 mc.viewOnceMessageV2?.message?.extendedTextMessage?.contextInfo;
             if (direct) return direct;
-            // Generic scan — covers any wrapping type
             for (const key of Object.keys(mc)) {
                 const val = mc[key];
                 if (val && typeof val === 'object') {
@@ -45,10 +44,9 @@ async function handleTranslateCommand(sock, chatId, message, match) {
 
         const contextInfo = findContextInfo(msgContent);
 
-        // ── Extract text from a message object ────────────────────────────────
+        // ── Extract text from any message object ──────────────────────────────
         function extractText(msg) {
             if (!msg) return '';
-            // Could be a quotedMessage payload or a full stored message
             const m = msg.message || msg;
             return (
                 m.conversation ||
@@ -64,22 +62,18 @@ async function handleTranslateCommand(sock, chatId, message, match) {
             );
         }
 
-        // ── Resolve quoted message ────────────────────────────────────────────
-        // When replying to a fromMe message, WhatsApp omits quotedMessage and only
-        // sends a stanzaId reference. Look it up from the local message store.
+        // ── Resolve quoted text ───────────────────────────────────────────────
         let quotedText = '';
 
         if (contextInfo) {
-            const qm = contextInfo.quotedMessage;
-            if (qm) {
-                quotedText = extractText(qm);
+            if (contextInfo.quotedMessage) {
+                quotedText = extractText(contextInfo.quotedMessage);
             }
-
+            // Fallback: stanzaId store lookup (works for non-fromMe quoted messages)
             if (!quotedText && contextInfo.stanzaId) {
-                // Try store lookup — covers fromMe quoted messages
                 try {
-                    const storedMsg = await store.loadMessage(chatId, contextInfo.stanzaId);
-                    if (storedMsg) quotedText = extractText(storedMsg);
+                    const stored = await store.loadMessage(chatId, contextInfo.stanzaId);
+                    if (stored) quotedText = extractText(stored);
                 } catch (_) {}
             }
         }
@@ -88,7 +82,6 @@ async function handleTranslateCommand(sock, chatId, message, match) {
             // ── Reply mode ────────────────────────────────────────────────────
             lang = query;
             textToTranslate = quotedText;
-
             if (!lang) {
                 return sock.sendMessage(chatId, {
                     text: `❌ Please provide a language code.\nExample: *$translate en*`,
@@ -102,19 +95,19 @@ async function handleTranslateCommand(sock, chatId, message, match) {
                 lang = parts.pop().trim();
                 textToTranslate = parts.join('|').trim();
             } else {
-                // If it looks like a bare lang code the user meant reply mode but
-                // the quoted message wasn't stored — give a clear error.
                 const looksLikeLangCode = /^[a-zA-Z]{2,5}$/.test(query);
                 if (looksLikeLangCode) {
-                    // Debug: show what we actually see in the message structure
-                    const mc = message.message || {};
-                    const ci = findContextInfo(mc);
-                    const debugInfo = [
-                        `fromMe: ${message.key?.fromMe}`,
-                        `full msg: ${JSON.stringify(mc)?.slice(0, 500)}`,
-                    ].filter(Boolean).join('\n');
+                    // Detect if this is the owner using their own phone (fromMe)
+                    // WhatsApp strips reply context from self-sent message echoes,
+                    // so the bot can never read the quoted message in that case.
+                    const isOwnerPhone = message.key?.fromMe === true;
+                    if (isOwnerPhone) {
+                        return sock.sendMessage(chatId, {
+                            text: `⚠️ *Reply translation doesn't work when you send from the bot's own number.*\n\nWhatsApp strips the reply context from messages you send yourself.\n\n*Workaround — paste the text directly:*\n*$translate <text> | ${query}*\n\nExample:\n_$translate Arigatou gozaimasu | en_`,
+                        }, { quoted: message });
+                    }
                     return sock.sendMessage(chatId, {
-                        text: `❌ Couldn't read the quoted message.\n\n_Debug:_\n${debugInfo}\n\nOr paste directly:\n*$translate text here | ${query}*`,
+                        text: `❌ No reply context found.\n\nReply to a message and send: *$translate ${query}*\n\nOr paste directly: *$translate text | ${query}*`,
                     }, { quoted: message });
                 }
 
