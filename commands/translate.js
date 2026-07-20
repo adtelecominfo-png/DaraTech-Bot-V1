@@ -1,4 +1,5 @@
 const fetch = require('node-fetch');
+const store = require('../lib/lightweight_store');
 
 async function handleTranslateCommand(sock, chatId, message, match) {
     try {
@@ -13,11 +14,10 @@ async function handleTranslateCommand(sock, chatId, message, match) {
 
         const query = match.trim();
 
-        // ── Extract contextInfo from ANY message type ─────────────────────────
+        // ── Find contextInfo from any message type ────────────────────────────
         const msgContent = message.message || {};
 
         function findContextInfo(mc) {
-            // Check all known types that carry contextInfo
             const direct =
                 mc.extendedTextMessage?.contextInfo ||
                 mc.imageMessage?.contextInfo ||
@@ -29,13 +29,11 @@ async function handleTranslateCommand(sock, chatId, message, match) {
                 mc.viewOnceMessage?.message?.extendedTextMessage?.contextInfo ||
                 mc.viewOnceMessageV2?.message?.extendedTextMessage?.contextInfo;
             if (direct) return direct;
-
-            // Generic scan: check every top-level key for a contextInfo property
+            // Generic scan — covers any wrapping type
             for (const key of Object.keys(mc)) {
                 const val = mc[key];
                 if (val && typeof val === 'object') {
                     if (val.contextInfo) return val.contextInfo;
-                    // one level deeper (e.g. wrapping messages)
                     for (const k2 of Object.keys(val)) {
                         const v2 = val[k2];
                         if (v2 && typeof v2 === 'object' && v2.contextInfo) return v2.contextInfo;
@@ -46,35 +44,51 @@ async function handleTranslateCommand(sock, chatId, message, match) {
         }
 
         const contextInfo = findContextInfo(msgContent);
-        const quotedMessage = contextInfo?.quotedMessage || null;
 
-        // ── Extract text from quoted message (all common sub-types) ───────────
-        function quotedText(qm) {
-            if (!qm) return '';
+        // ── Extract text from a message object ────────────────────────────────
+        function extractText(msg) {
+            if (!msg) return '';
+            // Could be a quotedMessage payload or a full stored message
+            const m = msg.message || msg;
             return (
-                qm.conversation ||
-                qm.extendedTextMessage?.text ||
-                qm.imageMessage?.caption ||
-                qm.videoMessage?.caption ||
-                qm.documentMessage?.caption ||
-                qm.buttonsMessage?.contentText ||
-                qm.listMessage?.description ||
-                qm.ephemeralMessage?.message?.conversation ||
-                qm.ephemeralMessage?.message?.extendedTextMessage?.text ||
+                m.conversation ||
+                m.extendedTextMessage?.text ||
+                m.imageMessage?.caption ||
+                m.videoMessage?.caption ||
+                m.documentMessage?.caption ||
+                m.buttonsMessage?.contentText ||
+                m.listMessage?.description ||
+                m.ephemeralMessage?.message?.conversation ||
+                m.ephemeralMessage?.message?.extendedTextMessage?.text ||
                 ''
             );
         }
 
-        if (quotedMessage) {
-            // ── Reply mode: $translate <lang> ─────────────────────────────────
-            textToTranslate = quotedText(quotedMessage);
-            lang = query;
+        // ── Resolve quoted message ────────────────────────────────────────────
+        // When replying to a fromMe message, WhatsApp omits quotedMessage and only
+        // sends a stanzaId reference. Look it up from the local message store.
+        let quotedText = '';
 
-            if (!textToTranslate) {
-                return sock.sendMessage(chatId, {
-                    text: `❌ Couldn't read the quoted message text.\nTry: *$translate <text> | ${lang || 'en'}*`,
-                }, { quoted: message });
+        if (contextInfo) {
+            const qm = contextInfo.quotedMessage;
+            if (qm) {
+                quotedText = extractText(qm);
             }
+
+            if (!quotedText && contextInfo.stanzaId) {
+                // Try store lookup — covers fromMe quoted messages
+                try {
+                    const storedMsg = await store.loadMessage(chatId, contextInfo.stanzaId);
+                    if (storedMsg) quotedText = extractText(storedMsg);
+                } catch (_) {}
+            }
+        }
+
+        if (quotedText) {
+            // ── Reply mode ────────────────────────────────────────────────────
+            lang = query;
+            textToTranslate = quotedText;
+
             if (!lang) {
                 return sock.sendMessage(chatId, {
                     text: `❌ Please provide a language code.\nExample: *$translate en*`,
@@ -82,22 +96,21 @@ async function handleTranslateCommand(sock, chatId, message, match) {
             }
 
         } else {
-            // ── Direct mode: $translate <text> | <lang> ───────────────────────
+            // ── Direct mode ───────────────────────────────────────────────────
             if (query.includes('|')) {
                 const parts = query.split('|');
                 lang = parts.pop().trim();
                 textToTranslate = parts.join('|').trim();
             } else {
-                // If input looks like a plain lang code (no spaces, ≤5 chars),
-                // the user almost certainly meant reply mode but the reply wasn't detected.
+                // If it looks like a bare lang code the user meant reply mode but
+                // the quoted message wasn't stored — give a clear error.
                 const looksLikeLangCode = /^[a-zA-Z]{2,5}$/.test(query);
                 if (looksLikeLangCode) {
                     return sock.sendMessage(chatId, {
-                        text: `❌ No quoted message found.\n\nTo translate, *reply* to the message you want to translate, then send:\n*$translate ${query}*\n\nOr translate text directly:\n*$translate Hello world | ${query}*`,
+                        text: `❌ Couldn't read the quoted message.\n\nThe message you replied to may not be in the bot's memory yet.\n\n*Try this instead:*\nCopy the text and use:\n*$translate ${query} | <paste text here>*\n\nOr use the pipe format:\n*$translate نموهمزه | ${query}*`,
                     }, { quoted: message });
                 }
 
-                // Legacy: last space-separated token is the lang
                 const args = query.split(/\s+/);
                 if (args.length < 2) {
                     return sock.sendMessage(chatId, { text: USAGE }, { quoted: message });
@@ -111,16 +124,16 @@ async function handleTranslateCommand(sock, chatId, message, match) {
             return sock.sendMessage(chatId, { text: USAGE }, { quoted: message });
         }
 
-        // ── Try translation APIs in sequence ──────────────────────────────────
+        // ── Translation API chain ─────────────────────────────────────────────
         let translatedText = null;
 
         // API 1 — Google Translate (unofficial)
         try {
-            const response = await fetch(
+            const res = await fetch(
                 `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(lang)}&dt=t&q=${encodeURIComponent(textToTranslate)}`
             );
-            if (response.ok) {
-                const data = await response.json();
+            if (res.ok) {
+                const data = await res.json();
                 if (data?.[0]?.[0]?.[0]) translatedText = data[0][0][0];
             }
         } catch (_) {}
@@ -128,11 +141,11 @@ async function handleTranslateCommand(sock, chatId, message, match) {
         // API 2 — MyMemory
         if (!translatedText) {
             try {
-                const response = await fetch(
+                const res = await fetch(
                     `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=auto|${lang}`
                 );
-                if (response.ok) {
-                    const data = await response.json();
+                if (res.ok) {
+                    const data = await res.json();
                     if (data?.responseData?.translatedText) translatedText = data.responseData.translatedText;
                 }
             } catch (_) {}
@@ -141,11 +154,11 @@ async function handleTranslateCommand(sock, chatId, message, match) {
         // API 3 — Dreaded
         if (!translatedText) {
             try {
-                const response = await fetch(
+                const res = await fetch(
                     `https://api.dreaded.site/api/translate?text=${encodeURIComponent(textToTranslate)}&lang=${lang}`
                 );
-                if (response.ok) {
-                    const data = await response.json();
+                if (res.ok) {
+                    const data = await res.json();
                     if (data?.translated) translatedText = data.translated;
                 }
             } catch (_) {}
