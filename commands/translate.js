@@ -97,18 +97,28 @@ async function handleTranslateCommand(sock, chatId, message, match) {
             } else {
                 const looksLikeLangCode = /^[a-zA-Z]{2,5}$/.test(query);
                 if (looksLikeLangCode) {
-                    // Detect if this is the owner using their own phone (fromMe)
-                    // WhatsApp strips reply context from self-sent message echoes,
-                    // so the bot can never read the quoted message in that case.
-                    const isOwnerPhone = message.key?.fromMe === true;
-                    if (isOwnerPhone) {
+                    // WhatsApp strips reply context from self-echoes (fromMe messages).
+                    // Best-effort fallback: translate the most recent incoming message
+                    // in this chat from the store.
+                    const chatMessages = store.messages[chatId];
+                    if (Array.isArray(chatMessages) && chatMessages.length) {
+                        // Walk backwards to find the latest non-fromMe message
+                        for (let i = chatMessages.length - 1; i >= 0; i--) {
+                            const m = chatMessages[i];
+                            if (m.key?.fromMe) continue;
+                            const t = extractText(m);
+                            if (t) {
+                                textToTranslate = t;
+                                lang = query;
+                                break;
+                            }
+                        }
+                    }
+                    if (!textToTranslate) {
                         return sock.sendMessage(chatId, {
-                            text: `⚠️ *Reply translation doesn't work when you send from the bot's own number.*\n\nWhatsApp strips the reply context from messages you send yourself.\n\n*Workaround — paste the text directly:*\n*$translate <text> | ${query}*\n\nExample:\n_$translate Arigatou gozaimasu | en_`,
+                            text: `❌ Couldn't find a recent message to translate.\n\nPaste the text directly:\n*$translate <text> | ${query}*`,
                         }, { quoted: message });
                     }
-                    return sock.sendMessage(chatId, {
-                        text: `❌ No reply context found.\n\nReply to a message and send: *$translate ${query}*\n\nOr paste directly: *$translate text | ${query}*`,
-                    }, { quoted: message });
                 }
 
                 const args = query.split(/\s+/);
