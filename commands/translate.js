@@ -109,15 +109,9 @@ async function handleTranslateCommand(sock, chatId, message, match) {
                     // Debug: show what we actually see in the message structure
                     const mc = message.message || {};
                     const ci = findContextInfo(mc);
-                    const msgTopKeys = Object.keys(message).join(', ');
-                    const etm = mc.extendedTextMessage || {};
                     const debugInfo = [
-                        `msg keys: ${msgTopKeys}`,
-                        `msg.quoted: ${JSON.stringify(message.quoted)?.slice(0, 100)}`,
-                        `msg.msg keys: ${message.msg ? Object.keys(message.msg).join(', ') : 'none'}`,
-                        `msg.msg.contextInfo: ${JSON.stringify(message.msg?.contextInfo)?.slice(0, 120)}`,
-                        `etm keys: ${Object.keys(etm).join(', ')}`,
-                        `etm.contextInfo: ${JSON.stringify(etm.contextInfo)?.slice(0, 120)}`,
+                        `fromMe: ${message.key?.fromMe}`,
+                        `full msg: ${JSON.stringify(mc)?.slice(0, 500)}`,
                     ].filter(Boolean).join('\n');
                     return sock.sendMessage(chatId, {
                         text: `❌ Couldn't read the quoted message.\n\n_Debug:_\n${debugInfo}\n\nOr paste directly:\n*$translate text here | ${query}*`,
