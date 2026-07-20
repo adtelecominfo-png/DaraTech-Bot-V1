@@ -385,7 +385,9 @@ async function uploadRcImage(imgMsg) {
     fs.writeFileSync(tmpPath, Buffer.concat(chunks));
     try {
         const res = await UploadFileUgu(tmpPath);
-        return typeof res === 'string' ? res : (res.url || res.url_full);
+        const uploadedUrl = typeof res === 'string' ? res : (res?.url || res?.url_full);
+        if (!uploadedUrl) throw new Error('Image upload returned no URL');
+        return uploadedUrl;
     } finally {
         setTimeout(() => { try { fs.unlinkSync(tmpPath); } catch {} }, 3000);
     }

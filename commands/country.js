@@ -30,7 +30,12 @@ async function countryCommand(sock, chatId, message) {
             `╰━━━━━━━━━━━━━━━━━━━╯\n\n_Daratech_ ⚡`;
         const flag = c.flags?.png || c.flags?.svg;
         if (flag) {
-            await sock.sendMessage(chatId, { image: { url: flag }, caption: txt }, { quoted: message });
+            try {
+                const imgRes = await axios.get(flag, { responseType: 'arraybuffer', timeout: 15000 });
+                await sock.sendMessage(chatId, { image: Buffer.from(imgRes.data), caption: txt }, { quoted: message });
+            } catch {
+                await sock.sendMessage(chatId, { text: txt }, { quoted: message });
+            }
         } else {
             await sock.sendMessage(chatId, { text: txt }, { quoted: message });
         }
@@ -66,8 +71,9 @@ async function flagCommand(sock, chatId, message) {
         const c = data[0];
         const flag = c.flags?.png || c.flags?.svg;
         if (!flag) return sock.sendMessage(chatId, { text: `❌ No flag found for "*${name}*".` }, { quoted: message });
+        const imgRes = await axios.get(flag, { responseType: 'arraybuffer', timeout: 15000 });
         await sock.sendMessage(chatId, {
-            image: { url: flag },
+            image: Buffer.from(imgRes.data),
             caption: `🚩 *Flag of ${c.name?.common}* ${c.flag || ''}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch {

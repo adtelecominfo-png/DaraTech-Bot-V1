@@ -244,6 +244,8 @@ const { ttpCommand, canvasCommand, topdfCommand, web2zipCommand, proxyCommand, o
 const { konachanCommand, kusonimeCommand, animenewCommand, charquoteCommand, showquoteCommand } = require('./commands/gifted-anime');
 const { friendshipCommand, lovetextCommand, heartbreakCommand, gratitudeCommand, thankyouCommand, newyearCommand, xmasCommand, halloweenCommand, valentinesCommand, mothersdayCommand, fathersdayCommand, bfdayCommand, gfdayCommand } = require('./commands/gifted-fun');
 const { gsearchCommand, gimageCommand, ttsearchCommand, chordCommand, hearthisCommand, npmpkgCommand, slyricsCommand, happymodCommand, scsearchCommand, wattpadCommand, stickersearchCommand } = require('./commands/gifted-search');
+const getCommand  = require('./commands/get');
+const qcardCommand = require('./commands/qcard');
 const { textproCommand } = require('./commands/gifted-textpro');
 const { ephotoCommand, ephoto2Command, ephotolistCommand } = require('./commands/gifted-ephoto');
 const { tempphoneCommand, smsinboxCommand } = require('./commands/gifted-tempgen');
@@ -881,6 +883,12 @@ case userMessage.startsWith('$bssensi'):
                 break;
             case userMessage === '$meme':
                 await memeCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$get ') || userMessage === '$get':
+                await getCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$q') && (userMessage === '$q' || userMessage.startsWith('$q ')):
+                await qcardCommand(sock, chatId, message);
                 break;
             case userMessage === '$joke':
                 await jokeCommand(sock, chatId, message);

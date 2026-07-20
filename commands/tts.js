@@ -8,8 +8,10 @@ async function ttsCommand(sock, chatId, text, message, language = 'en') {
         return;
     }
 
+    const tmpDir = path.join(__dirname, '../temp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
     const fileName = `tts-${Date.now()}.mp3`;
-    const filePath = path.join(__dirname, '..', 'assets', fileName);
+    const filePath = path.join(tmpDir, fileName);
 
     await sock.sendMessage(chatId, { text: '🗣️ Converting text to speech……' }, { quoted: message });
     const gtts = new gTTS(text, language);

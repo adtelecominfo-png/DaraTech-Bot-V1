@@ -3,6 +3,11 @@ const axios = require('axios');
 
 const SRA = 'https://some-random-api.com/animal';
 
+async function fetchImgBuf(url) {
+    const res = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+    return Buffer.from(res.data);
+}
+
 async function catfactCommand(sock, chatId, message) {
     try {
         const { data } = await axios.get('https://catfact.ninja/fact', { timeout: 8000 });
@@ -16,7 +21,7 @@ async function catimageCommand(sock, chatId, message) {
     try {
         const { data } = await axios.get(`${SRA}/cat`, { timeout: 10000 });
         await sock.sendMessage(chatId, {
-            image: { url: data.image },
+            image: await fetchImgBuf(data.image),
             caption: `🐱 *RANDOM CAT* 🐱\n\n💡 ${data.fact || ''}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch {
@@ -37,7 +42,7 @@ async function dogimageCommand(sock, chatId, message) {
     try {
         const { data } = await axios.get(`${SRA}/dog`, { timeout: 10000 });
         await sock.sendMessage(chatId, {
-            image: { url: data.image },
+            image: await fetchImgBuf(data.image),
             caption: `🐶 *RANDOM DOG* 🐶\n\n💡 ${data.fact || ''}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch {
@@ -49,7 +54,7 @@ async function foxImageCommand(sock, chatId, message) {
     try {
         const { data } = await axios.get(`${SRA}/fox`, { timeout: 10000 });
         await sock.sendMessage(chatId, {
-            image: { url: data.image },
+            image: await fetchImgBuf(data.image),
             caption: `🦊 *RANDOM FOX*\n\n💡 ${data.fact || ''}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch {
@@ -61,7 +66,7 @@ async function pandaImageCommand(sock, chatId, message) {
     try {
         const { data } = await axios.get(`${SRA}/panda`, { timeout: 10000 });
         await sock.sendMessage(chatId, {
-            image: { url: data.image },
+            image: await fetchImgBuf(data.image),
             caption: `🐼 *RANDOM PANDA*\n\n💡 ${data.fact || ''}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch {
@@ -73,7 +78,7 @@ async function koalaImageCommand(sock, chatId, message) {
     try {
         const { data } = await axios.get(`${SRA}/koala`, { timeout: 10000 });
         await sock.sendMessage(chatId, {
-            image: { url: data.image },
+            image: await fetchImgBuf(data.image),
             caption: `🐨 *RANDOM KOALA*\n\n💡 ${data.fact || ''}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch {
@@ -85,7 +90,7 @@ async function birbCommand(sock, chatId, message) {
     try {
         const { data } = await axios.get(`${SRA}/birb`, { timeout: 10000 });
         await sock.sendMessage(chatId, {
-            image: { url: data.image },
+            image: await fetchImgBuf(data.image),
             caption: `🐦 *RANDOM BIRD*\n\n💡 ${data.fact || ''}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch {
@@ -97,7 +102,7 @@ async function raccoonCommand(sock, chatId, message) {
     try {
         const { data } = await axios.get(`${SRA}/raccoon`, { timeout: 10000 });
         await sock.sendMessage(chatId, {
-            image: { url: data.image },
+            image: await fetchImgBuf(data.image),
             caption: `🦝 *RANDOM RACCOON*\n\n💡 ${data.fact || ''}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     } catch {

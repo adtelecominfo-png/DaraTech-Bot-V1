@@ -1,4 +1,5 @@
 'use strict';
+const axios = require('axios');
 /**
  * commands/gifted-search.js — Gifted Search API commands
  * Base: https://api.gifted.co.ke/api/search/<endpoint>
@@ -79,8 +80,9 @@ async function gimageCommand(sock, chatId, message) {
         if (!data?.success || !data?.results?.length) throw new Error(data?.error || 'No images found');
         const imgUrl = data.results.find(u => typeof u === 'string' && u.startsWith('http'));
         if (!imgUrl) throw new Error('No valid image URL in results');
+        const imgRes = await axios.get(imgUrl, { responseType: 'arraybuffer', timeout: 20000, headers: { 'User-Agent': 'Mozilla/5.0' } });
         await sock.sendMessage(chatId, {
-            image: { url: imgUrl },
+            image: Buffer.from(imgRes.data),
             caption: `🖼️ *GOOGLE IMAGES — "${q}"*\n\n_${data.results.length} results found_\n\n_Daratech_ ⚡`,
         }, { quoted: message });
         await react(sock, message, '✅');

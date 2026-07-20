@@ -7,6 +7,7 @@
  * Usage: $textpro <style> <text>   OR   $textpro  (shows style list)
  */
 
+const axios = require('axios');
 const { textproGet } = require('../lib/gifted');
 
 // ─── Curated style list ───────────────────────────────────────────────────────
@@ -121,7 +122,7 @@ async function textproCommand(sock, chatId, message) {
             const data = await textproGet(rawEndpoint, { text });
             if (!data?.success || !data?.result?.image_url) throw new Error(data?.error || 'No image returned');
             await sock.sendMessage(chatId, {
-                image: { url: data.result.image_url },
+                image: await (async () => { const r = await require('axios').get(data.result.image_url, { responseType: 'arraybuffer', timeout: 20000, headers: { 'User-Agent': 'Mozilla/5.0' } }); return Buffer.from(r.data); })(),
                 caption: `✨ *${rawEndpoint.toUpperCase()}*\n"${text}"\n\n_Daratech_ ⚡`,
             }, { quoted: message });
             await react(sock, message, '✅');
@@ -144,7 +145,7 @@ async function textproCommand(sock, chatId, message) {
         const data = await textproGet(endpoint, { text });
         if (!data?.success || !data?.result?.image_url) throw new Error(data?.error || 'No image returned');
         await sock.sendMessage(chatId, {
-            image: { url: data.result.image_url },
+            image: await (async () => { const r = await require('axios').get(data.result.image_url, { responseType: 'arraybuffer', timeout: 20000, headers: { 'User-Agent': 'Mozilla/5.0' } }); return Buffer.from(r.data); })(),
             caption: `✨ *TEXTPRO — ${alias.toUpperCase()}*\n"${text}"\n\n_Daratech_ ⚡`,
         }, { quoted: message });
         await react(sock, message, '✅');
