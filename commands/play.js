@@ -1,6 +1,5 @@
 'use strict';
 const yts   = require('yt-search');
-const axios = require('axios');
 const { get } = require('../lib/gifted');
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -34,21 +33,6 @@ function pickDl(result) {
         || null;
 }
 
-/** Download a URL to a Buffer — increased timeout for large audio files */
-async function toBuffer(url, timeout = 120000) {
-    const res = await axios.get(url, {
-        responseType: 'arraybuffer',
-        timeout,
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': '*/*',
-        },
-    });
-    return Buffer.from(res.data);
-}
-
 async function sendBanner(sock, chatId, message, meta, action) {
     const caption = [
         `🎵 *${meta.title}*`,
@@ -69,7 +53,7 @@ async function sendBanner(sock, chatId, message, meta, action) {
     return sock.sendMessage(chatId, { text: caption }, { quoted: message });
 }
 
-// ─── $play — YouTube audio with multi-endpoint fallback ──────────────────────
+// ─── $play — YouTube audio (ytaudio → ytmp3 fallback) ────────────────────────
 
 async function playCommand(sock, chatId, message) {
     try {
@@ -81,33 +65,33 @@ async function playCommand(sock, chatId, message) {
         const meta = await ytSearch(input);
         await sendBanner(sock, chatId, message, meta, 'Downloading audio…');
 
-        // Try three endpoints in order until one works
+        // Increased timeout: audio processing on GiftedTech can take 30–60s
         const endpoints = [
-            () => get('/download/ytaudio',    { url: meta.url }),
-            () => get('/download/ytmp3',      { url: meta.url, quality: '128kbps' }),
-            () => get('/download/savetubemp3',{ url: meta.url }),
+            () => get('/download/ytaudio',    { url: meta.url }, 90000),
+            () => get('/download/ytmp3',      { url: meta.url, quality: '128kbps' }, 90000),
+            () => get('/download/savetubemp3',{ url: meta.url }, 90000),
         ];
 
-        let buf = null;
+        let dl    = null;
         let title = meta.title;
 
         for (const endpoint of endpoints) {
             try {
                 const data = await endpoint();
-                const dl   = pickDl(data?.result);
-                if (!dl) continue;
+                const url  = pickDl(data?.result);
+                if (!url) continue;
                 title = data?.result?.title || title;
-                buf   = await toBuffer(dl);
+                dl    = url;
                 break;
             } catch { /* try next */ }
         }
 
-        if (!buf) throw new Error('All endpoints failed');
+        if (!dl) throw new Error('All endpoints failed');
 
+        // Send via URL — Baileys downloads + re-uploads to WhatsApp CDN
         await sock.sendMessage(chatId, {
-            audio:    buf,
+            audio:    { url: dl },
             mimetype: 'audio/mpeg',
-            fileName: `${title}.mp3`,
             ptt:      false,
         }, { quoted: message });
     } catch (err) {
@@ -130,31 +114,30 @@ async function play2Command(sock, chatId, message) {
         await sendBanner(sock, chatId, message, meta, 'Downloading via SaveTube…');
 
         const endpoints = [
-            () => get('/download/savetubemp3', { url: meta.url }),
-            () => get('/download/ytmp3',       { url: meta.url, quality: '320kbps' }),
-            () => get('/download/ytaudio',     { url: meta.url }),
+            () => get('/download/savetubemp3', { url: meta.url }, 90000),
+            () => get('/download/ytmp3',       { url: meta.url, quality: '320kbps' }, 90000),
+            () => get('/download/ytaudio',     { url: meta.url }, 90000),
         ];
 
-        let buf = null;
+        let dl    = null;
         let title = meta.title;
 
         for (const endpoint of endpoints) {
             try {
                 const data = await endpoint();
-                const dl   = pickDl(data?.result);
-                if (!dl) continue;
+                const url  = pickDl(data?.result);
+                if (!url) continue;
                 title = data?.result?.title || title;
-                buf   = await toBuffer(dl);
+                dl    = url;
                 break;
             } catch { /* try next */ }
         }
 
-        if (!buf) throw new Error('All endpoints failed');
+        if (!dl) throw new Error('All endpoints failed');
 
         await sock.sendMessage(chatId, {
-            audio:    buf,
+            audio:    { url: dl },
             mimetype: 'audio/mpeg',
-            fileName: `${title}.mp3`,
             ptt:      false,
         }, { quoted: message });
     } catch (err) {
@@ -163,7 +146,7 @@ async function play2Command(sock, chatId, message) {
     }
 }
 
-// ─── $playdoc — YouTube audio as document ────────────────────────────────────
+// ─── $playdoc — YouTube audio sent as document file ──────────────────────────
 
 async function playDocCommand(sock, chatId, message) {
     try {
@@ -177,29 +160,29 @@ async function playDocCommand(sock, chatId, message) {
         await sendBanner(sock, chatId, message, meta, 'Downloading audio file…');
 
         const endpoints = [
-            () => get('/download/savetubemp3', { url: meta.url }),
-            () => get('/download/ytmp3',       { url: meta.url, quality: '320kbps' }),
-            () => get('/download/ytaudio',     { url: meta.url }),
+            () => get('/download/savetubemp3', { url: meta.url }, 90000),
+            () => get('/download/ytmp3',       { url: meta.url, quality: '320kbps' }, 90000),
+            () => get('/download/ytaudio',     { url: meta.url }, 90000),
         ];
 
-        let buf = null;
+        let dl    = null;
         let title = meta.title;
 
         for (const endpoint of endpoints) {
             try {
                 const data = await endpoint();
-                const dl   = pickDl(data?.result);
-                if (!dl) continue;
+                const url  = pickDl(data?.result);
+                if (!url) continue;
                 title = data?.result?.title || title;
-                buf   = await toBuffer(dl);
+                dl    = url;
                 break;
             } catch { /* try next */ }
         }
 
-        if (!buf) throw new Error('All endpoints failed');
+        if (!dl) throw new Error('All endpoints failed');
 
         await sock.sendMessage(chatId, {
-            document: buf,
+            document: { url: dl },
             mimetype: 'audio/mpeg',
             fileName: `${title}.mp3`,
         }, { quoted: message });
@@ -223,31 +206,30 @@ async function playChCommand(sock, chatId, message) {
         await sendBanner(sock, chatId, message, meta, 'Downloading 320kbps audio…');
 
         const endpoints = [
-            () => get('/download/ytmp3',       { url: meta.url, quality: '320kbps' }),
-            () => get('/download/savetubemp3', { url: meta.url }),
-            () => get('/download/ytaudio',     { url: meta.url }),
+            () => get('/download/ytmp3',       { url: meta.url, quality: '320kbps' }, 90000),
+            () => get('/download/savetubemp3', { url: meta.url }, 90000),
+            () => get('/download/ytaudio',     { url: meta.url }, 90000),
         ];
 
-        let buf = null;
+        let dl    = null;
         let title = meta.title;
 
         for (const endpoint of endpoints) {
             try {
                 const data = await endpoint();
-                const dl   = pickDl(data?.result);
-                if (!dl) continue;
+                const url  = pickDl(data?.result);
+                if (!url) continue;
                 title = data?.result?.title || title;
-                buf   = await toBuffer(dl);
+                dl    = url;
                 break;
             } catch { /* try next */ }
         }
 
-        if (!buf) throw new Error('All endpoints failed');
+        if (!dl) throw new Error('All endpoints failed');
 
         await sock.sendMessage(chatId, {
-            audio:    buf,
+            audio:    { url: dl },
             mimetype: 'audio/mpeg',
-            fileName: `${title}.mp3`,
             ptt:      false,
         }, { quoted: message });
     } catch (err) {

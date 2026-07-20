@@ -1,6 +1,5 @@
 'use strict';
 const yts   = require('yt-search');
-const axios = require('axios');
 const { get } = require('../lib/gifted');
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -19,16 +18,14 @@ function pickDl(result) {
     return result.download_url || result.video_url || result.url || result.link || null;
 }
 
-/** Download a URL to a Buffer so we send bytes, not an expiring link */
-async function toBuffer(url) {
-    const res = await axios.get(url, {
-        responseType: 'arraybuffer',
-        timeout: 90000,
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-    return Buffer.from(res.data);
+// ─── Single download helper — uses only ytvideo endpoint ─────────────────────
+
+async function fetchYtVideo(ytUrl) {
+    // ytvideo: 720p mp4, confirmed working
+    const data = await get('/download/ytvideo', { url: ytUrl }, 120000);
+    const dl   = pickDl(data?.result);
+    if (!dl) throw new Error('No download URL from ytvideo');
+    return { dl, title: data?.result?.title || ytUrl, quality: data?.result?.quality || '720p' };
 }
 
 // ─── $video / $ytmp4 — YouTube video (720p) ──────────────────────────────────
@@ -36,22 +33,19 @@ async function toBuffer(url) {
 async function videoCommand(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-        const input = text.replace(/^\.(video|ytmp4)\s*/i, '').trim();
+        const input = text.replace(/^\$(video|ytmp4)\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId,
             { text: '🎬 Usage: $video <title or YouTube URL>' }, { quoted: message });
 
         const { url, title } = await ytSearch(input);
         await sock.sendMessage(chatId, { text: `🎬 *Downloading:* ${title}…` }, { quoted: message });
 
-        const data = await get('/download/ytmp4', { url });
-        const dl   = pickDl(data?.result);
-        if (!dl) throw new Error('No download URL');
+        const { dl, title: vtitle, quality } = await fetchYtVideo(url);
 
-        const buf = await toBuffer(dl);
         await sock.sendMessage(chatId, {
-            video:    buf,
+            video:    { url: dl },
             mimetype: 'video/mp4',
-            caption:  `🎬 *${data?.result?.title || title}*\n\n_Daratech_ ⚡`,
+            caption:  `🎬 *${vtitle}*\n📊 ${quality}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
     } catch (err) {
         console.error('[video]', err.message);
@@ -59,28 +53,25 @@ async function videoCommand(sock, chatId, message) {
     }
 }
 
-// ─── $video2 / $savetube — YouTube video via SaveTube (360p) ─────────────────
+// ─── $video2 / $savetube — alias to same ytvideo endpoint ────────────────────
 
 async function video2Command(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-        const input = text.replace(/^\.(video2|savetube)\s*/i, '').trim();
+        const input = text.replace(/^\$(video2|savetube)\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
             text: '🎬 Usage: $video2 <title or YouTube URL>',
         }, { quoted: message });
 
         const { url, title } = await ytSearch(input);
-        await sock.sendMessage(chatId, { text: `🎬 *Downloading (360p):* ${title}…` }, { quoted: message });
+        await sock.sendMessage(chatId, { text: `🎬 *Downloading:* ${title}…` }, { quoted: message });
 
-        const data = await get('/download/savetubemp4', { url });
-        const dl   = pickDl(data?.result);
-        if (!dl) throw new Error('No download URL');
+        const { dl, title: vtitle, quality } = await fetchYtVideo(url);
 
-        const buf = await toBuffer(dl);
         await sock.sendMessage(chatId, {
-            video:    buf,
+            video:    { url: dl },
             mimetype: 'video/mp4',
-            caption:  `🎬 *${data?.result?.title || title}*\n📊 ${data?.result?.quality || '360p'}\n\n_Daratech_ ⚡`,
+            caption:  `🎬 *${vtitle}*\n📊 ${quality}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
     } catch (err) {
         console.error('[video2]', err.message);
@@ -93,7 +84,7 @@ async function video2Command(sock, chatId, message) {
 async function videoDocCommand(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-        const input = text.replace(/^\.videodoc\s*/i, '').trim();
+        const input = text.replace(/^\$videodoc\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
             text: '🎬 Usage: $videodoc <title or YouTube URL>',
         }, { quoted: message });
@@ -101,16 +92,12 @@ async function videoDocCommand(sock, chatId, message) {
         const { url, title } = await ytSearch(input);
         await sock.sendMessage(chatId, { text: `🎬 *Preparing video file:* ${title}…` }, { quoted: message });
 
-        const data = await get('/download/savetubemp4', { url });
-        const dl   = pickDl(data?.result);
-        if (!dl) throw new Error('No download URL');
+        const { dl, title: vtitle } = await fetchYtVideo(url);
 
-        const buf = await toBuffer(dl);
-        const vidTitle = data?.result?.title || title;
         await sock.sendMessage(chatId, {
-            document: buf,
+            document: { url: dl },
             mimetype: 'video/mp4',
-            fileName: `${vidTitle}.mp4`,
+            fileName: `${vtitle}.mp4`,
         }, { quoted: message });
     } catch (err) {
         console.error('[videodoc]', err.message);
