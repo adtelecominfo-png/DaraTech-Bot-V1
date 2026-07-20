@@ -24,15 +24,15 @@ function safeEval(expr) {
 
     // Safe substitutions (operate on the original sanitized string, not stripped)
     const safe = sanitized
-        $replace(/\^/g, '**')
-        $replace(/\bsqrt\b/g, 'Math.sqrt')
-        $replace(/\bsin\b/g, 'Math.sin')
-        $replace(/\bcos\b/g, 'Math.cos')
-        $replace(/\btan\b/g, 'Math.tan')
-        $replace(/\blog\b/g, 'Math.log')
-        $replace(/\babs\b/g, 'Math.abs')
-        $replace(/\bpi\b/g, 'Math.PI')
-        $replace(/\be\b/g, 'Math.E');
+        .replace(/\^/g, '**')
+        .replace(/\bsqrt\b/g, 'Math.sqrt')
+        .replace(/\bsin\b/g, 'Math.sin')
+        .replace(/\bcos\b/g, 'Math.cos')
+        .replace(/\btan\b/g, 'Math.tan')
+        .replace(/\blog\b/g, 'Math.log')
+        .replace(/\babs\b/g, 'Math.abs')
+        .replace(/\bpi\b/g, 'Math.PI')
+        .replace(/\be\b/g, 'Math.E');
 
     // eslint-disable-next-line no-new-func
     const result = Function('"use strict"; return (' + safe + ')')();

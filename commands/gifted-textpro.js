@@ -64,8 +64,8 @@ const STYLES = {
 };
 
 const STYLE_MENU = Object.entries(STYLES)
-    $map(([alias, _]) => alias)
-    $join(', ');
+    .map(([alias, _]) => alias)
+    .join(', ');
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 

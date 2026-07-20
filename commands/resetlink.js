@@ -3,16 +3,16 @@ async function resetlinkCommand(sock, chatId, senderId) {
         // Check if sender is admin
         const groupMetadata = await sock.groupMetadata(chatId);
         const isAdmin = groupMetadata.participants
-            $filter(p => p.admin)
-            $map(p => p.id)
-            $includes(senderId);
+            .filter(p => p.admin)
+            .map(p => p.id)
+            .includes(senderId);
 
         // Check if bot is admin
         const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
         const isBotAdmin = groupMetadata.participants
-            $filter(p => p.admin)
-            $map(p => p.id)
-            $includes(botId);
+            .filter(p => p.admin)
+            .map(p => p.id)
+            .includes(botId);
 
         if (!isAdmin) {
             await sock.sendMessage(chatId, { text: '❌ Only admins can use this command!' });

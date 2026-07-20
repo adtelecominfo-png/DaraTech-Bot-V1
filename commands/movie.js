@@ -169,10 +169,10 @@ function parsePick(pick) {
     const sOnly      = !seMatch && pick.match(/\bs(\d+)\b/i);
     const audioMatch = pick.match(/\baudio:(\d+)\b/i);
     const cleaned    = pick
-        $replace(/\bs\d+e\d+\b/gi, '')
-        $replace(/\bs\d+\b/gi, '')
-        $replace(/\baudio:\d+\b/gi, '')
-        $trim();
+        .replace(/\bs\d+e\d+\b/gi, '')
+        .replace(/\bs\d+\b/gi, '')
+        .replace(/\baudio:\d+\b/gi, '')
+        .trim();
     return {
         season:     seMatch  ? parseInt(seMatch[1])  : (sOnly ? parseInt(sOnly[1]) : null),
         episode:    seMatch  ? parseInt(seMatch[2])  : null,

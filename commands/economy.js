@@ -1192,9 +1192,9 @@ async function questCommand(sock, chatId, message) {
 async function leaderboardCommand(sock, chatId, message) {
     const db      = loadDB();
     const entries = Object.entries(db)
-        $filter(([, u]) => u && u.registered && typeof u.wallet === 'number')
-        $map(([id, u]) => ({ id, total: (u.wallet || 0) + (u.bank || 0), name: u.name || numFromJid(id) }))
-        $sort((a, b) => b.total - a.total).slice(0, 10);
+        .filter(([, u]) => u && u.registered && typeof u.wallet === 'number')
+        .map(([id, u]) => ({ id, total: (u.wallet || 0) + (u.bank || 0), name: u.name || numFromJid(id) }))
+        .sort((a, b) => b.total - a.total).slice(0, 10);
     if (!entries.length) return sock.sendMessage(chatId, { text: `📊 No registered users yet!` }, { quoted: message });
     const medals = ['🥇', '🥈', '🥉'];
     const rows   = entries.map((e, i) => `│ ${medals[i] || `${i + 1}.`}  *${e.name}*  🪙 ${fmt(e.total)}`).join('\n');
@@ -1347,14 +1347,14 @@ function seedEconomyOwner(ownerJid, ownerLid) {
         allEquip.forEach(k => { allUpgrades[k] = MAX_UPGRADE; });
 
         const bestOf = (type, stat) => Object.entries(STORE)
-            $filter(([, v]) => v.type === type)
-            $sort(([, a], [, b]) => (b[stat] || 0) - (a[stat] || 0))[0]?.[0];
+            .filter(([, v]) => v.type === type)
+            .sort(([, a], [, b]) => (b[stat] || 0) - (a[stat] || 0))[0]?.[0];
 
         const bestWeapon    = bestOf('weapon',    'atk');
         const bestArmor     = bestOf('armor',     'def');
         const bestAccessory = Object.entries(STORE)
-            $filter(([, v]) => v.type === 'accessory')
-            $sort(([, a], [, b]) => ((b.atk||0)+(b.def||0)+(b.luck||0)) - ((a.atk||0)+(a.def||0)+(a.luck||0)))[0]?.[0];
+            .filter(([, v]) => v.type === 'accessory')
+            .sort(([, a], [, b]) => ((b.atk||0)+(b.def||0)+(b.luck||0)) - ((a.atk||0)+(a.def||0)+(a.luck||0)))[0]?.[0];
 
         db[ownerJid] = {
             registered:  true,

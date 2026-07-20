@@ -331,11 +331,11 @@ async function creategcCommand(sock, chatId, senderId, userMessage, message) {
 
         // Group name = everything that is NOT a pure phone-number token and NOT an @mention token
         const groupName = afterCmd
-            $replace(/@\d+/g, '')
-            $split(/\s+/)
-            $filter(t => !/^\d{7,15}$/.test(t))
-            $join(' ')
-            $trim();
+            .replace(/@\d+/g, '')
+            .split(/\s+/)
+            .filter(t => !/^\d{7,15}$/.test(t))
+            .join(' ')
+            .trim();
 
         if (!groupName) {
             return sock.sendMessage(chatId, {

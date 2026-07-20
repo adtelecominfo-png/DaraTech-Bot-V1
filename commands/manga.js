@@ -223,11 +223,11 @@ async function resolveChapterSlug(mangaSlug, chapterNum) {
     if (!found) {
         // Show a sample of what numbers exist so user can self-correct
         const nums = chapters
-            $map(c => parseInt((c.chapter || c.number || '').toString().replace(/\D/g, '')))
-            $filter(n => !isNaN(n))
-            $sort((a, b) => b - a)
-            $slice(0, 6)
-            $join(', ');
+            .map(c => parseInt((c.chapter || c.number || '').toString().replace(/\D/g, '')))
+            .filter(n => !isNaN(n))
+            .sort((a, b) => b - a)
+            .slice(0, 6)
+            .join(', ');
         throw new Error(`Chapter ${chapterNum} not found in \`${mangaSlug}\`.\nAvailable (latest): ${nums}…`);
     }
 

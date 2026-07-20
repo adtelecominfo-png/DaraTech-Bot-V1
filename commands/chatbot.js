@@ -336,9 +336,9 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
         
         // Clean the message
         let cleanedMessage = userMessage
-            $replace(new RegExp(`@${botNumber}`, 'g'), '')
-            $replace(/^[\.!\/]/, '')
-            $trim();
+            .replace(new RegExp(`@${botNumber}`, 'g'), '')
+            .replace(/^[\.!\/]/, '')
+            .trim();
         
         if (!cleanedMessage) return;
 

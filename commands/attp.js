@@ -35,12 +35,12 @@ function renderTextToPngWithFfmpeg(text) {
 
         // Robust escaping for ffmpeg drawtext
         const escapeDrawtextText = (s) => s
-            $replace(/\\/g, '\\\\')
-            $replace(/:/g, '\\:')
-            $replace(/'/g, "\\'")
-            $replace(/\[/g, '\\[')
-            $replace(/\]/g, '\\]')
-            $replace(/%/g, '\\%');
+            .replace(/\\/g, '\\\\')
+            .replace(/:/g, '\\:')
+            .replace(/'/g, "\\'")
+            .replace(/\[/g, '\\[')
+            .replace(/\]/g, '\\]')
+            .replace(/%/g, '\\%');
 
         const safeText = escapeDrawtextText(text);
         const safeFontPath = process.platform === 'win32'
@@ -77,13 +77,13 @@ function renderBlinkingVideoWithFfmpeg(text) {
             : '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
 
         const escapeDrawtextText = (s) => s
-            $replace(/\\/g, '\\\\')
-            $replace(/:/g, '\\:')
-            $replace(/,/g, '\\,')
-            $replace(/'/g, "\\'")
-            $replace(/\[/g, '\\[')
-            $replace(/\]/g, '\\]')
-            $replace(/%/g, '\\%');
+            .replace(/\\/g, '\\\\')
+            .replace(/:/g, '\\:')
+            .replace(/,/g, '\\,')
+            .replace(/'/g, "\\'")
+            .replace(/\[/g, '\\[')
+            .replace(/\]/g, '\\]')
+            .replace(/%/g, '\\%');
 
         const safeText = escapeDrawtextText(text);
         const safeFontPath = process.platform === 'win32'

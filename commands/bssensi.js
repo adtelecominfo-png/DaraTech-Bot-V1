@@ -74,9 +74,9 @@ async function bsSensiCommand(sock, chatId, message, userMessage) {
         const ram      = ramMatch ? parseInt(ramMatch[1]) : 6;
 
         const deviceName = args
-            $replace(/\d+\s*gb/i, '')
-            $replace(/\b(android|ios|iphone|ipad)\b/i, '')
-            $replace(/\s+/g, ' ').trim() || 'Unknown Device';
+            .replace(/\d+\s*gb/i, '')
+            .replace(/\b(android|ios|iphone|ipad)\b/i, '')
+            .replace(/\s+/g, ' ').trim() || 'Unknown Device';
 
         if (!isKnownBrand(args)) {
             return sock.sendMessage(chatId, {

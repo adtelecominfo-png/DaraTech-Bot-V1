@@ -83,10 +83,10 @@ async function freefireSensitivityCommand(sock, chatId, message, userMessage) {
 
         // Device name = everything before the RAM part (or platform part)
         const deviceName = args
-            $replace(/\d+\s*gb/i, '')
-            $replace(/\b(android|ios|iphone|ipad)\b/i, '')
-            $replace(/\s+/g, ' ')
-            $trim() || 'Unknown Device';
+            .replace(/\d+\s*gb/i, '')
+            .replace(/\b(android|ios|iphone|ipad)\b/i, '')
+            .replace(/\s+/g, ' ')
+            .trim() || 'Unknown Device';
 
         if (!isKnownBrand(args)) {
             return sock.sendMessage(chatId, {
