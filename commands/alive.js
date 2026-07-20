@@ -20,6 +20,8 @@ async function aliveCommand(sock, chatId, message) {
             `🤖 AI assistant  →  *$gpt*`,
             `📋 All commands  →  *$menu*`,
             `📖 Descriptions  →  *$help*\n`,
+            `👥 *Join our Community:*`,
+            `https://chat.whatsapp.com/D1OaGKmTvrOGfb5E7w8nZJ\n`,
             `_Daratech_ ⚡`,
         ].join('\n');
 

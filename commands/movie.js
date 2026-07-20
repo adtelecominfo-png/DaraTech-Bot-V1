@@ -69,31 +69,31 @@ async function apiFetch(path) {
 }
 
 /**
- * shortenUrl — tries multiple free no-auth shorteners in order.
- * Falls back to the next service on failure; returns original URL if all fail.
- * Services: TinyURL → is.gd → v.gd
+ * shortenUrl — same backends as the bot's own $vgd / $tinyurl commands.
+ * Chain: v.gd (direct) → TinyURL (direct) → original URL
  */
 async function shortenUrl(longUrl) {
-    const services = [
-        () => axios.get('https://tinyurl.com/api-create.php',
-            { params: { url: longUrl }, timeout: 5000, responseType: 'text' })
-            .then(r => r.data?.trim()),
+    const enc = encodeURIComponent(longUrl);
 
-        () => axios.get('https://is.gd/create.php',
-            { params: { format: 'simple', url: longUrl }, timeout: 5000, responseType: 'text' })
-            .then(r => r.data?.trim()),
+    // 1️⃣ v.gd — same call as _shortenDirect('vgd')
+    try {
+        const { data } = await axios.get(
+            `https://v.gd/create.php?format=json&url=${enc}`,
+            { timeout: 8000 }
+        );
+        if (data?.shorturl) return data.shorturl;
+    } catch { /* fall through */ }
 
-        () => axios.get('https://v.gd/create.php',
-            { params: { format: 'simple', url: longUrl }, timeout: 5000, responseType: 'text' })
-            .then(r => r.data?.trim()),
-    ];
+    // 2️⃣ TinyURL — same call as _shortenDirect('ssur') fallback
+    try {
+        const { data } = await axios.get(
+            `https://tinyurl.com/api-create.php?url=${enc}`,
+            { timeout: 8000, responseType: 'text' }
+        );
+        const short = (data || '').trim();
+        if (short.startsWith('http') && short.length < longUrl.length) return short;
+    } catch { /* fall through */ }
 
-    for (const attempt of services) {
-        try {
-            const short = await attempt();
-            if (short?.startsWith('http') && short.length < longUrl.length) return short;
-        } catch { /* try next */ }
-    }
     return longUrl;   // all services failed — return original
 }
 
