@@ -215,59 +215,53 @@ async function showFullDir(sock, chatId, message) {
     }
 }
 
-// ─── $dir search <query> — find files/folders by name (owner only) ───────────
-function findFiles(dir, query, results = [], depth = 0) {
-    if (depth > 6) return results;
-    let entries;
-    try { entries = fs.readdirSync(dir); } catch { return results; }
-    for (const name of entries) {
-        if (SKIP_ALWAYS.has(name)) continue;
-        const full  = path.join(dir, name);
-        let   isDir = false;
-        try { isDir = fs.statSync(full).isDirectory(); } catch { continue; }
-        if (name.toLowerCase().includes(query)) {
-            results.push({ full, isDir });
-        }
-        if (isDir) findFiles(full, query, results, depth + 1);
-    }
-    return results;
-}
-
+// ─── $dir search <query> — find commands by name, pulled from commands/ folder ─
 async function searchDirCommand(sock, chatId, message, query) {
     if (!query) return sock.sendMessage(chatId, {
-        text: '🔍 *DIR SEARCH*\n\nUsage: *$dir search <filename>*\nExample: $dir search economy\n\n_Daratech_ ⚡',
+        text: '🔍 *CMD SEARCH*\n\nUsage: *$dir search <command>*\nExample: $dir search economy\n\nSearches all commands in the commands/ folder.\n\n_Daratech_ ⚡',
     }, { quoted: message });
 
-    const q       = query.toLowerCase();
-    const matches = findFiles(ROOT, q);
+    const q       = query.toLowerCase().replace(/^\$/, ''); // allow user to type "$economy" or "economy"
+    const cmdsDir = path.join(ROOT, 'commands');
 
-    if (matches.length === 0) {
+    let files;
+    try { files = fs.readdirSync(cmdsDir).filter(f => f.endsWith('.js')).sort(); }
+    catch { return sock.sendMessage(chatId, { text: '❌ Could not read commands/ folder.' }, { quoted: message }); }
+
+    // Grep each file for $command strings and collect matches
+    const results = []; // { cmd, file }
+    for (const file of files) {
+        const filePath = path.join(cmdsDir, file);
+        let src = '';
+        try { src = fs.readFileSync(filePath, 'utf8'); } catch { continue; }
+
+        const found = new Set();
+        for (const m of src.matchAll(/['"`](\$[a-z][a-z0-9_]*)['"`]/g)) {
+            const cmd = m[1]; // e.g. "$economy"
+            if (cmd.slice(1).includes(q)) found.add(cmd);
+        }
+        for (const cmd of [...found].sort()) {
+            results.push({ cmd, file });
+        }
+    }
+
+    if (results.length === 0) {
         return sock.sendMessage(chatId, {
-            text: `🔍 No files or folders found matching *"${query}"*.`,
+            text: `🔍 No commands found matching *"${query}"*.\n\n_Daratech_ ⚡`,
         }, { quoted: message });
     }
 
-    const lines = [`┌─( 🔍 *SEARCH: ${query}* ) — ${matches.length} result${matches.length !== 1 ? 's' : ''}`, `│`];
+    const lines = [
+        `┌─( 🔍 *SEARCH: ${query}* ) — ${results.length} result${results.length !== 1 ? 's' : ''}`,
+        `│`,
+    ];
 
-    for (let i = 0; i < matches.length; i++) {
-        const m      = matches[i];
-        const isLast = i === matches.length - 1;
-        const rel    = path.relative(ROOT, m.full);
-        const name   = path.basename(m.full);
-        const folder = path.dirname(rel).replace(/\\/g, '/');
-        const ext    = m.isDir ? '' : path.extname(m.full).replace('.', '');
-        const icon   = m.isDir ? '📁' : fileEmoji(ext);
-        const type   = m.isDir ? 'Folder' : fileType(ext);
-
-        let sizeStr = '';
-        if (!m.isDir) {
-            try { sizeStr = ` • ${formatSize(fs.statSync(m.full).size)}`; } catch { /* skip */ }
-        }
-
+    for (let i = 0; i < results.length; i++) {
+        const { cmd, file } = results[i];
+        const isLast = i === results.length - 1;
         const branch = isLast ? '└─' : '├─';
-        lines.push(`${branch}◆ ${icon} *${name}${m.isDir ? '/' : ''}*`);
-        lines.push(`│  📂 ${folder === '.' ? 'root' : folder + '/'}`);
-        lines.push(`│  📋 ${type}${sizeStr}`);
+        lines.push(`${branch}◆ *${cmd}*`);
+        lines.push(`│  📂 commands/${file}`);
         lines.push(`│`);
     }
 
