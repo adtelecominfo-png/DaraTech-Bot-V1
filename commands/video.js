@@ -1,6 +1,14 @@
 'use strict';
-const yts   = require('yt-search');
-const { get } = require('../lib/gifted');
+const yts                  = require('yt-search');
+const { get }              = require('../lib/gifted');
+const { toBuffer }         = require('../lib/media');
+
+// Lazy-load ruhend-scraper (not in Replit env but installed on user's server)
+let _scraper;
+function getScraper() {
+    if (!_scraper) _scraper = require('ruhend-scraper');
+    return _scraper;
+}
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -15,13 +23,29 @@ async function ytSearch(input) {
 
 function pickDl(result) {
     if (!result) return null;
-    return result.download_url || result.video_url || result.url || result.link || null;
+    return result.audio
+        || result.download_url
+        || result.video_url
+        || result.url
+        || result.link
+        || null;
 }
 
-// ─── Single download helper — uses only ytvideo endpoint ─────────────────────
-
+/**
+ * Download a YouTube video URL.
+ * Primary: ruhend-scraper ytmp4
+ * Fallback: GiftedTech ytvideo (720p)
+ */
 async function fetchYtVideo(ytUrl) {
-    // ytvideo: 720p mp4, confirmed working
+    // Method 1 — ruhend-scraper ytmp4
+    try {
+        const { ytmp4 } = getScraper();
+        const data = await ytmp4(ytUrl);
+        const dl   = data?.audio || data?.video || data?.download_url || null;
+        if (dl) return { dl, title: data?.title || ytUrl, quality: '720p' };
+    } catch { /* fallthrough */ }
+
+    // Method 2 — GiftedTech ytvideo (confirmed working, 720p mp4)
     const data = await get('/download/ytvideo', { url: ytUrl }, 120000);
     const dl   = pickDl(data?.result);
     if (!dl) throw new Error('No download URL from ytvideo');
@@ -41,9 +65,10 @@ async function videoCommand(sock, chatId, message) {
         await sock.sendMessage(chatId, { text: `🎬 *Downloading:* ${title}…` }, { quoted: message });
 
         const { dl, title: vtitle, quality } = await fetchYtVideo(url);
+        const buf = await toBuffer(dl);
 
         await sock.sendMessage(chatId, {
-            video:    { url: dl },
+            video:    buf,
             mimetype: 'video/mp4',
             caption:  `🎬 *${vtitle}*\n📊 ${quality}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
@@ -53,7 +78,7 @@ async function videoCommand(sock, chatId, message) {
     }
 }
 
-// ─── $video2 / $savetube — alias to same ytvideo endpoint ────────────────────
+// ─── $video2 / $savetube — alias ─────────────────────────────────────────────
 
 async function video2Command(sock, chatId, message) {
     try {
@@ -67,9 +92,10 @@ async function video2Command(sock, chatId, message) {
         await sock.sendMessage(chatId, { text: `🎬 *Downloading:* ${title}…` }, { quoted: message });
 
         const { dl, title: vtitle, quality } = await fetchYtVideo(url);
+        const buf = await toBuffer(dl);
 
         await sock.sendMessage(chatId, {
-            video:    { url: dl },
+            video:    buf,
             mimetype: 'video/mp4',
             caption:  `🎬 *${vtitle}*\n📊 ${quality}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
@@ -93,9 +119,10 @@ async function videoDocCommand(sock, chatId, message) {
         await sock.sendMessage(chatId, { text: `🎬 *Preparing video file:* ${title}…` }, { quoted: message });
 
         const { dl, title: vtitle } = await fetchYtVideo(url);
+        const buf = await toBuffer(dl);
 
         await sock.sendMessage(chatId, {
-            document: { url: dl },
+            document: buf,
             mimetype: 'video/mp4',
             fileName: `${vtitle}.mp4`,
         }, { quoted: message });
