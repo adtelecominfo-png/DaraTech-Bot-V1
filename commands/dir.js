@@ -68,19 +68,30 @@ async function showFile(sock, chatId, message, absPath, relPath) {
         }, { quoted: message });
     }
 
-    // Read content (cap at 3 KB to avoid huge messages)
-    let content = '';
+    // Read content — send as .txt file if too large for a message
+    let raw = '';
     try {
-        const raw = fs.readFileSync(absPath, 'utf8');
-        const MAX = 3000;
-        content = raw.length > MAX
-            ? raw.slice(0, MAX) + `\n\n… _(truncated — ${raw.length - MAX} more chars)_`
-            : raw;
+        raw = fs.readFileSync(absPath, 'utf8');
     } catch (e) {
-        content = `_(could not read: ${e.message})_`;
+        return sock.sendMessage(chatId, {
+            text: `${header}\n\n_(could not read: ${e.message})_\n\n_Daratech_ ⚡`,
+        }, { quoted: message });
     }
 
-    const text = `${header}\n\n📝 *CONTENT :*\n${'─'.repeat(28)}\n\`\`\`\n${content}\n\`\`\`\n\n_Daratech_ ⚡`;
+    const MAX = 3000;
+    if (raw.length > MAX) {
+        // Too big — send as a downloadable .txt file
+        await sock.sendMessage(chatId, { text: header }, { quoted: message });
+        await sock.sendMessage(chatId, {
+            document: Buffer.from(raw, 'utf8'),
+            mimetype: 'text/plain',
+            fileName: `${name}.txt`,
+            caption: `📄 *${name}* — full file\n\n_Daratech_ ⚡`,
+        }, { quoted: message });
+        return;
+    }
+
+    const text = `${header}\n\n📝 *CONTENT :*\n${'─'.repeat(28)}\n\`\`\`\n${raw}\n\`\`\`\n\n_Daratech_ ⚡`;
     await sock.sendMessage(chatId, { text }, { quoted: message });
 }
 
