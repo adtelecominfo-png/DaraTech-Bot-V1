@@ -42,7 +42,7 @@ async function randomRecipeCommand(sock, chatId, message) {
         for (let i = 1; i <= 20; i++) {
             const ing = m[`strIngredient${i}`];
             const mea = m[`strMeasure${i}`];
-            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`$trim());
+            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`.trim());
         }
         const instructions = m.strInstructions?.slice(0, 500) + (m.strInstructions?.length > 500 ? '...' : '') || 'No instructions.';
         const txt =
@@ -92,7 +92,7 @@ async function searchRecipeCommand(sock, chatId, message) {
         for (let i = 1; i <= 20; i++) {
             const ing = m[`strIngredient${i}`];
             const mea = m[`strMeasure${i}`];
-            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`$trim());
+            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`.trim());
         }
         const instructions = m.strInstructions?.slice(0, 400) + '...' || 'No instructions.';
         const txt =
@@ -131,7 +131,7 @@ async function cocktailCommand(sock, chatId, message) {
         for (let i = 1; i <= 15; i++) {
             const ing = d[`strIngredient${i}`];
             const mea = d[`strMeasure${i}`];
-            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`$trim());
+            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`.trim());
         }
         const txt =
             `╭━═『 🍹 *COCKTAIL* 』═━╮\n` +

@@ -368,7 +368,7 @@ async function handleDownload(sock, chatId, message, chapterSlug) {
         });
 
         const buffer = Buffer.from(response.data);
-        const filename = `manga-${chapterSlug}.zip`$replace(/[^\w\-.]/g, '_');
+        const filename = `manga-${chapterSlug}.zip`.replace(/[^\w\-.]/g, '_');
 
         await sock.sendMessage(chatId, {
             document: buffer,
@@ -415,7 +415,7 @@ async function handleRangeDownload(sock, chatId, message, slug, from, to) {
         });
 
         const buffer   = Buffer.from(response.data);
-        const filename = `manga-${slug}-ch${fromN}-${toN}.zip`$replace(/[^\w\-.]/g, '_');
+        const filename = `manga-${slug}-ch${fromN}-${toN}.zip`.replace(/[^\w\-.]/g, '_');
 
         await sock.sendMessage(chatId, {
             document: buffer,

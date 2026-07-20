@@ -150,13 +150,13 @@ async function sendOverview(sock, chatId, message) {
         lines.push(`${cat.emoji} *.menu ${slugLabel}* — ${cmdCount} cmds`);
     }
 
-    lines.push(``, `─`$repeat(34));
+    lines.push(``, `─`.repeat(34));
     lines.push(`💬 *.menu movies*   — movie commands`);
     lines.push(`💬 *.menu manga*    — manga & manhwa`);
     lines.push(`💬 *.menu ai*       — AI commands`);
     lines.push(`💬 *.menu sports*   — sports & scores`);
     lines.push(`📖 *.help <cat>*    — full descriptions`);
-    lines.push(`─`$repeat(34));
+    lines.push(`─`.repeat(34));
     lines.push(`🔍 *.menu search <command>*  — find commands`);
     lines.push(`📋 *.menu details <command>* — command usage`);
 
