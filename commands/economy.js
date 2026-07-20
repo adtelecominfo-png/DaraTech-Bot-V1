@@ -178,6 +178,18 @@ function normalizeJid(jid) {
     return jid.replace(/:\d+(?=@)/, '');
 }
 
+// Resolve a JID to the key actually stored in DB (handles LID vs s.whatsapp.net mismatch).
+// @mention JIDs in Baileys v7 can arrive in LID format; getUser would then create a
+// separate DB entry instead of finding the user's real registered account.
+function resolveDbJid(db, jid) {
+    if (!jid) return jid;
+    if (db[jid]?.registered) return jid;          // exact match, already registered
+    const num = numFromJid(jid);
+    if (!num) return jid;
+    const found = Object.keys(db).find(k => numFromJid(k) === num && db[k]?.registered);
+    return found || jid;
+}
+
 function senderJid(message) {
     if (message.key?.fromMe && connectorJid) return connectorJid;
     return normalizeJid(message.key?.participant || message.key?.remoteJid || '');
@@ -1014,9 +1026,14 @@ async function battleCommand(sock, chatId, message, q) {
     const CD   = 30 * 60 * 1000;
     const left = cooldownLeft(u.lastBattle, CD, uid);
     if (left) return sock.sendMessage(chatId, { text: `⏳ Still recovering from last battle!\nFight again in *${left}*.` }, { quoted: message });
-    const mentioned = resolveTarget(message);
-    if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Tag or reply to someone to battle!\n_Example: $battle @user 500_` }, { quoted: message });
+
+    // resolveDbJid: if the mentioned JID is in LID format (Baileys v7), map it
+    // to the real DB key so stats/wins save to the correct registered account.
+    const rawMentioned = resolveTarget(message);
+    if (!rawMentioned) return sock.sendMessage(chatId, { text: `❌ Tag or reply to someone to battle!\n_Example: $battle @user 500_` }, { quoted: message });
+    const mentioned = resolveDbJid(db, rawMentioned);
     if (numFromJid(mentioned) === numFromJid(uid)) return sock.sendMessage(chatId, { text: `❌ You can't battle yourself!` }, { quoted: message });
+
     const bet = parseInt((q || '').replace(/\D/g, '')) || 0;
     const t   = getUser(db, mentioned);
     if (!t.registered) return sock.sendMessage(chatId, { text: `❌ That user hasn't registered yet!` }, { quoted: message });
@@ -1039,12 +1056,12 @@ async function battleCommand(sock, chatId, message, q) {
         round++;
         const dmgU = Math.max(1, Math.floor((statsU.atk + Math.random() * 20) * (1 - statsT.def / 200)));
         hpT = Math.max(0, hpT - dmgU);
-        log.push(`R${round}: ${mention(uid)} ⚔️ *-${dmgU}* → ${mention(mentioned)} ❤️${hpT}`);
+        log.push(`R${round}: ${mention(uid)} ⚔️ -${fmt(dmgU)} → ${mention(mentioned)} ❤️ ${fmt(hpT)}`);
         if (hpT <= 0) break;
 
         const dmgT = Math.max(1, Math.floor((statsT.atk + Math.random() * 20) * (1 - statsU.def / 200)));
         hpU = Math.max(0, hpU - dmgT);
-        log.push(`R${round}: ${mention(mentioned)} ⚔️ *-${dmgT}* → ${mention(uid)} ❤️${hpU}`);
+        log.push(`R${round}: ${mention(mentioned)} ⚔️ -${fmt(dmgT)} → ${mention(uid)} ❤️ ${fmt(hpU)}`);
 
         if (!usedPotionU && hasPotionOf(u.inventory, HEAL_ITEMS) && hpU < statsU.maxHp * 0.3) {
             const pKey = HEAL_ITEMS.find(k => (u.inventory || []).includes(k));
@@ -1052,7 +1069,7 @@ async function battleCommand(sock, chatId, message, q) {
             hpU = Math.min(statsU.maxHp, hpU + heal);
             const idx = u.inventory.indexOf(pKey); if (idx > -1) u.inventory.splice(idx, 1);
             usedPotionU = true;
-            log.push(`🧪 ${mention(uid)} used ${STORE[pKey].name}! ❤️${hpU}`);
+            log.push(`🧪 ${mention(uid)} used ${STORE[pKey].name}! ❤️ ${fmt(hpU)}`);
         }
         if (!usedPotionT && hasPotionOf(t.inventory, HEAL_ITEMS) && hpT < statsT.maxHp * 0.3) {
             const pKey = HEAL_ITEMS.find(k => (t.inventory || []).includes(k));
@@ -1060,7 +1077,7 @@ async function battleCommand(sock, chatId, message, q) {
             hpT = Math.min(statsT.maxHp, hpT + heal);
             const idx = t.inventory.indexOf(pKey); if (idx > -1) t.inventory.splice(idx, 1);
             usedPotionT = true;
-            log.push(`🧪 ${mention(mentioned)} used ${STORE[pKey].name}! ❤️${hpT}`);
+            log.push(`🧪 ${mention(mentioned)} used ${STORE[pKey].name}! ❤️ ${fmt(hpT)}`);
         }
     }
 
@@ -1082,14 +1099,29 @@ async function battleCommand(sock, chatId, message, q) {
     }
     saveDB(db);
 
-    const battleLog = log.slice(-8).join('\n');
+    // Show only the last 6 log lines (final ~3 rounds) to keep the output tight
+    const shownLog    = log.slice(-6).join('\n');
+    const winnerLv    = fmt(levelOf(winner.xp));
+    const loserLv     = fmt(levelOf(loser.xp));
+
     await sock.sendMessage(chatId, {
         text:
-            `⚔️ *BATTLE RESULT*\n\n` +
-            `${battleLog}\n\n` +
-            `🏆 *WINNER: ${mention(winnerJid)}*\n` +
-            (bet > 0 ? `💰 Won: *🪙 ${fmt(bet)}*\n` : '') +
-            `⚡ +100 XP | Level ${levelOf(winner.xp)}`,
+            `⚔️ *BATTLE*\n` +
+            `━━━━━━━━━━━━━━━━\n` +
+            `👤 *${mention(uid)}*\n` +
+            `   ❤️ ${fmt(statsU.maxHp)}  ⚔️ ${fmt(statsU.atk)}  🛡️ ${fmt(statsU.def)}  Lv ${fmt(levelOf(u.xp))}\n` +
+            `        VS\n` +
+            `👤 *${mention(mentioned)}*\n` +
+            `   ❤️ ${fmt(statsT.maxHp)}  ⚔️ ${fmt(statsT.atk)}  🛡️ ${fmt(statsT.def)}  Lv ${fmt(levelOf(t.xp))}\n` +
+            `━━━━━━━━━━━━━━━━\n` +
+            `${shownLog}\n` +
+            `━━━━━━━━━━━━━━━━\n` +
+            `🏆 *WINNER: ${mention(winnerJid)}*  Lv ${winnerLv}\n` +
+            `   ⚡ +100 XP  |  🏆 Wins: ${winner.wins}\n` +
+            `💀 *Loser: ${mention(loserJid)}*  Lv ${loserLv}\n` +
+            `   ⚡ +20 XP  |  💀 Losses: ${loser.losses}\n` +
+            (bet > 0 ? `💰 *Pot: 🪙 ${fmt(bet)}* → ${mention(winnerJid)}\n` : '') +
+            `━━━━━━━━━━━━━━━━`,
         mentions: [uid, mentioned],
     }, { quoted: message });
 }
