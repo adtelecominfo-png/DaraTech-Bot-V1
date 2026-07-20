@@ -39,8 +39,12 @@ async function vvdmCommand(sock, chatId, message) {
     }
     const ownerJid = `${ownerRaw}@s.whatsapp.net`;
 
-    const senderRaw = (message.key.participant || message.key.remoteJid || '').split('@')[0].split(':')[0];
-    const senderDisplay = `+${senderRaw}`;
+    // Get the ORIGINAL sender of the view-once (from contextInfo), not whoever ran .vv2
+    const contextInfo = message.message?.extendedTextMessage?.contextInfo || {};
+    const voSenderJid = contextInfo.participant || contextInfo.remoteJid || message.key.participant || message.key.remoteJid || '';
+    const voSenderNum = voSenderJid.split('@')[0].split(':')[0];
+    // If it's a real WA JID show +number; if it's a LID we still show the number (best we can without server lookup)
+    const senderDisplay = voSenderNum ? `+${voSenderNum}` : 'Unknown';
 
     // Resolve chat label — show real group name if in a group
     let chatLabel = 'Private';
