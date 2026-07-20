@@ -3,7 +3,7 @@
  * commands/gifted-anime.js
  * New anime commands powered by https://api.gifted.co.ke/api/anime/
  *
- * Commands: .konachan  .kusonime <query>  .animenew
+ * Commands: $konachan  $kusonime <query>  $animenew
  */
 
 const { animeGet } = require('../lib/gifted');
@@ -21,7 +21,7 @@ function getQ(message) {
     return body.split(' ').slice(1).join(' ').trim();
 }
 
-// ─── .konachan ───────────────────────────────────────────────────────────────
+// ─── $konachan ───────────────────────────────────────────────────────────────
 /** Returns a random anime wallpaper image from Konachan */
 async function konachanCommand(sock, chatId, message) {
     await react(sock, message, '⏳');
@@ -41,7 +41,7 @@ async function konachanCommand(sock, chatId, message) {
     }
 }
 
-// ─── .kusonime ────────────────────────────────────────────────────────────────
+// ─── $kusonime ────────────────────────────────────────────────────────────────
 /** Search KusoNime for anime downloads (.kusonime <query>) */
 async function kusonimeCommand(sock, chatId, message) {
     const q = getQ(message);
@@ -77,7 +77,7 @@ async function kusonimeCommand(sock, chatId, message) {
     }
 }
 
-// ─── .animenew ───────────────────────────────────────────────────────────────
+// ─── $animenew ───────────────────────────────────────────────────────────────
 /** Latest anime releases from KusoNime */
 async function animenewCommand(sock, chatId, message) {
     await react(sock, message, '⏳');
@@ -108,7 +108,7 @@ async function animenewCommand(sock, chatId, message) {
     }
 }
 
-// ─── .charquote ──────────────────────────────────────────────────────────────
+// ─── $charquote ──────────────────────────────────────────────────────────────
 /** Random quote by an anime character (.charquote <character name>) */
 async function charquoteCommand(sock, chatId, message) {
     const q = getQ(message);
@@ -134,7 +134,7 @@ async function charquoteCommand(sock, chatId, message) {
     }
 }
 
-// ─── .showquote ───────────────────────────────────────────────────────────────
+// ─── $showquote ───────────────────────────────────────────────────────────────
 /** Random quote from an anime show (.showquote <show name>) */
 async function showquoteCommand(sock, chatId, message) {
     const q = getQ(message);

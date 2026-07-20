@@ -81,7 +81,7 @@ async function trendingCryptoCommand(sock, chatId, message) {
 
 async function cryptoConvertCommand(sock, chatId, message, args) {
     if (args.length < 3) {
-        return sock.sendMessage(chatId, { text: '💱 Usage: .crypto-convert <amount> <from> <to>\nExample: .crypto-convert 1 btc usd' }, { quoted: message });
+        return sock.sendMessage(chatId, { text: '💱 Usage: $crypto-convert <amount> <from> <to>\nExample: $crypto-convert 1 btc usd' }, { quoted: message });
     }
     const amount = parseFloat(args[0]);
     const from = (args[1] || '').toLowerCase();

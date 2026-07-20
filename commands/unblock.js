@@ -18,7 +18,7 @@ async function unblockCommand(sock, chatId, message) {
 
         if (!targetJid) {
             return await sock.sendMessage(chatId, { 
-                text: '❌ Please mention the user to unblock.\nExample: .unblock @user' 
+                text: '❌ Please mention the user to unblock.\nExample: $unblock @user' 
             });
         }
 

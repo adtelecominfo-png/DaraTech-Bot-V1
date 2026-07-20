@@ -21,7 +21,7 @@ async function getMediaBufferAndExt(message) {
         const stream = await downloadContentFromMessage(m.audioMessage, 'audio');
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
-        // default mp3 for voice/ptt may be opus; still use .mp3 generically
+        // default mp3 for voice/ptt may be opus; still use $mp3 generically
         return { buffer: Buffer.concat(chunks), ext: '.mp3' };
     }
     if (m.documentMessage) {

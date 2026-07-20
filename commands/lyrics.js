@@ -4,7 +4,7 @@ const { davidGet } = require('../lib/gifted');
 async function lyricsCommand(sock, chatId, input, message) {
     if (!input || !input.trim()) {
         return sock.sendMessage(chatId, {
-            text: '🎶 Usage: .lyrics <song>\n        .lyrics <song> | <artist>\nExample: .lyrics Faded | Alan Walker',
+            text: '🎶 Usage: $lyrics <song>\n        $lyrics <song> | <artist>\nExample: $lyrics Faded | Alan Walker',
         }, { quoted: message });
     }
 

@@ -4,7 +4,7 @@ const axios = require('axios');
 module.exports = async function weatherCommand(sock, chatId, message, city) {
     if (!city) {
         return sock.sendMessage(chatId, {
-            text: '🌤 Usage: .weather <city name>\nExample: .weather Lagos'
+            text: '🌤 Usage: $weather <city name>\nExample: $weather Lagos'
         }, { quoted: message });
     }
     try {

@@ -1,6 +1,6 @@
 'use strict';
 /**
- * .pair [number] — Show pairing instructions + website link.
+ * $pair [number] — Show pairing instructions + website link.
  *
  * NOTE: We intentionally do NOT call the session website API from here.
  * Calling the external session site while the bot is live caused a session

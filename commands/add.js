@@ -42,11 +42,11 @@ async function addCommand(sock, chatId, message, userMessage) {
             }, { quoted: message });
         }
 
-        // Fallback: phone number(s), comma-separated e.g. .add 234xxx,91xxx
+        // Fallback: phone number(s), comma-separated e.g. $add 234xxx,91xxx
         const raw = userMessage.slice(4).trim();
         if (!raw) {
             return await sock.sendMessage(chatId, {
-                text: '❌ Usage:\n• .add @mention\n• .add 2347030626048\n• .add 234xxx,91xxx'
+                text: '❌ Usage:\n• $add @mention\n• $add 2347030626048\n• $add 234xxx,91xxx'
             }, { quoted: message });
         }
 

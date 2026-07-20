@@ -27,7 +27,7 @@ async function setGroupDescription(sock, chatId, senderId, text, message) {
     if (!check.ok) return;
     const desc = (text || '').trim();
     if (!desc) {
-        await sock.sendMessage(chatId, { text: 'Usage: .setgdesc <description>' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: 'Usage: $setgdesc <description>' }, { quoted: message });
         return;
     }
     try {
@@ -43,7 +43,7 @@ async function setGroupName(sock, chatId, senderId, text, message) {
     if (!check.ok) return;
     const name = (text || '').trim();
     if (!name) {
-        await sock.sendMessage(chatId, { text: 'Usage: .setgname <new name>' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: 'Usage: $setgname <new name>' }, { quoted: message });
         return;
     }
     try {
@@ -61,7 +61,7 @@ async function setGroupPhoto(sock, chatId, senderId, message) {
     const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const imageMessage = quoted?.imageMessage || quoted?.stickerMessage;
     if (!imageMessage) {
-        await sock.sendMessage(chatId, { text: 'Reply to an image/sticker with .setgpp' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: 'Reply to an image/sticker with $setgpp' }, { quoted: message });
         return;
     }
     try {

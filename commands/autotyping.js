@@ -50,7 +50,7 @@ async function autotypingCommand(sock, chatId, message) {
                 config.enabled = false;
             } else {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Invalid option! Use: .autotyping on/off',
+                    text: '❌ Invalid option! Use: $autotyping on/off',
                     contextInfo: {
                     }
                 });

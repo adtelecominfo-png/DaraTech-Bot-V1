@@ -129,9 +129,9 @@ async function animeCommand(sock, chatId, message, args) {
             try {
                 const res = await axios.get(ANIMU_BASE);
                 const apiTypes = res.data && res.data.types ? res.data.types.map(s => s.replace('/animu/', '')).join(', ') : supported.join(', ');
-                await sock.sendMessage(chatId, { text: `Usage: .animu <type>\nTypes: ${apiTypes}` }, { quoted: message });
+                await sock.sendMessage(chatId, { text: `Usage: $animu <type>\nTypes: ${apiTypes}` }, { quoted: message });
             } catch {
-                await sock.sendMessage(chatId, { text: `Usage: .animu <type>\nTypes: ${supported.join(', ')}` }, { quoted: message });
+                await sock.sendMessage(chatId, { text: `Usage: $animu <type>\nTypes: ${supported.join(', ')}` }, { quoted: message });
             }
             return;
         }

@@ -36,10 +36,10 @@ async function react(sock, message, emoji) {
 
 // ─── TikTok ───────────────────────────────────────────────────────────────────
 
-/** .ttstalk / .tiktokstalk <username> — TikTok profile lookup */
+/** $ttstalk / $tiktokstalk <username> — TikTok profile lookup */
 async function ttstalkCommand(sock, chatId, message) {
     const q = getQuery(message);
-    if (!q) return sock.sendMessage(chatId, { text: '🎵 Usage: .ttstalk <TikTok username>' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '🎵 Usage: $ttstalk <TikTok username>' }, { quoted: message });
     await react(sock, message, '⏳');
     try {
         const data = await stalkerGet('tiktokstalk', { username: q });
@@ -72,10 +72,10 @@ async function ttstalkCommand(sock, chatId, message) {
 
 // ─── GitHub ───────────────────────────────────────────────────────────────────
 
-/** .ghstalk / .gitstalk <username> — GitHub profile lookup */
+/** $ghstalk / $gitstalk <username> — GitHub profile lookup */
 async function ghstalkCommand(sock, chatId, message) {
     const q = getQuery(message);
-    if (!q) return sock.sendMessage(chatId, { text: '🐙 Usage: .ghstalk <GitHub username>' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '🐙 Usage: $ghstalk <GitHub username>' }, { quoted: message });
     await react(sock, message, '⏳');
     try {
         const data = await stalkerGet('gitstalk', { username: q });
@@ -108,10 +108,10 @@ async function ghstalkCommand(sock, chatId, message) {
 
 // ─── Instagram ────────────────────────────────────────────────────────────────
 
-/** .igstalk / .instastalk <username> — Instagram profile lookup */
+/** $igstalk / $instastalk <username> — Instagram profile lookup */
 async function igstalkCommand(sock, chatId, message) {
     const q = getQuery(message);
-    if (!q) return sock.sendMessage(chatId, { text: '📸 Usage: .igstalk <Instagram username>' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '📸 Usage: $igstalk <Instagram username>' }, { quoted: message });
     await react(sock, message, '⏳');
     try {
         const data = await stalkerGet('igstalk', { username: q });
@@ -143,10 +143,10 @@ async function igstalkCommand(sock, chatId, message) {
 
 // ─── Twitter / X ──────────────────────────────────────────────────────────────
 
-/** .twstalk / .xstalk / .twitterstalk <username> — Twitter/X profile lookup */
+/** $twstalk / $xstalk / $twitterstalk <username> — Twitter/X profile lookup */
 async function twstalkCommand(sock, chatId, message) {
     const q = getQuery(message);
-    if (!q) return sock.sendMessage(chatId, { text: '🐦 Usage: .twstalk <Twitter/X username>' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '🐦 Usage: $twstalk <Twitter/X username>' }, { quoted: message });
     await react(sock, message, '⏳');
     try {
         const data = await stalkerGet('twitterstalk', { username: q });
@@ -178,10 +178,10 @@ async function twstalkCommand(sock, chatId, message) {
 
 // ─── WhatsApp Channel ─────────────────────────────────────────────────────────
 
-/** .wachannel <url> — WhatsApp channel info lookup */
+/** $wachannel <url> — WhatsApp channel info lookup */
 async function wachannelCommand(sock, chatId, message) {
     const q = getQuery(message);
-    if (!q) return sock.sendMessage(chatId, { text: '💬 Usage: .wachannel <WhatsApp channel URL>' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '💬 Usage: $wachannel <WhatsApp channel URL>' }, { quoted: message });
     await react(sock, message, '⏳');
     try {
         const data = await stalkerGet('wachannel', { url: q });
@@ -208,10 +208,10 @@ async function wachannelCommand(sock, chatId, message) {
 
 // ─── IP Lookup ────────────────────────────────────────────────────────────────
 
-/** .ipstalk / .iplookup <ip> — IP address geolocation & info */
+/** $ipstalk / $iplookup <ip> — IP address geolocation & info */
 async function ipstalkCommand(sock, chatId, message) {
     const q = getQuery(message);
-    if (!q) return sock.sendMessage(chatId, { text: '🌐 Usage: .ipstalk <IP address>' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '🌐 Usage: $ipstalk <IP address>' }, { quoted: message });
     await react(sock, message, '⏳');
     try {
         const data = await stalkerGet('ipstalk', { address: q });
@@ -240,10 +240,10 @@ async function ipstalkCommand(sock, chatId, message) {
 
 // ─── NPM Package ─────────────────────────────────────────────────────────────
 
-/** .npmstalk / .npmlookup <package> — npm package info */
+/** $npmstalk / $npmlookup <package> — npm package info */
 async function npmstalkCommand(sock, chatId, message) {
     const q = getQuery(message);
-    if (!q) return sock.sendMessage(chatId, { text: '📦 Usage: .npmstalk <package name>' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '📦 Usage: $npmstalk <package name>' }, { quoted: message });
     await react(sock, message, '⏳');
     try {
         const data = await stalkerGet('npmstalk', { packagename: q });
@@ -272,10 +272,10 @@ async function npmstalkCommand(sock, chatId, message) {
 
 // ─── Steam ────────────────────────────────────────────────────────────────────
 
-/** .steamstalk <username> — Steam profile lookup (David Cyril API) */
+/** $steamstalk <username> — Steam profile lookup (David Cyril API) */
 async function steamstalkCommand(sock, chatId, message) {
     const q = getQuery(message);
-    if (!q) return sock.sendMessage(chatId, { text: '🎮 Usage: .steamstalk <Steam username>' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '🎮 Usage: $steamstalk <Steam username>' }, { quoted: message });
     await react(sock, message, '⏳');
     try {
         const data = await davidGet(`/stalk/steam?username=${encodeURIComponent(q)}`);

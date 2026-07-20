@@ -11,18 +11,18 @@ async function unbanCommand(sock, chatId, message) {
         const senderId = message.key.participant || message.key.remoteJid;
         const { isSenderAdmin, isBotAdmin } = await isAdmin(sock, chatId, senderId);
         if (!isBotAdmin) {
-            await sock.sendMessage(chatId, { text: 'Please make the bot an admin to use .unban', ...channelInfo }, { quoted: message });
+            await sock.sendMessage(chatId, { text: 'Please make the bot an admin to use $unban', ...channelInfo }, { quoted: message });
             return;
         }
         if (!isSenderAdmin && !message.key.fromMe) {
-            await sock.sendMessage(chatId, { text: 'Only group admins can use .unban', ...channelInfo }, { quoted: message });
+            await sock.sendMessage(chatId, { text: 'Only group admins can use $unban', ...channelInfo }, { quoted: message });
             return;
         }
     } else {
         const senderId = message.key.participant || message.key.remoteJid;
         const senderIsSudo = await isSudo(senderId);
         if (!message.key.fromMe && !senderIsSudo) {
-            await sock.sendMessage(chatId, { text: 'Only owner/sudo can use .unban in private chat', ...channelInfo }, { quoted: message });
+            await sock.sendMessage(chatId, { text: 'Only owner/sudo can use $unban in private chat', ...channelInfo }, { quoted: message });
             return;
         }
     }

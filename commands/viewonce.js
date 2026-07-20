@@ -1,7 +1,7 @@
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const settings = require('../settings');
 
-// .vv — re-send view-once in the same chat
+// $vv — re-send view-once in the same chat
 async function viewonceCommand(sock, chatId, message) {
     const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const quotedImage = quoted?.imageMessage;
@@ -22,8 +22,9 @@ async function viewonceCommand(sock, chatId, message) {
     }
 }
 
-// .vv2 / .vvdm — download view-once and send to bot owner's DM privately
-async function vvdmCommand(sock, chatId, message) {
+// $vv2 / $vvdm — download view-once and send to bot owner's DM privately
+// noReact=true: skip the ✅ reaction (used when triggered by 👀 emoji)
+async function vvdmCommand(sock, chatId, message, noReact = false) {
     const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const quotedImage = quoted?.imageMessage;
     const quotedVideo = quoted?.videoMessage;
@@ -39,7 +40,7 @@ async function vvdmCommand(sock, chatId, message) {
     }
     const ownerJid = `${ownerRaw}@s.whatsapp.net`;
 
-    // Get the ORIGINAL sender of the view-once (from contextInfo), not whoever ran .vv2
+    // Get the ORIGINAL sender of the view-once (from contextInfo), not whoever ran $vv2
     const contextInfo = message.message?.extendedTextMessage?.contextInfo || {};
     const voSenderJid = contextInfo.participant || contextInfo.remoteJid || message.key.participant || message.key.remoteJid || '';
 
@@ -93,8 +94,10 @@ async function vvdmCommand(sock, chatId, message) {
             });
         }
 
-        // React ✅ on the original message instead of sending a text reply
-        await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
+        // React ✅ only when triggered by an explicit command (not 👀 emoji)
+        if (!noReact) {
+            await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
+        }
     } catch (err) {
         console.error('[vvdm]', err.message);
         await sock.sendMessage(chatId, { text: `❌ Failed to send to DM.\n_${err.message}_` }, { quoted: message });

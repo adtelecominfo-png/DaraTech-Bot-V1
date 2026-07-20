@@ -5,7 +5,7 @@ async function net9jaCommand(sock, chatId, message) {
     try {
         const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const q = text.split(' ').slice(1).join(' ').trim();
-        if (!q) return sock.sendMessage(chatId, { text: '📁 Usage: .net9ja <movie title>\nExample: .net9ja Black Panther' }, { quoted: message });
+        if (!q) return sock.sendMessage(chatId, { text: '📁 Usage: $net9ja <movie title>\nExample: $net9ja Black Panther' }, { quoted: message });
         await sock.sendMessage(chatId, { text: `📁 Searching Net9ja for: *${q}*...` }, { quoted: message });
         const data = await davidGet(`/movies/net9ja/search?q=${encodeURIComponent(q)}&limit=5`);
         if (!data?.success || !data?.results?.length) {

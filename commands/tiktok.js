@@ -23,7 +23,7 @@ async function tiktokCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const url  = text.split(' ').slice(1).join(' ').trim();
     if (!url) {
-        return sock.sendMessage(chatId, { text: '🎵 Usage: .tiktok <TikTok URL>' }, { quoted: message });
+        return sock.sendMessage(chatId, { text: '🎵 Usage: $tiktok <TikTok URL>' }, { quoted: message });
     }
     try {
         await sock.sendMessage(chatId, { text: '⏳ _Downloading TikTok video…_' }, { quoted: message });

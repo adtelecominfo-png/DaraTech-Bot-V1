@@ -1,5 +1,5 @@
 /**
- * .listonline — Lists all members in a group with their status (admin/member).
+ * $listonline — Lists all members in a group with their status (admin/member).
  * WhatsApp does not expose real-time online presence via the API,
  * so this command shows a full member roster with roles.
  */

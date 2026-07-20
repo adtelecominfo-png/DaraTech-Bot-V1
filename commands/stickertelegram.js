@@ -19,7 +19,7 @@ async function stickerTelegramCommand(sock, chatId, msg) {
         
         if (!args[0]) {
             await sock.sendMessage(chatId, { 
-                text: '⚠️ Please enter the Telegram sticker URL!\n\nExample: .tg https://t.me/addstickers/Porcientoreal' 
+                text: '⚠️ Please enter the Telegram sticker URL!\n\nExample: $tg https://t.me/addstickers/Porcientoreal' 
             });
             return;
         }

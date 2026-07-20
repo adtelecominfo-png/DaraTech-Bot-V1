@@ -23,7 +23,7 @@ async function hideTagCommand(sock, chatId, senderId, messageText, replyMessage,
     }
 
     if (!isSenderAdmin) {
-        await sock.sendMessage(chatId, { text: 'Only admins can use the .hidetag command.' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: 'Only admins can use the $hidetag command.' }, { quoted: message });
         return;
     }
 

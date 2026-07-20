@@ -2,17 +2,17 @@
 /**
  * Manga Command — powered by RUNFLIX API (RosyScans)
  *
- * .manga <title>               → search
- * .manga details <slug>        → full info + chapter list
- * .manga read <chapter-slug>   → chapter page image URLs
- * .manga dl <chapter-slug>     → single chapter as ZIP (max 30 pages)
- * .manga dls <slug> <from> <to>→ chapter range ZIP (max 3 per request)
- * .manga popular [page]        → popular titles
- * .manga latest [page]         → latest releases
- * .manga genres                → full genre list
- * .manga genre <slug> [page]   → browse by genre
- * .manga home                  → homepage (popularToday, latestUpdates)
- * .manga browse [opts]         → advanced filter (genre,status,type,order,page)
+ * $manga <title>               → search
+ * $manga details <slug>        → full info + chapter list
+ * $manga read <chapter-slug>   → chapter page image URLs
+ * $manga dl <chapter-slug>     → single chapter as ZIP (max 30 pages)
+ * $manga dls <slug> <from> <to>→ chapter range ZIP (max 3 per request)
+ * $manga popular [page]        → popular titles
+ * $manga latest [page]         → latest releases
+ * $manga genres                → full genre list
+ * $manga genre <slug> [page]   → browse by genre
+ * $manga home                  → homepage (popularToday, latestUpdates)
+ * $manga browse [opts]         → advanced filter (genre,status,type,order,page)
  */
 
 const axios = require('axios');
@@ -130,7 +130,7 @@ async function handleSearch(sock, chatId, message, query) {
         `┃ Found: ${results.length > 10 ? '10+' : results.length} results\n` +
         `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
         lines.join('\n\n') +
-        `\n\n📖 _Use_ \`.manga details <slug>\` _for full info_`;
+        `\n\n📖 _Use_ \`$manga details <slug>\` _for full info_`;
 
     return sock.sendMessage(chatId, { text }, { quoted: message });
 }
@@ -177,9 +177,9 @@ async function handleDetails(sock, chatId, message, slug) {
         (m.synopsis || m.description ? `\n📝 ${truncate(m.synopsis || m.description, 400)}\n` : '') +
         (chapterLines ? `\n📋 *Latest chapters:*\n${chapterLines}\n` : '') +
         (chapters.length > 10 ? `  _…and ${chapters.length - 10} more_\n` : '') +
-        `\n📖 _Read by number:_ \`.manga read ${slug} <N>\`\n` +
-        `💾 _Download by number:_ \`.manga dl ${slug} <N>\`\n` +
-        `_Example: .manga read ${slug} ${
+        `\n📖 _Read by number:_ \`$manga read ${slug} <N>\`\n` +
+        `💾 _Download by number:_ \`$manga dl ${slug} <N>\`\n` +
+        `_Example: $manga read ${slug} ${
             (() => {
                 const first = chapters[0];
                 return first ? parseInt((first.chapter || first.number || '1').toString().replace(/\D/g,'')) || 1 : 1;
@@ -223,11 +223,11 @@ async function resolveChapterSlug(mangaSlug, chapterNum) {
     if (!found) {
         // Show a sample of what numbers exist so user can self-correct
         const nums = chapters
-            .map(c => parseInt((c.chapter || c.number || '').toString().replace(/\D/g, '')))
-            .filter(n => !isNaN(n))
-            .sort((a, b) => b - a)
-            .slice(0, 6)
-            .join(', ');
+            $map(c => parseInt((c.chapter || c.number || '').toString().replace(/\D/g, '')))
+            $filter(n => !isNaN(n))
+            $sort((a, b) => b - a)
+            $slice(0, 6)
+            $join(', ');
         throw new Error(`Chapter ${chapterNum} not found in \`${mangaSlug}\`.\nAvailable (latest): ${nums}…`);
     }
 
@@ -283,7 +283,7 @@ async function handleRead(sock, chatId, message, chapterSlug) {
     // API returns: data.results.images[] (array of URL strings)
     const pages = data?.results?.images || data?.results?.pages || data?.pages || data?.images || data?.data || [];
     if (!pages.length) {
-        return sock.sendMessage(chatId, { text: `❌ No pages found for chapter: \`${chapterSlug}\`\n\n_Try_ \`.manga dl ${chapterSlug}\` _to download as ZIP instead._` }, { quoted: message });
+        return sock.sendMessage(chatId, { text: `❌ No pages found for chapter: \`${chapterSlug}\`\n\n_Try_ \`$manga dl ${chapterSlug}\` _to download as ZIP instead._` }, { quoted: message });
     }
 
     const total     = pages.length;
@@ -340,13 +340,13 @@ async function handleRead(sock, chatId, message, chapterSlug) {
 
     if (totalSent === 0) {
         await sock.sendMessage(chatId, {
-            text: `❌ All pages failed to download. Try \`.manga dl ${chapterSlug}\` instead.`
+            text: `❌ All pages failed to download. Try \`$manga dl ${chapterSlug}\` instead.`
         }, { quoted: message });
     } else {
         await sock.sendMessage(chatId, {
             text:
                 `✅ *${totalSent}/${total} pages sent!*\n\n` +
-                `💾 Download ZIP: \`.manga dl ${chapterSlug}\``
+                `💾 Download ZIP: \`$manga dl ${chapterSlug}\``
         }, { quoted: message });
     }
 }
@@ -368,7 +368,7 @@ async function handleDownload(sock, chatId, message, chapterSlug) {
         });
 
         const buffer = Buffer.from(response.data);
-        const filename = `manga-${chapterSlug}.zip`.replace(/[^\w\-.]/g, '_');
+        const filename = `manga-${chapterSlug}.zip`$replace(/[^\w\-.]/g, '_');
 
         await sock.sendMessage(chatId, {
             document: buffer,
@@ -392,7 +392,7 @@ async function handleRangeDownload(sock, chatId, message, slug, from, to) {
     const toN   = parseInt(to);
     if (isNaN(fromN) || isNaN(toN) || fromN < 1 || toN < fromN) {
         return sock.sendMessage(chatId, {
-            text: `❌ Invalid range.\nUsage: \`.manga dls <slug> <from> <to>\`\nExample: \`.manga dls one-piece 1 3\`\n\n_Max 3 chapters per request._`
+            text: `❌ Invalid range.\nUsage: \`$manga dls <slug> <from> <to>\`\nExample: \`$manga dls one-piece 1 3\`\n\n_Max 3 chapters per request._`
         }, { quoted: message });
     }
     if (toN - fromN + 1 > 3) {
@@ -415,7 +415,7 @@ async function handleRangeDownload(sock, chatId, message, slug, from, to) {
         });
 
         const buffer   = Buffer.from(response.data);
-        const filename = `manga-${slug}-ch${fromN}-${toN}.zip`.replace(/[^\w\-.]/g, '_');
+        const filename = `manga-${slug}-ch${fromN}-${toN}.zip`$replace(/[^\w\-.]/g, '_');
 
         await sock.sendMessage(chatId, {
             document: buffer,
@@ -425,7 +425,7 @@ async function handleRangeDownload(sock, chatId, message, slug, from, to) {
         }, { quoted: message });
     } catch (err) {
         await sock.sendMessage(chatId, {
-            text: `❌ Range ZIP failed: ${err.message}\n\nTry individual chapters:\n\`.manga dl <chapter-slug>\``
+            text: `❌ Range ZIP failed: ${err.message}\n\nTry individual chapters:\n\`$manga dl <chapter-slug>\``
         }, { quoted: message });
     }
 }
@@ -456,8 +456,8 @@ async function handlePopular(sock, chatId, message, page = 1) {
             `┃ Page ${page}\n` +
             `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
             lines.join('\n\n') +
-            `\n\n📄 _Next page:_ \`.manga popular ${page + 1}\`\n` +
-            `📖 _Details:_ \`.manga details <slug>\``
+            `\n\n📄 _Next page:_ \`$manga popular ${page + 1}\`\n` +
+            `📖 _Details:_ \`$manga details <slug>\``
     }, { quoted: message });
 }
 
@@ -487,8 +487,8 @@ async function handleLatest(sock, chatId, message, page = 1) {
             `┃ Page ${page}\n` +
             `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
             lines.join('\n\n') +
-            `\n\n📄 _Next page:_ \`.manga latest ${page + 1}\`\n` +
-            `📖 _Details:_ \`.manga details <slug>\``
+            `\n\n📄 _Next page:_ \`$manga latest ${page + 1}\`\n` +
+            `📖 _Details:_ \`$manga details <slug>\``
     }, { quoted: message });
 }
 
@@ -516,7 +516,7 @@ async function handleGenres(sock, chatId, message) {
             `┃ ${list.length} genres available\n` +
             `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
             lines +
-            `\n\n📖 _Browse:_ \`.manga genre <slug>\``
+            `\n\n📖 _Browse:_ \`$manga genre <slug>\``
     }, { quoted: message });
 }
 
@@ -545,8 +545,8 @@ async function handleGenreBrowse(sock, chatId, message, slug, page = 1) {
             `┃ Page ${page}\n` +
             `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
             lines.join('\n\n') +
-            `\n\n📄 _Next page:_ \`.manga genre ${slug} ${page + 1}\`\n` +
-            `📖 _Details:_ \`.manga details <slug>\``
+            `\n\n📄 _Next page:_ \`$manga genre ${slug} ${page + 1}\`\n` +
+            `📖 _Details:_ \`$manga details <slug>\``
     }, { quoted: message });
 }
 
@@ -595,7 +595,7 @@ async function handleHome(sock, chatId, message) {
         }).join('\n') + '\n';
     }
 
-    text += `\n📖 _Details:_ \`.manga details <slug>\`\n🔥 _Popular:_ \`.manga popular\`\n🆕 _Latest:_ \`.manga latest\``;
+    text += `\n📖 _Details:_ \`$manga details <slug>\`\n🔥 _Popular:_ \`$manga popular\`\n🆕 _Latest:_ \`$manga latest\``;
 
     return sock.sendMessage(chatId, { text }, { quoted: message });
 }
@@ -603,7 +603,7 @@ async function handleHome(sock, chatId, message) {
 // ─── Browse (advanced filter) ─────────────────────────────────────────────────
 
 async function handleBrowse(sock, chatId, message, args) {
-    // Parse: .manga browse [genre=action] [status=ongoing] [type=manhwa] [order=popular] [page=1]
+    // Parse: $manga browse [genre=action] [status=ongoing] [type=manhwa] [order=popular] [page=1]
     const params = {};
     for (const arg of args) {
         if (arg.includes('=')) {
@@ -626,7 +626,7 @@ async function handleBrowse(sock, chatId, message, args) {
 
     if (!results.length) {
         return sock.sendMessage(chatId, {
-            text: `❌ No results.\n\nUsage: \`.manga browse genre=action status=ongoing type=manhwa order=popular page=1\``
+            text: `❌ No results.\n\nUsage: \`$manga browse genre=action status=ongoing type=manhwa order=popular page=1\``
         }, { quoted: message });
     }
 
@@ -642,7 +642,7 @@ async function handleBrowse(sock, chatId, message, args) {
             `┃ ${qs || 'All'}\n` +
             `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
             lines.join('\n\n') +
-            `\n\n📖 _Details:_ \`.manga details <slug>\``
+            `\n\n📖 _Details:_ \`$manga details <slug>\``
     }, { quoted: message });
 }
 
@@ -671,8 +671,8 @@ async function mangaCommand(sock, chatId, message, userMessage) {
                     `🏷️ *.manga genre <slug> [pg]*  — browse by genre\n` +
                     `🏠 *.manga home*               — homepage\n` +
                     `🔎 *.manga browse [filters]*   — advanced filter\n\n` +
-                    `_Example: .manga Jujutsu Kaisen_\n` +
-                    `_Example: .manga browse genre=action status=ongoing_\n` +
+                    `_Example: $manga Jujutsu Kaisen_\n` +
+                    `_Example: $manga browse genre=action status=ongoing_\n` +
                     `╰━━━━━━━━━━━━━━━━━━━━━━━━╯`
             }, { quoted: message });
         }
@@ -698,7 +698,7 @@ async function mangaCommand(sock, chatId, message, userMessage) {
         if (sub === 'genre') {
             const slug = rest[0];
             if (!slug) {
-                return sock.sendMessage(chatId, { text: `❌ Usage: \`.manga genre <slug> [page]\`\nGet slugs with \`.manga genres\`` }, { quoted: message });
+                return sock.sendMessage(chatId, { text: `❌ Usage: \`$manga genre <slug> [page]\`\nGet slugs with \`$manga genres\`` }, { quoted: message });
             }
             const page = parseInt(rest[1]) || 1;
             return await handleGenreBrowse(sock, chatId, message, slug, page);
@@ -707,7 +707,7 @@ async function mangaCommand(sock, chatId, message, userMessage) {
         if (sub === 'details' || sub === 'info') {
             const slug = rest.join('-') || '';
             if (!slug) {
-                return sock.sendMessage(chatId, { text: `❌ Usage: \`.manga details <slug>\`\nGet slugs from \`.manga <search>\`` }, { quoted: message });
+                return sock.sendMessage(chatId, { text: `❌ Usage: \`$manga details <slug>\`\nGet slugs from \`$manga <search>\`` }, { quoted: message });
             }
             return await handleDetails(sock, chatId, message, slug);
         }
@@ -764,7 +764,7 @@ async function mangaCommand(sock, chatId, message, userMessage) {
             const to   = rest[2];
             if (!slug || !from || !to) {
                 return sock.sendMessage(chatId, {
-                    text: `❌ Usage: \`.manga dls <slug> <from-chapter> <to-chapter>\`\nExample: \`.manga dls one-piece 1 3\`\n\n_Max 3 chapters per request._`
+                    text: `❌ Usage: \`$manga dls <slug> <from-chapter> <to-chapter>\`\nExample: \`$manga dls one-piece 1 3\`\n\n_Max 3 chapters per request._`
                 }, { quoted: message });
             }
             return await handleRangeDownload(sock, chatId, message, slug, from, to);

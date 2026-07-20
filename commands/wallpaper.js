@@ -5,7 +5,7 @@ async function wallpaperCommand(sock, chatId, message) {
     try {
         const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const q = text.split(' ').slice(1).join(' ').trim();
-        if (!q) return sock.sendMessage(chatId, { text: '🖼 Usage: .wallpaper <search term>\nExample: .wallpaper naruto' }, { quoted: message });
+        if (!q) return sock.sendMessage(chatId, { text: '🖼 Usage: $wallpaper <search term>\nExample: $wallpaper naruto' }, { quoted: message });
         await sock.sendMessage(chatId, { text: `🖼 Searching wallpapers for: *${q}*...` }, { quoted: message });
         const data = await davidGet(`/search/wallpaper?text=${encodeURIComponent(q)}`);
         if (!data?.success || !data?.result?.length) {

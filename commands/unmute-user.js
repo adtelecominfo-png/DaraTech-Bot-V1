@@ -21,7 +21,7 @@ async function unmuteUserCommand(sock, chatId, message) {
         const mentioned = message.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
         if (mentioned.length === 0) {
             return await sock.sendMessage(chatId, { 
-                text: '❌ Please mention the user to unmute.\nExample: .unmute-user @user' 
+                text: '❌ Please mention the user to unmute.\nExample: $unmute-user @user' 
             }, { quoted: message });
         }
 

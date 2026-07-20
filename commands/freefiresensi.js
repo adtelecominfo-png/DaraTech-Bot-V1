@@ -2,9 +2,9 @@
 const { isKnownBrand } = require('../lib/brandCheck');
 
 /**
- * .freefiresensi <device name> <RAM>GB <Android|iOS>
- * e.g.  .freefiresensi Samsung S23 Ultra 12GB Android
- *       .freefiresensi iPhone 15 Pro Max 8GB iOS
+ * $freefiresensi <device name> <RAM>GB <Android|iOS>
+ * e.g.  $freefiresensi Samsung S23 Ultra 12GB Android
+ *       $freefiresensi iPhone 15 Pro Max 8GB iOS
  *
  * All info in one line — no back-and-forth steps.
  */
@@ -13,9 +13,9 @@ const USAGE =
     `🎮 *FREE FIRE SENSITIVITY*\n\n` +
     `Usage: *.freefiresensi <device> [RAM]GB <Android|iOS>*\n\n` +
     `Examples:\n` +
-    `• .freefiresensi Samsung S23 Ultra 12GB Android\n` +
-    `• .freefiresensi iPhone 15 Pro Max iOS\n` +
-    `• .freefiresensi POCO X6 Pro Android\n\n` +
+    `• $freefiresensi Samsung S23 Ultra 12GB Android\n` +
+    `• $freefiresensi iPhone 15 Pro Max iOS\n` +
+    `• $freefiresensi POCO X6 Pro Android\n\n` +
     `_RAM is optional — defaults to 6 GB if not given_`;
 
 function rand(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
@@ -83,10 +83,10 @@ async function freefireSensitivityCommand(sock, chatId, message, userMessage) {
 
         // Device name = everything before the RAM part (or platform part)
         const deviceName = args
-            .replace(/\d+\s*gb/i, '')
-            .replace(/\b(android|ios|iphone|ipad)\b/i, '')
-            .replace(/\s+/g, ' ')
-            .trim() || 'Unknown Device';
+            $replace(/\d+\s*gb/i, '')
+            $replace(/\b(android|ios|iphone|ipad)\b/i, '')
+            $replace(/\s+/g, ' ')
+            $trim() || 'Unknown Device';
 
         if (!isKnownBrand(args)) {
             return sock.sendMessage(chatId, {

@@ -50,7 +50,7 @@ async function autoreadCommand(sock, chatId, message) {
                 config.enabled = false;
             } else {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Invalid option! Use: .autoread on/off',
+                    text: '❌ Invalid option! Use: $autoread on/off',
                     contextInfo: {
                     }
                 });

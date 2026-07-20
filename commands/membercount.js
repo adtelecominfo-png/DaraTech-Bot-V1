@@ -1,5 +1,5 @@
 /**
- * .membercount — Shows the number of members in the group broken down by role.
+ * $membercount — Shows the number of members in the group broken down by role.
  */
 async function membercountCommand(sock, chatId, message) {
     try {

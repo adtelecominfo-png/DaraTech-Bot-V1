@@ -67,84 +67,84 @@ async function giftedTextReply(sock, chatId, message, endpoint, params, label) {
 
 // ─── Text AI commands ─────────────────────────────────────────────────────────
 
-/** .letmegpt — LetMeGPT endpoint */
+/** $letmegpt — LetMeGPT endpoint */
 async function letmegptCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'letmegpt', {}, 'LetMeGPT');
 }
 
-/** .unlimitedai — UnlimitedAI endpoint */
+/** $unlimitedai — UnlimitedAI endpoint */
 async function unlimitedAiCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'unlimitedai', {}, 'UnlimitedAI');
 }
 
-/** .claude — Claude AI via overchat */
+/** $claude — Claude AI via overchat */
 async function claudeCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'overchat', { model: 'claude' }, 'Claude AI');
 }
 
-/** .deepseek — DeepSeek via overchat */
+/** $deepseek — DeepSeek via overchat */
 async function deepseekCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'overchat', { model: 'deepseek' }, 'DeepSeek');
 }
 
-/** .gpt4 — GPT-4 via overchat */
+/** $gpt4 — GPT-4 via overchat */
 async function gpt4Command(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'overchat', { model: 'gpt4' }, 'GPT-4');
 }
 
-/** .llama — Meta LLaMA via overchat */
+/** $llama — Meta LLaMA via overchat */
 async function llamaCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'overchat', { model: 'llama' }, 'LLaMA AI');
 }
 
-/** .mistralai — Mistral AI via overchat (gifted version) */
+/** $mistralai — Mistral AI via overchat (gifted version) */
 async function mistralAiCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'overchat', { model: 'mistral' }, 'Mistral AI');
 }
 
-/** .geminioc — Google Gemini via overchat model */
+/** $geminioc — Google Gemini via overchat model */
 async function geminiOcCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'overchat', { model: 'gemini' }, 'Gemini (Overchat)');
 }
 
-/** .grok — Grok AI via overchat */
+/** $grok — Grok AI via overchat */
 async function grokCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'overchat', { model: 'grok' }, 'Grok AI');
 }
 
-/** .qwenai — Qwen AI via overchat (gifted version) */
+/** $qwenai — Qwen AI via overchat (gifted version) */
 async function qwenAiCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'overchat', { model: 'qwen' }, 'Qwen AI');
 }
 
-/** .o1 — OpenAI O1 reasoning model via overchat */
+/** $o1 — OpenAI O1 reasoning model via overchat */
 async function o1Command(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'overchat', { model: 'o1' }, 'OpenAI O1');
 }
 
 // ─── Standalone Gifted AI endpoints ──────────────────────────────────────────
 
-/** .gifgemini — Standalone Google Gemini via Gifted API */
+/** $gifgemini — Standalone Google Gemini via Gifted API */
 async function gifGeminiCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'gemini', {}, 'Google Gemini');
 }
 
-/** .gifvenice — Venice AI (uncensored) via Gifted API */
+/** $gifvenice — Venice AI (uncensored) via Gifted API */
 async function gifVeniceCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'venice', {}, 'Venice AI (Uncensored)');
 }
 
-/** .gifpoll — Pollinations AI via Gifted API */
+/** $gifpoll — Pollinations AI via Gifted API */
 async function gifPollCommand(sock, chatId, message) {
     await giftedTextReply(sock, chatId, message, 'pollinations', {}, 'Pollinations AI');
 }
 
-/** .muslimai — Islamic AI (answers Quran/Islam questions) */
+/** $muslimai — Islamic AI (answers Quran/Islam questions) */
 async function muslimAiCommand(sock, chatId, message) {
     const query = extractQuery(message);
     if (!query) {
         return sock.sendMessage(chatId, {
-            text: '☪️ Usage: .muslimai <your Islamic question>\n_Ask about Quran, Hadith, Islamic rulings, and more._',
+            text: '☪️ Usage: $muslimai <your Islamic question>\n_Ask about Quran, Hadith, Islamic rulings, and more._',
         }, { quoted: message });
     }
     try {
@@ -167,12 +167,12 @@ async function muslimAiCommand(sock, chatId, message) {
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
 
-/** .transcript — Get YouTube video transcript */
+/** $transcript — Get YouTube video transcript */
 async function transcriptCommand(sock, chatId, message) {
     const url = extractQuery(message);
     if (!url || !/youtu(be\.com|\.be)/i.test(url)) {
         return sock.sendMessage(chatId, {
-            text: '📝 Usage: .transcript <YouTube URL>\nExample: .transcript https://youtu.be/dQw4w9WgXcQ',
+            text: '📝 Usage: $transcript <YouTube URL>\nExample: $transcript https://youtu.be/dQw4w9WgXcQ',
         }, { quoted: message });
     }
     try {
@@ -207,12 +207,12 @@ async function transcriptCommand(sock, chatId, message) {
 
 // ─── Image generation ─────────────────────────────────────────────────────────
 
-/** .giftflux — GiftedTech Flux image (result.url → Amazon S3) */
+/** $giftflux — GiftedTech Flux image (result.url → Amazon S3) */
 async function giftFluxCommand(sock, chatId, message) {
     const prompt = extractQuery(message);
     if (!prompt) {
         return sock.sendMessage(chatId, {
-            text: '🎨 Usage: .giftflux <describe the image you want>\nExample: .giftflux anime girl with blue hair in a cherry blossom garden',
+            text: '🎨 Usage: $giftflux <describe the image you want>\nExample: $giftflux anime girl with blue hair in a cherry blossom garden',
         }, { quoted: message });
     }
     try {
@@ -234,12 +234,12 @@ async function giftFluxCommand(sock, chatId, message) {
     }
 }
 
-/** .gifttxt2img — GiftedTech txt2img (result.url → Sora/Aritek server) */
+/** $gifttxt2img — GiftedTech txt2img (result.url → Sora/Aritek server) */
 async function giftTxt2ImgCommand(sock, chatId, message) {
     const prompt = extractQuery(message);
     if (!prompt) {
         return sock.sendMessage(chatId, {
-            text: '🖼️ Usage: .gifttxt2img <describe the image you want>\nExample: .gifttxt2img futuristic city at night with neon lights',
+            text: '🖼️ Usage: $gifttxt2img <describe the image you want>\nExample: $gifttxt2img futuristic city at night with neon lights',
         }, { quoted: message });
     }
     try {
@@ -261,12 +261,12 @@ async function giftTxt2ImgCommand(sock, chatId, message) {
     }
 }
 
-/** .magicstudio — MagicStudio AI (returns raw binary JPEG, no JSON wrapper) */
+/** $magicstudio — MagicStudio AI (returns raw binary JPEG, no JSON wrapper) */
 async function magicStudioCommand(sock, chatId, message) {
     const prompt = extractQuery(message);
     if (!prompt) {
         return sock.sendMessage(chatId, {
-            text: '✨ Usage: .magicstudio <describe the image you want>\nExample: .magicstudio a majestic lion in golden armor',
+            text: '✨ Usage: $magicstudio <describe the image you want>\nExample: $magicstudio a majestic lion in golden armor',
         }, { quoted: message });
     }
     try {

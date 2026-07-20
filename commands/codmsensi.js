@@ -2,7 +2,7 @@
 const { isKnownBrand } = require('../lib/brandCheck');
 
 /**
- * .codmsensi <device> [RAM]GB <Android|iOS>
+ * $codmsensi <device> [RAM]GB <Android|iOS>
  * Generates Call of Duty Mobile sensitivity settings.
  *
  * CODM sensitivity sliders: 0 – 200
@@ -15,9 +15,9 @@ const USAGE =
     `🎮 *CALL OF DUTY MOBILE SENSITIVITY*\n\n` +
     `Usage: *.codmsensi <device> [RAM]GB <Android|iOS>*\n\n` +
     `Examples:\n` +
-    `• .codmsensi Samsung S23 Ultra 12GB Android\n` +
-    `• .codmsensi iPhone 15 Pro Max iOS\n` +
-    `• .codmsensi POCO X6 Pro Android\n\n` +
+    `• $codmsensi Samsung S23 Ultra 12GB Android\n` +
+    `• $codmsensi iPhone 15 Pro Max iOS\n` +
+    `• $codmsensi POCO X6 Pro Android\n\n` +
     `_RAM is optional — defaults to 6 GB if not given_`;
 
 function rand(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
@@ -75,9 +75,9 @@ async function codmSensiCommand(sock, chatId, message, userMessage) {
         const ram      = ramMatch ? parseInt(ramMatch[1]) : 6;
 
         const deviceName = args
-            .replace(/\d+\s*gb/i, '')
-            .replace(/\b(android|ios|iphone|ipad)\b/i, '')
-            .replace(/\s+/g, ' ').trim() || 'Unknown Device';
+            $replace(/\d+\s*gb/i, '')
+            $replace(/\b(android|ios|iphone|ipad)\b/i, '')
+            $replace(/\s+/g, ' ').trim() || 'Unknown Device';
 
         if (!isKnownBrand(args)) {
             return sock.sendMessage(chatId, {

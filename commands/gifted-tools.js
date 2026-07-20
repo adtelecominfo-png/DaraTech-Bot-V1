@@ -46,10 +46,10 @@ async function processing(sock, message, chatId, text) {
 
 // ─── Image Tools ─────────────────────────────────────────────────────────────
 
-/** .ttp <text> — text to picture image */
+/** $ttp <text> — text to picture image */
 async function ttpCommand(sock, chatId, message) {
     const q = getQ(message);
-    if (!q) return sock.sendMessage(chatId, { text: '🖼️ Usage: .ttp <text>\nExample: .ttp Hello World' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '🖼️ Usage: $ttp <text>\nExample: $ttp Hello World' }, { quoted: message });
     await processing(sock, message, chatId, '🖼️ Generating image……');
     try {
         const data = await toolsGet('ttp', { query: q });
@@ -66,7 +66,7 @@ async function ttpCommand(sock, chatId, message) {
     }
 }
 
-/** .canvas <title> — Spotify-style canvas card image */
+/** $canvas <title> — Spotify-style canvas card image */
 const CANVAS_TYPES = [
     'spotify', 'youtube', 'google', 'tiktok', 'duckduckgo', 'brave',
     'applemusic', 'soundcloud', 'pinterest', 'playstore', 'happymod',
@@ -117,11 +117,11 @@ async function canvasCommand(sock, chatId, message) {
 
 // ─── Document Tools ──────────────────────────────────────────────────────────
 
-/** .topdf <text or url> — generate a PDF document */
+/** $topdf <text or url> — generate a PDF document */
 async function topdfCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '📄 Usage: .topdf <text or URL>\nExample: .topdf https://example.com\nExample: .topdf This is my document content',
+        text: '📄 Usage: $topdf <text or URL>\nExample: $topdf https://example.com\nExample: $topdf This is my document content',
     }, { quoted: message });
     await processing(sock, message, chatId, '📄 Generating PDF……');
     try {
@@ -144,11 +144,11 @@ async function topdfCommand(sock, chatId, message) {
 
 // ─── Web Tools ────────────────────────────────────────────────────────────────
 
-/** .web2zip <url> — download a website as a ZIP archive */
+/** $web2zip <url> — download a website as a ZIP archive */
 async function web2zipCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
-        text: '🗜️ Usage: .web2zip <url>\nExample: .web2zip https://example.com',
+        text: '🗜️ Usage: $web2zip <url>\nExample: $web2zip https://example.com',
     }, { quoted: message });
     await processing(sock, message, chatId, '🗜️ Archiving website……');
     try {
@@ -170,7 +170,7 @@ async function web2zipCommand(sock, chatId, message) {
     }
 }
 
-/** .proxy — get a fresh list of working proxies */
+/** $proxy — get a fresh list of working proxies */
 async function proxyCommand(sock, chatId, message) {
     await processing(sock, message, chatId, '🌐 Fetching proxy list……');
     try {
@@ -192,11 +192,11 @@ async function proxyCommand(sock, chatId, message) {
 
 // ─── Developer Tools ──────────────────────────────────────────────────────────
 
-/** .obfuscate <js code> — obfuscate / encrypt JavaScript code */
+/** $obfuscate <js code> — obfuscate / encrypt JavaScript code */
 async function obfuscateCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '🔐 Usage: .obfuscate <JavaScript code>\nExample: .obfuscate console.log("hello")',
+        text: '🔐 Usage: $obfuscate <JavaScript code>\nExample: $obfuscate console.log("hello")',
     }, { quoted: message });
     await processing(sock, message, chatId, '🔐 Obfuscating code……');
     try {
@@ -215,11 +215,11 @@ async function obfuscateCommand(sock, chatId, message) {
 
 // ─── Network / Lookup Tools ───────────────────────────────────────────────────
 
-/** .dns <domain> — DNS records lookup */
+/** $dns <domain> — DNS records lookup */
 async function dnsCommand(sock, chatId, message) {
     const q = getQ(message).replace(/^https?:\/\//, '').split('/')[0].trim();
     if (!q) return sock.sendMessage(chatId, {
-        text: '🔍 Usage: .dns <domain>\nExample: .dns google.com',
+        text: '🔍 Usage: $dns <domain>\nExample: $dns google.com',
     }, { quoted: message });
     await processing(sock, message, chatId, '🔍 Looking up DNS records……');
     try {
@@ -244,11 +244,11 @@ async function dnsCommand(sock, chatId, message) {
     }
 }
 
-/** .headers <url> — HTTP response headers of a server */
+/** $headers <url> — HTTP response headers of a server */
 async function headersCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
-        text: '📡 Usage: .headers <url>\nExample: .headers https://google.com',
+        text: '📡 Usage: $headers <url>\nExample: $headers https://google.com',
     }, { quoted: message });
     await processing(sock, message, chatId, '📡 Fetching HTTP headers……');
     try {
@@ -265,11 +265,11 @@ async function headersCommand(sock, chatId, message) {
     }
 }
 
-/** .servercheck <url> — check if a server / website is online */
+/** $servercheck <url> — check if a server / website is online */
 async function servercheckCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q || !q.startsWith('http')) return sock.sendMessage(chatId, {
-        text: '🖥️ Usage: .servercheck <url>\nExample: .servercheck https://google.com',
+        text: '🖥️ Usage: $servercheck <url>\nExample: $servercheck https://google.com',
     }, { quoted: message });
     await processing(sock, message, chatId, '🖥️ Checking server……');
     try {
@@ -316,27 +316,27 @@ async function _screenshotViewport(sock, chatId, message, endpoint, label) {
     }
 }
 
-/** .ssphone <url> — screenshot in mobile (phone) viewport */
+/** $ssphone <url> — screenshot in mobile (phone) viewport */
 async function ssphoneCommand(sock, chatId, message) {
     return _screenshotViewport(sock, chatId, message, 'ssphone', 'Mobile');
 }
 
-/** .sstab <url> — screenshot in tablet viewport */
+/** $sstab <url> — screenshot in tablet viewport */
 async function sstabCommand(sock, chatId, message) {
     return _screenshotViewport(sock, chatId, message, 'sstab', 'Tablet');
 }
 
-/** .sspc <url> — screenshot in desktop/PC viewport */
+/** $sspc <url> — screenshot in desktop/PC viewport */
 async function sspcCommand(sock, chatId, message) {
     return _screenshotViewport(sock, chatId, message, 'sspc', 'Desktop');
 }
 
 // ─── Fancy Text ───────────────────────────────────────────────────────────────
 
-/** .fantext <text> — show 8 different fancy Unicode text styles at once */
+/** $fantext <text> — show 8 different fancy Unicode text styles at once */
 async function fantextCommand(sock, chatId, message) {
     const q = getQ(message);
-    if (!q) return sock.sendMessage(chatId, { text: '✨ Usage: .fantext <text>\nExample: .fantext Hello World' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '✨ Usage: $fantext <text>\nExample: $fantext Hello World' }, { quoted: message });
     await processing(sock, message, chatId, '✨ Generating fancy text……');
     try {
         const data = await toolsGet('fancy', { text: q });
@@ -352,10 +352,10 @@ async function fantextCommand(sock, chatId, message) {
     }
 }
 
-/** .fantext2 <text> — show a different set of fancy Unicode text styles */
+/** $fantext2 <text> — show a different set of fancy Unicode text styles */
 async function fantext2Command(sock, chatId, message) {
     const q = getQ(message);
-    if (!q) return sock.sendMessage(chatId, { text: '✨ Usage: .fantext2 <text>\nExample: .fantext2 Hello World' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '✨ Usage: $fantext2 <text>\nExample: $fantext2 Hello World' }, { quoted: message });
     await processing(sock, message, chatId, '✨ Generating fancy text v2……');
     try {
         const data = await toolsGet('fancyv2', { text: q });
@@ -373,7 +373,7 @@ async function fantext2Command(sock, chatId, message) {
 
 // ─── AI Cloth Remover ────────────────────────────────────────────────────────
 
-/** .rc [url] — AI cloth/clothing remover. Works with URL, replied image, or sent image. */
+/** $rc [url] — AI cloth/clothing remover. Works with URL, replied image, or sent image. */
 /** Download an imageMessage to a temp file, upload to uguu.se, return URL */
 async function uploadRcImage(imgMsg) {
     const stream = await downloadContentFromMessage(imgMsg, 'image');
@@ -445,11 +445,11 @@ async function rcCommand(sock, chatId, message) {
 
 // ─── Whois Lookup ────────────────────────────────────────────────────────────
 
-/** .whois <domain> — domain WHOIS registration info */
+/** $whois <domain> — domain WHOIS registration info */
 async function whoisCommand(sock, chatId, message) {
     const q = getQ(message).replace(/^https?:\/\//, '').split('/')[0].trim();
     if (!q) return sock.sendMessage(chatId, {
-        text: '🔎 Usage: .whois <domain>\nExample: .whois google.com',
+        text: '🔎 Usage: $whois <domain>\nExample: $whois google.com',
     }, { quoted: message });
     await processing(sock, message, chatId, '🔎 Looking up WHOIS info……');
     try {
@@ -482,11 +482,11 @@ async function whoisCommand(sock, chatId, message) {
 
 // ─── JS Obfuscator V2 ────────────────────────────────────────────────────────
 
-/** .obfuscate2 <js code> — obfuscate JavaScript code using encryptv2 engine */
+/** $obfuscate2 <js code> — obfuscate JavaScript code using encryptv2 engine */
 async function obfuscate2Command(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '🔐 Usage: .obfuscate2 <JavaScript code>\nExample: .obfuscate2 console.log("hello")',
+        text: '🔐 Usage: $obfuscate2 <JavaScript code>\nExample: $obfuscate2 console.log("hello")',
     }, { quoted: message });
     await processing(sock, message, chatId, '🔐 Obfuscating code v2……');
     try {

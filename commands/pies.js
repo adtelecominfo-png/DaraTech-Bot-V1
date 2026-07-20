@@ -16,7 +16,7 @@ async function piesCommand(sock, chatId, message, args) {
         await sock.sendMessage(chatId, { image: { url: imgUrl }, caption: `🖼 *${query.toUpperCase()} Wallpaper*` }, { quoted: message });
     } catch (e) {
         console.error('[pies]', e.message);
-        await sock.sendMessage(chatId, { text: `❌ Failed to fetch image.\n\nUsage: .wallpaper <type>\nTypes: ${VALID_TYPES.join(', ')}` }, { quoted: message });
+        await sock.sendMessage(chatId, { text: `❌ Failed to fetch image.\n\nUsage: $wallpaper <type>\nTypes: ${VALID_TYPES.join(', ')}` }, { quoted: message });
     }
 }
 

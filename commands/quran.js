@@ -43,7 +43,7 @@ function ayahCard(en, ar) {
     ].join('\n');
 }
 
-// ─── .quran <surah>:<ayah>  or  .quran <surah> ───────────────────────────────
+// ─── $quran <surah>:<ayah>  or  $quran <surah> ───────────────────────────────
 
 async function quranCommand(sock, chatId, message) {
     const body = (
@@ -58,10 +58,10 @@ async function quranCommand(sock, chatId, message) {
                 `📿 *QURAN Command Usage*`,
                 ``,
                 `*.quran <surah>:<ayah>*  — fetch a specific verse`,
-                `  e.g.  .quran 2:255`,
+                `  e.g.  $quran 2:255`,
                 ``,
                 `*.quran <surah>*         — surah info + first verse`,
-                `  e.g.  .quran 18`,
+                `  e.g.  $quran 18`,
                 ``,
                 `*.dailyayah*             — random daily ayah`,
             ].join('\n'),
@@ -102,7 +102,7 @@ async function quranCommand(sock, chatId, message) {
     const match = arg.match(/^(\d+):(\d+)$/);
     if (!match) {
         return sock.sendMessage(chatId, {
-            text: `❌ Invalid format. Use *surah:ayah* (e.g. .quran 2:255) or just *surah* (e.g. .quran 18).`,
+            text: `❌ Invalid format. Use *surah:ayah* (e.g. $quran 2:255) or just *surah* (e.g. $quran 18).`,
         }, { quoted: message });
     }
 
@@ -116,7 +116,7 @@ async function quranCommand(sock, chatId, message) {
     }
 }
 
-// ─── .dailyayah ───────────────────────────────────────────────────────────────
+// ─── $dailyayah ───────────────────────────────────────────────────────────────
 
 async function dailyAyahCommand(sock, chatId, message) {
     const day = Math.floor(Date.now() / 86400000);

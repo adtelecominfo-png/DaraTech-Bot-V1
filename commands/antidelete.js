@@ -100,7 +100,7 @@ async function handleAntideleteCommand(sock, chatId, message, match) {
     } else if (match === 'off') {
         config.enabled = false;
     } else {
-        return sock.sendMessage(chatId, { text: '*Invalid command. Use .antidelete to see usage.*' }, {quoted:message});
+        return sock.sendMessage(chatId, { text: '*Invalid command. Use $antidelete to see usage.*' }, {quoted:message});
     }
 
     saveAntideleteConfig(config);

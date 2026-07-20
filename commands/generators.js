@@ -67,7 +67,7 @@ async function randomnumCommand(sock, chatId, message) {
     const parts = text.split(' ').slice(1);
     const min = parseInt(parts[0]) || 1;
     const max = parseInt(parts[1]) || 100;
-    if (min >= max) return sock.sendMessage(chatId, { text: '🎲 Usage: .randomnum <min> <max>\nExample: .randomnum 1 100' }, { quoted: message });
+    if (min >= max) return sock.sendMessage(chatId, { text: '🎲 Usage: $randomnum <min> <max>\nExample: $randomnum 1 100' }, { quoted: message });
     const result = Math.floor(Math.random() * (max - min + 1)) + min;
     await sock.sendMessage(chatId, {
         text: `🎲 *RANDOM NUMBER*\n\nRange: ${min} – ${max}\nResult: *${result}*\n\n_Daratech_ ⚡`

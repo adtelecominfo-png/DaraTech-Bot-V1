@@ -89,11 +89,11 @@ async function joinCommand(sock, chatId, senderId, userMessage, message) {
     try {
         const isOwner = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
         if (!isOwner) {
-            return sock.sendMessage(chatId, { text: '❌ Only the owner can use .join.' }, { quoted: message });
+            return sock.sendMessage(chatId, { text: '❌ Only the owner can use $join.' }, { quoted: message });
         }
         const link = userMessage.slice(5).trim();
         if (!link) {
-            return sock.sendMessage(chatId, { text: '❌ Usage: .join https://chat.whatsapp.com/xxxxxx' }, { quoted: message });
+            return sock.sendMessage(chatId, { text: '❌ Usage: $join https://chat.whatsapp.com/xxxxxx' }, { quoted: message });
         }
         const match = link.match(/chat\.whatsapp\.com\/([A-Za-z0-9_-]+)/);
         if (!match) {
@@ -123,7 +123,7 @@ async function inviteCommand(sock, chatId, senderId, message) {
 
         if (targets.length === 0) {
             return sock.sendMessage(chatId, {
-                text: `🔗 *Group Invite Link*\n\n📌 *${meta.subject}*\n\n${link}\n\n_Tip: Tag someone with .invite @user to DM them the link._`
+                text: `🔗 *Group Invite Link*\n\n📌 *${meta.subject}*\n\n${link}\n\n_Tip: Tag someone with $invite @user to DM them the link._`
             }, { quoted: message });
         }
 
@@ -202,7 +202,7 @@ async function setppgcCommand(sock, chatId, senderId, message) {
         const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         const imageMessage = quoted?.imageMessage || quoted?.stickerMessage;
         if (!imageMessage) {
-            return sock.sendMessage(chatId, { text: '↩️ Reply to an image or sticker with .setppgc' }, { quoted: message });
+            return sock.sendMessage(chatId, { text: '↩️ Reply to an image or sticker with $setppgc' }, { quoted: message });
         }
 
         const tmpDir = path.join(process.cwd(), 'temp');
@@ -300,7 +300,7 @@ async function linkgcCommand(sock, chatId, message) {
         const code = await sock.groupInviteCode(chatId);
         const link = `https://chat.whatsapp.com/${code}`;
         await sock.sendMessage(chatId, {
-            text: `🔗 *Group Link*\n\n📌 *${meta.subject}*\n\n${link}\n\n⚠️ _Use .resetlink to revoke this link._`
+            text: `🔗 *Group Link*\n\n📌 *${meta.subject}*\n\n${link}\n\n⚠️ _Use $resetlink to revoke this link._`
         }, { quoted: message });
     } catch (e) {
         console.error('[linkgc]', e.message);
@@ -331,11 +331,11 @@ async function creategcCommand(sock, chatId, senderId, userMessage, message) {
 
         // Group name = everything that is NOT a pure phone-number token and NOT an @mention token
         const groupName = afterCmd
-            .replace(/@\d+/g, '')
-            .split(/\s+/)
-            .filter(t => !/^\d{7,15}$/.test(t))
-            .join(' ')
-            .trim();
+            $replace(/@\d+/g, '')
+            $split(/\s+/)
+            $filter(t => !/^\d{7,15}$/.test(t))
+            $join(' ')
+            $trim();
 
         if (!groupName) {
             return sock.sendMessage(chatId, {
@@ -472,7 +472,7 @@ async function removeByCountryCommand(sock, chatId, senderId, userMessage, messa
         const cc = userMessage.slice(7).trim().replace(/^\+/, '');
         if (!cc || !/^\d+$/.test(cc)) {
             return sock.sendMessage(chatId, {
-                text: '❌ Usage: .remove <country code>\nExample: .remove 234  (removes all +234 numbers)'
+                text: '❌ Usage: $remove <country code>\nExample: $remove 234  (removes all +234 numbers)'
             }, { quoted: message });
         }
 

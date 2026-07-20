@@ -38,12 +38,12 @@ async function react(sock, message, emoji) {
     } catch (_) {}
 }
 
-// ─── .gsearch <query> — Google web search ────────────────────────────────────
+// ─── $gsearch <query> — Google web search ────────────────────────────────────
 
 async function gsearchCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '🔍 Usage: .gsearch <search query>\nExample: .gsearch best phone 2025',
+        text: '🔍 Usage: $gsearch <search query>\nExample: $gsearch best phone 2025',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {
@@ -66,12 +66,12 @@ async function gsearchCommand(sock, chatId, message) {
     }
 }
 
-// ─── .gimage <query> — Google image search ────────────────────────────────────
+// ─── $gimage <query> — Google image search ────────────────────────────────────
 
 async function gimageCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '🖼️ Usage: .gimage <search query>\nExample: .gimage sunset Kenya',
+        text: '🖼️ Usage: $gimage <search query>\nExample: $gimage sunset Kenya',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {
@@ -91,12 +91,12 @@ async function gimageCommand(sock, chatId, message) {
     }
 }
 
-// ─── .ttsearch <query> — TikTok video search (downloads & sends actual video) ──
+// ─── $ttsearch <query> — TikTok video search (downloads & sends actual video) ──
 
 async function ttsearchCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '🎵 Usage: .ttsearch <query>\nExample: .ttsearch funny cats',
+        text: '🎵 Usage: $ttsearch <query>\nExample: $ttsearch funny cats',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {
@@ -144,12 +144,12 @@ async function ttsearchCommand(sock, chatId, message) {
     }
 }
 
-// ─── .chord <song> — guitar chord search ─────────────────────────────────────
+// ─── $chord <song> — guitar chord search ─────────────────────────────────────
 
 async function chordCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '🎸 Usage: .chord <song name>\nExample: .chord Wonderwall Oasis',
+        text: '🎸 Usage: $chord <song name>\nExample: $chord Wonderwall Oasis',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {
@@ -172,12 +172,12 @@ async function chordCommand(sock, chatId, message) {
     }
 }
 
-// ─── .hearthis <query> — hearthis.at audio search ────────────────────────────
+// ─── $hearthis <query> — hearthis.at audio search ────────────────────────────
 
 async function hearthisCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '🎧 Usage: .hearthis <query>\nExample: .hearthis afrobeats mix',
+        text: '🎧 Usage: $hearthis <query>\nExample: $hearthis afrobeats mix',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {
@@ -206,12 +206,12 @@ async function hearthisCommand(sock, chatId, message) {
     }
 }
 
-// ─── .npmpkg <package> — npm package info ────────────────────────────────────
+// ─── $npmpkg <package> — npm package info ────────────────────────────────────
 
 async function npmpkgCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '📦 Usage: .npmpkg <package name>\nExample: .npmpkg axios',
+        text: '📦 Usage: $npmpkg <package name>\nExample: $npmpkg axios',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {
@@ -238,12 +238,12 @@ async function npmpkgCommand(sock, chatId, message) {
     }
 }
 
-// ─── .slyrics <query> — Spotify lyrics search ────────────────────────────────
+// ─── $slyrics <query> — Spotify lyrics search ────────────────────────────────
 
 async function slyricsCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '🎵 Usage: .slyrics <song title>\nExample: .slyrics Blinding Lights',
+        text: '🎵 Usage: $slyrics <song title>\nExample: $slyrics Blinding Lights',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {
@@ -274,12 +274,12 @@ async function slyricsCommand(sock, chatId, message) {
     }
 }
 
-// ─── .happymod <query> — app / mod search ────────────────────────────────────
+// ─── $happymod <query> — app / mod search ────────────────────────────────────
 
 async function happymodCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '📱 Usage: .happymod <app name>\nExample: .happymod minecraft',
+        text: '📱 Usage: $happymod <app name>\nExample: $happymod minecraft',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {
@@ -307,12 +307,12 @@ async function happymodCommand(sock, chatId, message) {
     }
 }
 
-// ─── .scsearch <query> — SoundCloud search ───────────────────────────────────
+// ─── $scsearch <query> — SoundCloud search ───────────────────────────────────
 
 async function scsearchCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '☁️ Usage: .scsearch <query>\nExample: .scsearch lofi hip hop',
+        text: '☁️ Usage: $scsearch <query>\nExample: $scsearch lofi hip hop',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {
@@ -336,12 +336,12 @@ async function scsearchCommand(sock, chatId, message) {
     }
 }
 
-// ─── .wattpad <query> — Wattpad story search ─────────────────────────────────
+// ─── $wattpad <query> — Wattpad story search ─────────────────────────────────
 
 async function wattpadCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '📖 Usage: .wattpad <story/author>\nExample: .wattpad love story',
+        text: '📖 Usage: $wattpad <story/author>\nExample: $wattpad love story',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {
@@ -371,12 +371,12 @@ async function wattpadCommand(sock, chatId, message) {
     }
 }
 
-// ─── .stickersearch <query> — sticker image search ───────────────────────────
+// ─── $stickersearch <query> — sticker image search ───────────────────────────
 
 async function stickersearchCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
-        text: '🎭 Usage: .stickersearch <query>\nExample: .stickersearch happy cat',
+        text: '🎭 Usage: $stickersearch <query>\nExample: $stickersearch happy cat',
     }, { quoted: message });
     await react(sock, message, '⏳');
     try {

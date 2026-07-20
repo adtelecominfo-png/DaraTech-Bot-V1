@@ -7,7 +7,7 @@ async function carbonCommand(sock, chatId, message) {
         const code = text.split(' ').slice(1).join(' ').trim();
         if (!code) {
             return sock.sendMessage(chatId, {
-                text: '💻 Usage: .carbon <code snippet>\nExample: .carbon console.log("Hello World")',
+                text: '💻 Usage: $carbon <code snippet>\nExample: $carbon console.log("Hello World")',
             }, { quoted: message });
         }
         await sock.sendMessage(chatId, { text: '⏳ Generating code screenshot...' }, { quoted: message });

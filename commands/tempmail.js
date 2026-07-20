@@ -3,9 +3,9 @@
  * commands/tempmail.js — Temporary email using tempgen/v2
  * Base: https://api.gifted.co.ke/api/tempgen/v2/
  *
- * .tempmail           → generate new temp email (mode=random)
- * .tempmail inbox     → check inbox of saved email
- * .tempmail inbox <email> → check inbox of specific email
+ * $tempmail           → generate new temp email (mode=random)
+ * $tempmail inbox     → check inbox of saved email
+ * $tempmail inbox <email> → check inbox of specific email
  */
 
 const { sportsGet } = require('../lib/gifted'); // sportsGet hits api.gifted.co.ke/api/<endpoint>
@@ -19,7 +19,7 @@ async function tempmailCommand(sock, chatId, message) {
     const sub  = args[0]?.toLowerCase();
 
     try {
-        // ── .tempmail inbox [email] ────────────────────────────────────────
+        // ── $tempmail inbox [email] ────────────────────────────────────────
         if (sub === 'inbox') {
             const email = args[1] || emailStore.get(message.key.participant || message.key.remoteJid);
             if (!email) {
@@ -51,7 +51,7 @@ async function tempmailCommand(sock, chatId, message) {
             return sock.sendMessage(chatId, { text: reply }, { quoted: message });
         }
 
-        // ── .tempmail — generate new address ──────────────────────────────
+        // ── $tempmail — generate new address ──────────────────────────────
         await sock.sendMessage(chatId, { text: '⏳ _Generating temp email..._' }, { quoted: message });
 
         const data  = await sportsGet('tempgen/v2/generate', { mode: 'random' });

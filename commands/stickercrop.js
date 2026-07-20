@@ -31,7 +31,7 @@ async function stickercropCommand(sock, chatId, message) {
 
     if (!mediaMessage) {
         await sock.sendMessage(chatId, { 
-            text: 'Please reply to an image/video/sticker with .crop, or send an image/video/sticker with .crop as the caption.',
+            text: 'Please reply to an image/video/sticker with $crop, or send an image/video/sticker with $crop as the caption.',
             contextInfo: {
             }
         },{ quoted: messageToQuote });

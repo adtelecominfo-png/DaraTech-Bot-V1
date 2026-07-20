@@ -4,14 +4,14 @@ const { davidGet } = require('../lib/gifted');
 
 const JIKAN = 'https://api.jikan.moe/v4';
 
-/** .animeinfo <title> — search for anime info via Jikan */
+/** $animeinfo <title> — search for anime info via Jikan */
 async function animeinfoCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const query = text.split(' ').slice(1).join(' ').trim();
 
     if (!query) {
         return sock.sendMessage(chatId, {
-            text: '🎌 *ANIME INFO*\n\nUsage: .animeinfo <anime name>\nExample: .animeinfo Attack on Titan\n\n_Daratech_ ⚡',
+            text: '🎌 *ANIME INFO*\n\nUsage: $animeinfo <anime name>\nExample: $animeinfo Attack on Titan\n\n_Daratech_ ⚡',
         }, { quoted: message });
     }
 
@@ -53,7 +53,7 @@ async function animeinfoCommand(sock, chatId, message) {
     }
 }
 
-/** .trendinganime — top/trending anime from Jikan */
+/** $trendinganime — top/trending anime from Jikan */
 async function trendingAnimeCommand(sock, chatId, message) {
     try {
         await sock.sendMessage(chatId, { text: '🔥 Fetching trending anime...' }, { quoted: message });
@@ -80,14 +80,14 @@ async function trendingAnimeCommand(sock, chatId, message) {
     }
 }
 
-/** .animeindo <title> — search Indonesian-dubbed anime via David API */
+/** $animeindo <title> — search Indonesian-dubbed anime via David API */
 async function animeIndoCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const query = text.split(' ').slice(1).join(' ').trim();
 
     if (!query) {
         return sock.sendMessage(chatId, {
-            text: '🎌 *ANIME INDO*\n\nUsage: .animeindo <anime name>\nExample: .animeindo Naruto\n\n_Daratech_ ⚡',
+            text: '🎌 *ANIME INDO*\n\nUsage: $animeindo <anime name>\nExample: $animeindo Naruto\n\n_Daratech_ ⚡',
         }, { quoted: message });
     }
 

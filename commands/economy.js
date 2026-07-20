@@ -124,7 +124,7 @@ async function requireRegistered(sock, chatId, message, u, jid) {
         text:
             `❌ *You need to register first!*\n\n` +
             `Use *.register <your name>* to create your economy account.\n\n` +
-            `_Example: .register Dara_`,
+            `_Example: $register Dara_`,
     }, { quoted: message });
     return false;
 }
@@ -252,7 +252,7 @@ function resolveTarget(message) {
     return null;
 }
 
-// ─── .register ────────────────────────────────────────────────────────────────
+// ─── $register ────────────────────────────────────────────────────────────────
 
 async function registerCommand(sock, chatId, message, q) {
     const db  = loadDB();
@@ -266,14 +266,14 @@ async function registerCommand(sock, chatId, message, q) {
                 `👤 Name   : ${u.name || 'User'}\n` +
                 `💰 Wallet : 🪙 ${fmt(u.wallet)}\n` +
                 `🏦 Bank   : 🪙 ${fmt(u.bank)}\n\n` +
-                `_Use .balance to check your funds._`,
+                `_Use $balance to check your funds._`,
         }, { quoted: message });
     }
 
     const name = (q || '').trim().slice(0, 30) || numFromJid(uid);
     if (!name) {
         return sock.sendMessage(chatId, {
-            text: `❌ Please provide your name!\n\n_Usage: .register <your name>_\n_Example: .register Dara_`,
+            text: `❌ Please provide your name!\n\n_Usage: $register <your name>_\n_Example: $register Dara_`,
         }, { quoted: message });
     }
 
@@ -294,16 +294,16 @@ async function registerCommand(sock, chatId, message, q) {
             `│ ⭐ Level  : *1*\n` +
             `╰──────────────────\n\n` +
             `*Available commands:*\n` +
-            `• .daily — claim daily reward\n` +
-            `• .work — earn coins\n` +
-            `• .balance — check wallet\n` +
-            `• .store — buy items\n` +
-            `• .profile — view your profile\n\n` +
+            `• $daily — claim daily reward\n` +
+            `• $work — earn coins\n` +
+            `• $balance — check wallet\n` +
+            `• $store — buy items\n` +
+            `• $profile — view your profile\n\n` +
             `_Good luck out there! 💪_`,
     }, { quoted: message });
 }
 
-// ─── .jail / .unjail / .jailstatus ───────────────────────────────────────────
+// ─── $jail / $unjail / $jailstatus ───────────────────────────────────────────
 
 async function jailCommand(sock, chatId, message, q) {
     const uid = senderJid(message);
@@ -312,7 +312,7 @@ async function jailCommand(sock, chatId, message, q) {
     const db       = loadDB();
     const target   = resolveTarget(message);
     if (!target) return sock.sendMessage(chatId, {
-        text: `❌ Tag or reply to a user to jail them.\n_Usage: .jail @user <minutes>_\n_Example: .jail @user 30_`,
+        text: `❌ Tag or reply to a user to jail them.\n_Usage: $jail @user <minutes>_\n_Example: $jail @user 30_`,
     }, { quoted: message });
 
     const minutes = parseInt((q || '').replace(/\D/g, '')) || 60;
@@ -326,7 +326,7 @@ async function jailCommand(sock, chatId, message, q) {
             `🔒 *JAILED!*\n\n` +
             `${mention(target)} has been sent to jail for *${minutes} minutes*.\n` +
             `They cannot use economy commands until released.\n\n` +
-            `_Use .unjail @user to release early._`,
+            `_Use $unjail @user to release early._`,
         mentions: [target],
     }, { quoted: message });
 }
@@ -338,7 +338,7 @@ async function unjailCommand(sock, chatId, message) {
     const db     = loadDB();
     const target = resolveTarget(message);
     if (!target) return sock.sendMessage(chatId, {
-        text: `❌ Tag or reply to a user to unjail them.\n_Usage: .unjail @user_`,
+        text: `❌ Tag or reply to a user to unjail them.\n_Usage: $unjail @user_`,
     }, { quoted: message });
 
     const t = getUser(db, target);
@@ -404,7 +404,7 @@ async function balanceCommand(sock, chatId, message) {
             `│ 🏦 Bank   : *🪙 ${fmt(u.bank)}*\n` +
             `│ 💎 Total  : *🪙 ${fmt(u.wallet + u.bank)}*\n` +
             `╰──────────────────\n\n` +
-            `_Use .daily to earn free coins!_`,
+            `_Use $daily to earn free coins!_`,
     }, { quoted: message });
 }
 
@@ -593,7 +593,7 @@ async function robCommand(sock, chatId, message) {
     const left = cooldownLeft(u.lastRob, CD, uid);
     if (left) return sock.sendMessage(chatId, { text: `⏳ Lay low! Police are watching.\nRob again in *${left}*.` }, { quoted: message });
     const mentioned = resolveTarget(message);
-    if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Tag or reply to someone to rob!\n_Example: .rob @user_` }, { quoted: message });
+    if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Tag or reply to someone to rob!\n_Example: $rob @user_` }, { quoted: message });
     if (numFromJid(mentioned) === numFromJid(uid)) return sock.sendMessage(chatId, { text: `❌ You can't rob yourself!` }, { quoted: message });
     const target = getUser(db, mentioned);
     if (!target.registered) return sock.sendMessage(chatId, { text: `❌ That user hasn't registered yet!` }, { quoted: message });
@@ -789,7 +789,7 @@ async function storeCommand(sock, chatId, message) {
         if (!items.length) return '';
         return `*${title}*\n` + items.map(i => {
             const stats = [i.atk && `⚔️${i.atk}`, i.def && `🛡️${i.def}`, i.luck && `🍀${i.luck}`, i.hp && `❤️${i.hp}`, i.xp && `⚡${i.xp}XP`].filter(Boolean).join(' ');
-            return `│ \`.buy ${i.key}\` — ${i.name}  🪙${fmt(i.price)}  ${stats}`;
+            return `│ \`$buy ${i.key}\` — ${i.name}  🪙${fmt(i.price)}  ${stats}`;
         }).join('\n');
     };
     await sock.sendMessage(chatId, {
@@ -799,7 +799,7 @@ async function storeCommand(sock, chatId, message) {
             section('🛡️ ARMORS', categories.armor) + '\n\n' +
             section('💍 ACCESSORIES', categories.accessory) + '\n\n' +
             section('🧪 CONSUMABLES', [...categories.potion, ...categories.boost]) + '\n\n' +
-            `_Use .buy <item> to purchase | .upgrade <item> to upgrade (max +${MAX_UPGRADE})_`,
+            `_Use $buy <item> to purchase | $upgrade <item> to upgrade (max +${MAX_UPGRADE})_`,
     }, { quoted: message });
 }
 
@@ -819,7 +819,7 @@ async function buyCommand(sock, chatId, message, q) {
     u.inventory.push(key);
     saveDB(db);
     await sock.sendMessage(chatId, {
-        text: `✅ *PURCHASED!*\n\n${item.name} is now in your inventory!\n👛 Wallet: *🪙 ${fmt(u.wallet)}*\n\n_${item.consumable ? 'Use .use ' + key + ' to use it' : 'Use .equip ' + key + ' to equip | .upgrade ' + key + ' to upgrade'}_`,
+        text: `✅ *PURCHASED!*\n\n${item.name} is now in your inventory!\n👛 Wallet: *🪙 ${fmt(u.wallet)}*\n\n_${item.consumable ? 'Use $use ' + key + ' to use it' : 'Use $equip ' + key + ' to equip | $upgrade ' + key + ' to upgrade'}_`,
     }, { quoted: message });
 }
 
@@ -869,7 +869,7 @@ async function inventoryCommand(sock, chatId, message) {
         text:
             `🎒 *INVENTORY — ${mention(uid)}*\n\n` +
             `╭──────────────────\n${rows}\n╰──────────────────\n\n` +
-            `_Use .equip <item> to equip | .sell <item> to sell | .upgrade <item> to upgrade_`,
+            `_Use $equip <item> to equip | $sell <item> to sell | $upgrade <item> to upgrade_`,
     }, { quoted: message });
 }
 
@@ -905,7 +905,7 @@ async function upgradeCommand(sock, chatId, message, q) {
     const key = (q || '').trim().toLowerCase().replace(/\s+/g, '');
 
     if (!key) return sock.sendMessage(chatId, {
-        text: `🔧 *UPGRADE SYSTEM*\n\nUpgrade your gear to boost its stats by *+10% per level* (max +${MAX_UPGRADE}).\n\n_Usage: .upgrade <item key>_\n_Example: .upgrade dragonsword_\n\nSee your items: *.inventory*`
+        text: `🔧 *UPGRADE SYSTEM*\n\nUpgrade your gear to boost its stats by *+10% per level* (max +${MAX_UPGRADE}).\n\n_Usage: $upgrade <item key>_\n_Example: $upgrade dragonsword_\n\nSee your items: *.inventory*`
     }, { quoted: message });
 
     const item = STORE[key];
@@ -970,7 +970,7 @@ async function useCommand(sock, chatId, message, q) {
     const key = (q || '').trim().toLowerCase();
 
     if (!key) return sock.sendMessage(chatId, {
-        text: `❌ Usage: *.use <item>*\n_Example: .use xpboost_\n\nSee consumables in *.inventory*`
+        text: `❌ Usage: *.use <item>*\n_Example: $use xpboost_\n\nSee consumables in *.inventory*`
     }, { quoted: message });
 
     const item = STORE[key];
@@ -1015,7 +1015,7 @@ async function battleCommand(sock, chatId, message, q) {
     const left = cooldownLeft(u.lastBattle, CD, uid);
     if (left) return sock.sendMessage(chatId, { text: `⏳ Still recovering from last battle!\nFight again in *${left}*.` }, { quoted: message });
     const mentioned = resolveTarget(message);
-    if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Tag or reply to someone to battle!\n_Example: .battle @user 500_` }, { quoted: message });
+    if (!mentioned) return sock.sendMessage(chatId, { text: `❌ Tag or reply to someone to battle!\n_Example: $battle @user 500_` }, { quoted: message });
     if (numFromJid(mentioned) === numFromJid(uid)) return sock.sendMessage(chatId, { text: `❌ You can't battle yourself!` }, { quoted: message });
     const bet = parseInt((q || '').replace(/\D/g, '')) || 0;
     const t   = getUser(db, mentioned);
@@ -1192,9 +1192,9 @@ async function questCommand(sock, chatId, message) {
 async function leaderboardCommand(sock, chatId, message) {
     const db      = loadDB();
     const entries = Object.entries(db)
-        .filter(([, u]) => u && u.registered && typeof u.wallet === 'number')
-        .map(([id, u]) => ({ id, total: (u.wallet || 0) + (u.bank || 0), name: u.name || numFromJid(id) }))
-        .sort((a, b) => b.total - a.total).slice(0, 10);
+        $filter(([, u]) => u && u.registered && typeof u.wallet === 'number')
+        $map(([id, u]) => ({ id, total: (u.wallet || 0) + (u.bank || 0), name: u.name || numFromJid(id) }))
+        $sort((a, b) => b.total - a.total).slice(0, 10);
     if (!entries.length) return sock.sendMessage(chatId, { text: `📊 No registered users yet!` }, { quoted: message });
     const medals = ['🥇', '🥈', '🥉'];
     const rows   = entries.map((e, i) => `│ ${medals[i] || `${i + 1}.`}  *${e.name}*  🪙 ${fmt(e.total)}`).join('\n');
@@ -1295,8 +1295,8 @@ async function boostUserCommand(sock, chatId, message, q) {
             : `⚡ *BOOSTING* ${mention(mentioned)}...\n`;
         const footer = done
             ? (partial
-                ? `\n_Stat bonus applied — use .profile to check_`
-                : `\n_All gear at +${MAX_UPGRADE} — use .equip to switch loadout_`)
+                ? `\n_Stat bonus applied — use $profile to check_`
+                : `\n_All gear at +${MAX_UPGRADE} — use $equip to switch loadout_`)
             : '';
         return (
             hdr + `\n` +
@@ -1347,14 +1347,14 @@ function seedEconomyOwner(ownerJid, ownerLid) {
         allEquip.forEach(k => { allUpgrades[k] = MAX_UPGRADE; });
 
         const bestOf = (type, stat) => Object.entries(STORE)
-            .filter(([, v]) => v.type === type)
-            .sort(([, a], [, b]) => (b[stat] || 0) - (a[stat] || 0))[0]?.[0];
+            $filter(([, v]) => v.type === type)
+            $sort(([, a], [, b]) => (b[stat] || 0) - (a[stat] || 0))[0]?.[0];
 
         const bestWeapon    = bestOf('weapon',    'atk');
         const bestArmor     = bestOf('armor',     'def');
         const bestAccessory = Object.entries(STORE)
-            .filter(([, v]) => v.type === 'accessory')
-            .sort(([, a], [, b]) => ((b.atk||0)+(b.def||0)+(b.luck||0)) - ((a.atk||0)+(a.def||0)+(a.luck||0)))[0]?.[0];
+            $filter(([, v]) => v.type === 'accessory')
+            $sort(([, a], [, b]) => ((b.atk||0)+(b.def||0)+(b.luck||0)) - ((a.atk||0)+(a.def||0)+(a.luck||0)))[0]?.[0];
 
         db[ownerJid] = {
             registered:  true,

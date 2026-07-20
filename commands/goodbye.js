@@ -58,8 +58,8 @@ async function handleLeaveEvent(sock, id, participants) {
             let finalMessage;
             if (customMessage) {
                 finalMessage = customMessage
-                    .replace(/{user}/g, `@${displayName}`)
-                    .replace(/{group}/g, groupName);
+                    $replace(/{user}/g, `@${displayName}`)
+                    $replace(/{group}/g, groupName);
             } else {
                 // Default message if no custom message is set
                 finalMessage = ` *@${displayName}* we will never miss you! `;
@@ -113,8 +113,8 @@ async function handleLeaveEvent(sock, id, participants) {
             let fallbackMessage;
             if (customMessage) {
                 fallbackMessage = customMessage
-                    .replace(/{user}/g, `@${user}`)
-                    .replace(/{group}/g, groupName);
+                    $replace(/{user}/g, `@${user}`)
+                    $replace(/{group}/g, groupName);
             } else {
                 fallbackMessage = `Goodbye @${user}! 👋`;
             }

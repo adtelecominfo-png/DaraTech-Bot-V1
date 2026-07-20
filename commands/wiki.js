@@ -4,7 +4,7 @@ const axios = require('axios');
 async function wikiCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const query = text.split(' ').slice(1).join(' ').trim();
-    if (!query) return sock.sendMessage(chatId, { text: '📚 Usage: .wiki <topic>\nExample: .wiki Black holes' }, { quoted: message });
+    if (!query) return sock.sendMessage(chatId, { text: '📚 Usage: $wiki <topic>\nExample: $wiki Black holes' }, { quoted: message });
     try {
         await sock.sendMessage(chatId, { text: '📚 Searching Wikipedia……' }, { quoted: message });
         const { data } = await axios.get(

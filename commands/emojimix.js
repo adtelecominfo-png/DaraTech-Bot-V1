@@ -44,14 +44,14 @@ async function emojimixCommand(sock, chatId, msg) {
 
         if (!args[0] || !args[0].includes('+')) {
             return sock.sendMessage(chatId, {
-                text: '🎴 *EMOJI MIX*\n\nUsage: .emojimix 😎+🥰\n\nSeparate two emojis with a *+* sign',
+                text: '🎴 *EMOJI MIX*\n\nUsage: $emojimix 😎+🥰\n\nSeparate two emojis with a *+* sign',
             }, { quoted: msg });
         }
 
         const [emoji1, emoji2] = args[0].split('+').map(e => e.trim());
         if (!emoji1 || !emoji2) {
             return sock.sendMessage(chatId, {
-                text: '❌ Please provide two emojis. Example: .emojimix 😎+🥰',
+                text: '❌ Please provide two emojis. Example: $emojimix 😎+🥰',
             }, { quoted: msg });
         }
 
@@ -98,7 +98,7 @@ async function emojimixCommand(sock, chatId, msg) {
     } catch (err) {
         console.error('[emojimix]', err.message);
         await sock.sendMessage(chatId, {
-            text: '❌ Failed to mix emojis. Try different ones.\n\nExample: .emojimix 😎+🥰',
+            text: '❌ Failed to mix emojis. Try different ones.\n\nExample: $emojimix 😎+🥰',
         }, { quoted: msg });
     }
 }

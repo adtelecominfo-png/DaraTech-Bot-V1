@@ -6,7 +6,7 @@ async function gitcloneCommand(sock, chatId, message) {
         let repoUrl = text.split(' ').slice(1).join(' ').trim();
         if (!repoUrl || !repoUrl.includes('github.com')) {
             return sock.sendMessage(chatId, {
-                text: '🐙 Usage: .gitclone <GitHub repo URL>\nExample: .gitclone https://github.com/owner/repo',
+                text: '🐙 Usage: $gitclone <GitHub repo URL>\nExample: $gitclone https://github.com/owner/repo',
             }, { quoted: message });
         }
         repoUrl = repoUrl.replace(/\.git$/, '').replace(/\/$/, '');

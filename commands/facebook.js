@@ -19,7 +19,7 @@ async function facebookCommand(sock, chatId, message) {
         const url  = text.split(' ').slice(1).join(' ').trim();
         if (!url || !(url.includes('facebook') || url.includes('fb.watch'))) {
             return sock.sendMessage(chatId,
-                { text: '📘 Usage: .facebook <Facebook video URL>' },
+                { text: '📘 Usage: $facebook <Facebook video URL>' },
                 { quoted: message });
         }
         await sock.sendMessage(chatId, { text: '⏳ _Downloading Facebook video…_' }, { quoted: message });

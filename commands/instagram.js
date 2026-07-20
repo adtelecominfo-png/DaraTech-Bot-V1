@@ -19,7 +19,7 @@ async function instagramCommand(sock, chatId, message) {
         const urlMatch = text.match(/https?:\/\/\S+/);
         if (!urlMatch) {
             return sock.sendMessage(chatId, {
-                text: '📸 *Instagram Downloader*\n\nUsage: .ig <Instagram post/reel URL>\n\nExample:\n.ig https://www.instagram.com/reel/ABC123/',
+                text: '📸 *Instagram Downloader*\n\nUsage: $ig <Instagram post/reel URL>\n\nExample:\n.ig https://www.instagram.com/reel/ABC123/',
             }, { quoted: message });
         }
 
@@ -31,7 +31,7 @@ async function instagramCommand(sock, chatId, message) {
 
         if (!items.length) {
             return sock.sendMessage(chatId, {
-                text: '❌ Instagram download failed. The link may be private or expired.\n\nTry again or use .igdl for a different method.',
+                text: '❌ Instagram download failed. The link may be private or expired.\n\nTry again or use $igdl for a different method.',
             }, { quoted: message });
         }
 

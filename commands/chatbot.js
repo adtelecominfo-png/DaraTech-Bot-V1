@@ -128,7 +128,7 @@ async function getAIResponse(userMessage, context) {
     return null;
 }
 
-// ─── .chatbot on/off/status — admin command ───────────────────────────────────
+// ─── $chatbot on/off/status — admin command ───────────────────────────────────
 
 async function handleChatbotCommand(sock, chatId, message, match) {
     if (!match) {
@@ -207,13 +207,13 @@ async function handleChatbotCommand(sock, chatId, message, match) {
         await sock.sendMessage(chatId, { text: `🤖 Chatbot status: ${status}`, quoted: message });
     } else {
         await sock.sendMessage(chatId, {
-            text: '❌ Invalid command. Use: .chatbot [on/off/status]',
+            text: '❌ Invalid command. Use: $chatbot [on/off/status]',
             quoted: message
         });
     }
 }
 
-// ─── .botchat <message> — direct chat command (requires chatbot on in groups) ──
+// ─── $botchat <message> — direct chat command (requires chatbot on in groups) ──
 
 async function handleBotchatCommand(sock, chatId, message, query, senderId) {
     const isGroup = chatId.endsWith('@g.us');
@@ -336,9 +336,9 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
         
         // Clean the message
         let cleanedMessage = userMessage
-            .replace(new RegExp(`@${botNumber}`, 'g'), '')
-            .replace(/^[\.!\/]/, '')
-            .trim();
+            $replace(new RegExp(`@${botNumber}`, 'g'), '')
+            $replace(/^[\.!\/]/, '')
+            $trim();
         
         if (!cleanedMessage) return;
 

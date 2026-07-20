@@ -19,7 +19,7 @@ async function setProfilePicture(sock, chatId, msg) {
         const quotedMessage = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         if (!quotedMessage) {
             await sock.sendMessage(chatId, { 
-                text: '⚠️ Please reply to an image with the .setpp command!' 
+                text: '⚠️ Please reply to an image with the $setpp command!' 
             });
             return;
         }

@@ -26,7 +26,7 @@ async function staffCommand(sock, chatId, msg) {
 ┌─⊷ *ADMINS*
 ▢ ${listAdmin}
 └───────────
-`.trim();
+`$trim();
 
         // Send the message with image and mentions
         await sock.sendMessage(chatId, {

@@ -2,15 +2,15 @@
 /**
  * Movie Command — powered by RUNFLIX API (movieapi.runflix.name.ng)
  *
- * Main:    .movie <title>           → search
- * Sub:     .movie details <id>      → full info + poster
- *          .movie dl <id>           → download / stream links
+ * Main:    $movie <title>           → search
+ * Sub:     $movie details <id>      → full info + poster
+ *          $movie dl <id>           → download / stream links
  *
- * Browse:  .trending  .popular  .upcoming  .schedule
- * Anime:   .anime <title>    .anime dl <id>
- * Live TV: .live  .livesearch <name>  .livestream <id>  .livecats
- * Filter:  .moviefilter <genre or platform>[,type]
- * Extra:   .moviecaptions <id>   .moviehome
+ * Browse:  $trending  $popular  $upcoming  $schedule
+ * Anime:   $anime <title>    $anime dl <id>
+ * Live TV: $live  $livesearch <name>  $livestream <id>  $livecats
+ * Filter:  $moviefilter <genre or platform>[,type]
+ * Extra:   $moviecaptions <id>   $moviehome
  */
 
 // Use axios — it correctly preserves Authorization headers through redirects,
@@ -19,7 +19,7 @@ const axios = require('axios');
 
 const MOVIE_BASE = 'https://runflix-api-v-3263--trumpmax.replit.app/api/v3';
 
-// Per-chat search result cache so users can pick by number (e.g. .movie dl 1)
+// Per-chat search result cache so users can pick by number (e.g. $movie dl 1)
 const lastSearches = new Map();
 
 async function apiFetch(path) {
@@ -169,10 +169,10 @@ function parsePick(pick) {
     const sOnly      = !seMatch && pick.match(/\bs(\d+)\b/i);
     const audioMatch = pick.match(/\baudio:(\d+)\b/i);
     const cleaned    = pick
-        .replace(/\bs\d+e\d+\b/gi, '')
-        .replace(/\bs\d+\b/gi, '')
-        .replace(/\baudio:\d+\b/gi, '')
-        .trim();
+        $replace(/\bs\d+e\d+\b/gi, '')
+        $replace(/\bs\d+\b/gi, '')
+        $replace(/\baudio:\d+\b/gi, '')
+        $trim();
     return {
         season:     seMatch  ? parseInt(seMatch[1])  : (sOnly ? parseInt(sOnly[1]) : null),
         episode:    seMatch  ? parseInt(seMatch[2])  : null,
@@ -336,7 +336,7 @@ function showResolutionPicker(sock, chatId, message, sorted, audioTracks, subtit
         msg += `${NUMS[i] || `${i + 1}.`}  *${s.quality}*  —  ${sz}${codec}${canSend}\n`;
     });
 
-    const dlCmd = epLabel ? `.movie dl ${id} ${epLabel.toLowerCase()} ` : `.movie dl ${id} `;
+    const dlCmd = epLabel ? `$movie dl ${id} ${epLabel.toLowerCase()} ` : `$movie dl ${id} `;
     msg += `\n✅ _= can be sent as video/file in chat_\n`;
     msg += `\n💬 *Pick a resolution:*\n`;
     msg += `_${dlCmd}1_ — by number\n`;
@@ -449,7 +449,7 @@ const HELP_TEXT = `🎬 *MOVIE COMMANDS*
 ▸ *.livecats*               — Browse categories
 
 *🔎 Filter & More*
-▸ *.moviefilter <genre>*    — e.g. .moviefilter action
+▸ *.moviefilter <genre>*    — e.g. $moviefilter action
 ▸ *.moviefilter action,1*   — genre + type (1=Movie, 2=Series)
 ▸ *.moviecaptions <id>*     — Subtitles & audio info
 ▸ *.moviehome*              — Featured content
@@ -462,7 +462,7 @@ _💡 IDs come from search results — copy the full ID_`;
 async function movieCommand(sock, chatId, message, args, subcommand) {
     try {
 
-        // Detect inline sub-keywords inside plain .movie command
+        // Detect inline sub-keywords inside plain $movie command
         if (!subcommand || subcommand === 'search') {
             const first = (args[0] || '').toLowerCase();
             if (first === 'details' || first === 'info') {
@@ -476,7 +476,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
 
         const query = args.join(' ').trim();
 
-        // Show help when .movie sent alone
+        // Show help when $movie sent alone
         if ((!subcommand || subcommand === 'search') && !query) {
             return sock.sendMessage(chatId, { text: HELP_TEXT }, { quoted: message });
         }
@@ -495,7 +495,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                 }, { quoted: message });
             }
             const top = list.slice(0, 10);
-            // Remember results so users can pick by number (e.g. .movie dl 1)
+            // Remember results so users can pick by number (e.g. $movie dl 1)
             lastSearches.set(chatId, top);
             const lines = top.map(formatResult);
             return sock.sendMessage(chatId, {
@@ -662,14 +662,14 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                         msg += `📋 *${totalEps} Episode${totalEps !== 1 ? 's' : ''}:*\n\n`;
                         const showMax = Math.min(totalEps, 30);
                         for (let ep = 1; ep <= showMax; ep++) {
-                            msg += `  *Ep ${ep}*  →  \`.movie dl ${id} s${parsed.season}e${ep}\`\n`;
+                            msg += `  *Ep ${ep}*  →  \`$movie dl ${id} s${parsed.season}e${ep}\`\n`;
                         }
                         if (totalEps > showMax) msg += `  _...and ${totalEps - showMax} more episodes_\n`;
                     } else {
                         // Episode count unknown — show first 20 as safe default
                         msg += `📋 *Episodes (specify directly):*\n\n`;
                         for (let ep = 1; ep <= 20; ep++) {
-                            msg += `  *Ep ${ep}*  →  \`.movie dl ${id} s${parsed.season}e${ep}\`\n`;
+                            msg += `  *Ep ${ep}*  →  \`$movie dl ${id} s${parsed.season}e${ep}\`\n`;
                         }
                         msg += `  _...try higher numbers if there are more_\n`;
                     }
@@ -922,7 +922,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
         if (subcommand === 'anime') {
             const first = (args[0] || '').toLowerCase();
 
-            // Anime download: .anime dl <id> [s1] [s1e3] [s1e3 1080p]
+            // Anime download: $anime dl <id> [s1] [s1e3] [s1e3 1080p]
             if (first === 'dl' || first === 'download') {
                 const animeId = args[1] || '';
                 const pick    = args.slice(2).join(' ').trim().toLowerCase();
@@ -982,7 +982,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                         let msg = `🎌 *${title || 'Anime'}* — Season ${parsed.season}\n`;
                         msg += `📋 *${totalEps} Episode${totalEps !== 1 ? 's' : ''}:*\n\n`;
                         for (let ep = 1; ep <= showMax; ep++) {
-                            msg += `  *Ep ${ep}*  →  \`.anime dl ${animeId} s${parsed.season}e${ep}\`\n`;
+                            msg += `  *Ep ${ep}*  →  \`$anime dl ${animeId} s${parsed.season}e${ep}\`\n`;
                         }
                         if (totalEps > showMax) msg += `  _...and ${totalEps - showMax} more_\n`;
                         msg += `\n💡 Add quality: _.anime dl ${animeId} s${parsed.season}e1 1080p_`;

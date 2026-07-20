@@ -8,7 +8,7 @@ async function savestatusCommand(sock, chatId, message) {
         
         if (!quotedMessage) {
             return await sock.sendMessage(chatId, {
-                text: "✪ *📱 SAVE STATUS*\n\n*Usage:* Reply to a status with `.savestatus`\n\n*How to:*\n1. Go to status\n2. Reply to it\n3. Type: .savestatus\n\n*Supported:* Images, Videos, Text, Audio"
+                text: "✪ *📱 SAVE STATUS*\n\n*Usage:* Reply to a status with `$savestatus`\n\n*How to:*\n1. Go to status\n2. Reply to it\n3. Type: $savestatus\n\n*Supported:* Images, Videos, Text, Audio"
             }, { quoted: message });
         }
 

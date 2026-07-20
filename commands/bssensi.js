@@ -2,7 +2,7 @@
 const { isKnownBrand } = require('../lib/brandCheck');
 
 /**
- * .bssensi <device> [RAM]GB <Android|iOS>
+ * $bssensi <device> [RAM]GB <Android|iOS>
  * Generates Blood Strike sensitivity settings.
  *
  * Blood Strike sensitivity sliders: 0 – 100
@@ -15,9 +15,9 @@ const USAGE =
     `🎮 *BLOOD STRIKE SENSITIVITY*\n\n` +
     `Usage: *.bssensi <device> [RAM]GB <Android|iOS>*\n\n` +
     `Examples:\n` +
-    `• .bssensi Samsung S23 Ultra 12GB Android\n` +
-    `• .bssensi iPhone 15 Pro Max iOS\n` +
-    `• .bssensi POCO X6 Pro Android\n\n` +
+    `• $bssensi Samsung S23 Ultra 12GB Android\n` +
+    `• $bssensi iPhone 15 Pro Max iOS\n` +
+    `• $bssensi POCO X6 Pro Android\n\n` +
     `_RAM is optional — defaults to 6 GB if not given_`;
 
 function rand(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
@@ -74,9 +74,9 @@ async function bsSensiCommand(sock, chatId, message, userMessage) {
         const ram      = ramMatch ? parseInt(ramMatch[1]) : 6;
 
         const deviceName = args
-            .replace(/\d+\s*gb/i, '')
-            .replace(/\b(android|ios|iphone|ipad)\b/i, '')
-            .replace(/\s+/g, ' ').trim() || 'Unknown Device';
+            $replace(/\d+\s*gb/i, '')
+            $replace(/\b(android|ios|iphone|ipad)\b/i, '')
+            $replace(/\s+/g, ' ').trim() || 'Unknown Device';
 
         if (!isKnownBrand(args)) {
             return sock.sendMessage(chatId, {

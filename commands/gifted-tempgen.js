@@ -31,7 +31,7 @@ function userId(message) {
     return message.key.participant || message.key.remoteJid;
 }
 
-// ─── .tempphone — generate a temporary SMS number ─────────────────────────────
+// ─── $tempphone — generate a temporary SMS number ─────────────────────────────
 async function tempphoneCommand(sock, chatId, message) {
     await react(sock, message, '⏳');
     try {
@@ -60,7 +60,7 @@ async function tempphoneCommand(sock, chatId, message) {
     }
 }
 
-// ─── .smsinbox [number] — check SMS inbox ─────────────────────────────────────
+// ─── $smsinbox [number] — check SMS inbox ─────────────────────────────────────
 async function smsinboxCommand(sock, chatId, message) {
     const arg    = getQ(message);
     const number = arg || phoneStore.get(userId(message));

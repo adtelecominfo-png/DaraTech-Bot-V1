@@ -11,7 +11,7 @@ async function deleteCommand(sock, chatId, message, senderId) {
         }
 
         if (!isSenderAdmin) {
-            await sock.sendMessage(chatId, { text: 'Only admins can use the .delete command.' }, { quoted: message });
+            await sock.sendMessage(chatId, { text: 'Only admins can use the $delete command.' }, { quoted: message });
             return;
         }
 
@@ -40,7 +40,7 @@ async function deleteCommand(sock, chatId, message, senderId) {
         // If no number provided and not replying/mentioning, show usage message
         else if (countArg === null && !repliedParticipant && !mentioned) {
             await sock.sendMessage(chatId, { 
-                text: '❌ Please specify the number of messages to delete.\n\nUsage:\n• `.del 5` - Delete last 5 messages from group\n• `.del 3 @user` - Delete last 3 messages from @user\n• `.del 2` (reply to message) - Delete last 2 messages from replied user' 
+                text: '❌ Please specify the number of messages to delete.\n\nUsage:\n• `$del 5` - Delete last 5 messages from group\n• `$del 3 @user` - Delete last 3 messages from @user\n• `$del 2` (reply to message) - Delete last 2 messages from replied user' 
             }, { quoted: message });
             return;
         }

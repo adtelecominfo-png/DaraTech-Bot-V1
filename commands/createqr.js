@@ -7,7 +7,7 @@ async function createqrCommand(sock, chatId, message) {
         const data = text.split(' ').slice(1).join(' ').trim();
         if (!data) {
             return sock.sendMessage(chatId, {
-                text: '📱 Usage: .createqr <text or URL>\nExample: .createqr https://example.com',
+                text: '📱 Usage: $createqr <text or URL>\nExample: $createqr https://example.com',
             }, { quoted: message });
         }
         const imgUrl = buildUrl('/tools/createqr', { query: data });

@@ -42,7 +42,7 @@ async function randomRecipeCommand(sock, chatId, message) {
         for (let i = 1; i <= 20; i++) {
             const ing = m[`strIngredient${i}`];
             const mea = m[`strMeasure${i}`];
-            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`.trim());
+            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`$trim());
         }
         const instructions = m.strInstructions?.slice(0, 500) + (m.strInstructions?.length > 500 ? '...' : '') || 'No instructions.';
         const txt =
@@ -69,7 +69,7 @@ async function randomRecipeCommand(sock, chatId, message) {
 async function searchRecipeCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const query = text.split(' ').slice(1).join(' ').trim();
-    if (!query) return sock.sendMessage(chatId, { text: '🍽️ Usage: .recipe <meal name>\nExample: .recipe pasta\n\nFor random: .randomrecipe' }, { quoted: message });
+    if (!query) return sock.sendMessage(chatId, { text: '🍽️ Usage: $recipe <meal name>\nExample: $recipe pasta\n\nFor random: $randomrecipe' }, { quoted: message });
     try {
         await sock.sendMessage(chatId, { text: '🍳 Searching recipe……' }, { quoted: message });
         const { data } = await axios.get(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`, { timeout: 10000 });
@@ -92,7 +92,7 @@ async function searchRecipeCommand(sock, chatId, message) {
         for (let i = 1; i <= 20; i++) {
             const ing = m[`strIngredient${i}`];
             const mea = m[`strMeasure${i}`];
-            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`.trim());
+            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`$trim());
         }
         const instructions = m.strInstructions?.slice(0, 400) + '...' || 'No instructions.';
         const txt =
@@ -131,7 +131,7 @@ async function cocktailCommand(sock, chatId, message) {
         for (let i = 1; i <= 15; i++) {
             const ing = d[`strIngredient${i}`];
             const mea = d[`strMeasure${i}`];
-            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`.trim());
+            if (ing && ing.trim()) ingredients.push(`${mea?.trim() || ''} ${ing.trim()}`$trim());
         }
         const txt =
             `╭━═『 🍹 *COCKTAIL* 』═━╮\n` +

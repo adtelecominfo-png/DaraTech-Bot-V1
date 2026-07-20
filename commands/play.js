@@ -59,14 +59,14 @@ async function sendBanner(sock, chatId, message, meta, action) {
     return sock.sendMessage(chatId, { text: caption }, { quoted: message });
 }
 
-// ─── .play — YouTube audio ────────────────────────────────────────────────────
+// ─── $play — YouTube audio ────────────────────────────────────────────────────
 
 async function playCommand(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.(play|song|mp3|ytmp3)\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId,
-            { text: '🎵 Usage: .play <song name or YouTube URL>' }, { quoted: message });
+            { text: '🎵 Usage: $play <song name or YouTube URL>' }, { quoted: message });
 
         const meta = await ytSearch(input);
         await sendBanner(sock, chatId, message, meta, 'Downloading audio…');
@@ -88,14 +88,14 @@ async function playCommand(sock, chatId, message) {
     }
 }
 
-// ─── .play2 — SaveTube MP3 ────────────────────────────────────────────────────
+// ─── $play2 — SaveTube MP3 ────────────────────────────────────────────────────
 
 async function play2Command(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.(play2|playdoc)\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
-            text: '🎵 Usage: .play2 <song name or YouTube URL>',
+            text: '🎵 Usage: $play2 <song name or YouTube URL>',
         }, { quoted: message });
 
         const meta = await ytSearch(input);
@@ -115,18 +115,18 @@ async function play2Command(sock, chatId, message) {
         }, { quoted: message });
     } catch (err) {
         console.error('[play2]', err.message);
-        await sock.sendMessage(chatId, { text: '❌ Audio download failed. Try .play instead.' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: '❌ Audio download failed. Try $play instead.' }, { quoted: message });
     }
 }
 
-// ─── .playdoc — YouTube audio as document ────────────────────────────────────
+// ─── $playdoc — YouTube audio as document ────────────────────────────────────
 
 async function playDocCommand(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.playdoc\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
-            text: '🎵 Usage: .playdoc <song name or YouTube URL>',
+            text: '🎵 Usage: $playdoc <song name or YouTube URL>',
         }, { quoted: message });
 
         const meta = await ytSearch(input);
@@ -149,14 +149,14 @@ async function playDocCommand(sock, chatId, message) {
     }
 }
 
-// ─── .playch — 320kbps high-quality audio ────────────────────────────────────
+// ─── $playch — 320kbps high-quality audio ────────────────────────────────────
 
 async function playChCommand(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.playch\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
-            text: '🎵 Usage: .playch <song name or YouTube URL>',
+            text: '🎵 Usage: $playch <song name or YouTube URL>',
         }, { quoted: message });
 
         const meta = await ytSearch(input);
@@ -176,7 +176,7 @@ async function playChCommand(sock, chatId, message) {
         }, { quoted: message });
     } catch (err) {
         console.error('[playch]', err.message);
-        await sock.sendMessage(chatId, { text: '❌ High-quality audio download failed. Try .play instead.' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: '❌ High-quality audio download failed. Try $play instead.' }, { quoted: message });
     }
 }
 

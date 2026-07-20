@@ -1,5 +1,5 @@
 /**
- * .grouplink — Get the current group invite link.
+ * $grouplink — Get the current group invite link.
  * Requires bot to be admin.
  */
 async function grouplinkCommand(sock, chatId, message) {

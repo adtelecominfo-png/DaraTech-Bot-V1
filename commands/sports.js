@@ -1,7 +1,7 @@
 'use strict';
 const { davidGet } = require('../lib/gifted');
 
-/** .sports / .scoreboard / .livescores — live game scores */
+/** $sports / $scoreboard / $livescores — live game scores */
 async function sportsCommand(sock, chatId, message) {
     try {
         await sock.sendMessage(chatId, {
@@ -43,11 +43,11 @@ async function sportsCommand(sock, chatId, message) {
     }
 }
 
-/** .sportsteam <name> — search a sports team */
+/** $sportsteam <name> — search a sports team */
 async function sportsTeamCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const q = text.split(' ').slice(1).join(' ').trim();
-    if (!q) return sock.sendMessage(chatId, { text: '🏆 Usage: .sportsteam <team name>\nExample: .sportsteam Lakers' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '🏆 Usage: $sportsteam <team name>\nExample: $sportsteam Lakers' }, { quoted: message });
     try {
         const data = await davidGet(`/sports/team?q=${encodeURIComponent(q)}`);
         if (!data?.success) return sock.sendMessage(chatId, { text: `❌ Team "${q}" not found.` }, { quoted: message });
@@ -71,11 +71,11 @@ async function sportsTeamCommand(sock, chatId, message) {
     }
 }
 
-/** .sportsplayer <name> — search a sports player */
+/** $sportsplayer <name> — search a sports player */
 async function sportsPlayerCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const q = text.split(' ').slice(1).join(' ').trim();
-    if (!q) return sock.sendMessage(chatId, { text: '🏅 Usage: .sportsplayer <player name>\nExample: .sportsplayer LeBron James' }, { quoted: message });
+    if (!q) return sock.sendMessage(chatId, { text: '🏅 Usage: $sportsplayer <player name>\nExample: $sportsplayer LeBron James' }, { quoted: message });
     try {
         const data = await davidGet(`/sports/player?q=${encodeURIComponent(q)}`);
         if (!data?.success) return sock.sendMessage(chatId, { text: `❌ Player "${q}" not found.` }, { quoted: message });
@@ -101,7 +101,7 @@ async function sportsPlayerCommand(sock, chatId, message) {
     }
 }
 
-/** .nbastandings / .nflstandings / .soccerstandings — league standings */
+/** $nbastandings / $nflstandings / $soccerstandings — league standings */
 async function standingsCommand(sock, chatId, message, league) {
     const endpointMap = { nba: '/sports/nba/standings', nfl: '/sports/nfl/standings', soccer: '/sports/soccer/standings' };
     const emojiMap = { nba: '🏀', nfl: '🏈', soccer: '⚽' };

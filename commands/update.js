@@ -4,7 +4,7 @@
  *
  * Strategy:
  *  1. git fetch → reset → clean
- *     Session survives because .env (SESSION_ID) and session/ are both
+ *     Session survives because $env (SESSION_ID) and session/ are both
  *     gitignored — git never touches them. On next boot, index.js restores
  *     creds from SESSION_ID if the session folder is empty.
  *  2. Exit cleanly so the panel restarts once, as the sole owner of the session.
@@ -53,7 +53,7 @@ async function detectBranch() {
 
 // ── Env + session backup/restore ─────────────────────────────────────────────
 // Some hosting platforms (e.g. Katabump) reset the container to the git repo
-// state when the process restarts, wiping any non-tracked files including .env
+// state when the process restarts, wiping any non-tracked files including $env
 // and session/. We snapshot them in memory before git operations and write them
 // back afterwards so they survive even a hard container reset.
 
@@ -78,10 +78,10 @@ function restoreEnvAndSession(snap) {
     try {
         if (snap.env !== null) {
             fs.writeFileSync(envPath, snap.env, 'utf8');
-            console.log('[update] .env restored ✅');
+            console.log('[update] $env restored ✅');
         }
     } catch (e) {
-        console.error('[update] Failed to restore .env:', e.message);
+        console.error('[update] Failed to restore $env:', e.message);
     }
 
     try {
@@ -115,7 +115,7 @@ async function updateViaGit() {
     const sameRev = oldRev === newRev;
 
     if (!sameRev) {
-        // Snapshot .env and session before git wipes anything
+        // Snapshot $env and session before git wipes anything
         const snap = snapshotEnvAndSession();
 
         await run(`git reset --hard ${newRev}`);
@@ -264,7 +264,7 @@ async function doRestart(sock, chatId, message, text) {
 async function updateCommand(sock, chatId, message, zipOverride) {
     const senderId = message.key.participant || message.key.remoteJid;
     if (!message.key.fromMe && !(await isOwnerOrSudo(senderId, sock, chatId))) {
-        return sock.sendMessage(chatId, { text: '❌ Only the bot owner can use .update' }, { quoted: message });
+        return sock.sendMessage(chatId, { text: '❌ Only the bot owner can use $update' }, { quoted: message });
     }
 
     try {

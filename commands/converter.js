@@ -9,7 +9,7 @@ async function bmiCommand(sock, chatId, message) {
     const args = getArgs(message);
     const weight = parseFloat(args[0]);
     const height = parseFloat(args[1]);
-    if (!weight || !height) return sock.sendMessage(chatId, { text: '⚖️ Usage: .bmi <weight_kg> <height_m>\nExample: .bmi 70 1.75' }, { quoted: message });
+    if (!weight || !height) return sock.sendMessage(chatId, { text: '⚖️ Usage: $bmi <weight_kg> <height_m>\nExample: $bmi 70 1.75' }, { quoted: message });
     const bmi = (weight / (height * height)).toFixed(1);
     let category = '', emoji = '';
     if (bmi < 18.5) { category = 'Underweight'; emoji = '😟'; }
@@ -24,7 +24,7 @@ async function bmiCommand(sock, chatId, message) {
 async function ageCommand(sock, chatId, message) {
     const args = getArgs(message);
     const dateStr = args.join(' ').trim();
-    if (!dateStr) return sock.sendMessage(chatId, { text: '🎂 Usage: .age <YYYY-MM-DD>\nExample: .age 2000-05-15' }, { quoted: message });
+    if (!dateStr) return sock.sendMessage(chatId, { text: '🎂 Usage: $age <YYYY-MM-DD>\nExample: $age 2000-05-15' }, { quoted: message });
     const birth = new Date(dateStr);
     if (isNaN(birth)) return sock.sendMessage(chatId, { text: '❌ Invalid date. Use format YYYY-MM-DD' }, { quoted: message });
     const now = new Date();
@@ -42,7 +42,7 @@ async function ageCommand(sock, chatId, message) {
 async function celsiusCommand(sock, chatId, message) {
     const args = getArgs(message);
     const val = parseFloat(args[0]);
-    if (isNaN(val)) return sock.sendMessage(chatId, { text: '🌡️ Usage: .celsius <fahrenheit>\nExample: .celsius 98.6' }, { quoted: message });
+    if (isNaN(val)) return sock.sendMessage(chatId, { text: '🌡️ Usage: $celsius <fahrenheit>\nExample: $celsius 98.6' }, { quoted: message });
     const result = ((val - 32) * 5 / 9).toFixed(2);
     await sock.sendMessage(chatId, { text: `🌡️ *${val}°F = ${result}°C*\n\n_Daratech_ ⚡` }, { quoted: message });
 }
@@ -50,7 +50,7 @@ async function celsiusCommand(sock, chatId, message) {
 async function fahrenheitCommand(sock, chatId, message) {
     const args = getArgs(message);
     const val = parseFloat(args[0]);
-    if (isNaN(val)) return sock.sendMessage(chatId, { text: '🌡️ Usage: .fahrenheit <celsius>\nExample: .fahrenheit 37' }, { quoted: message });
+    if (isNaN(val)) return sock.sendMessage(chatId, { text: '🌡️ Usage: $fahrenheit <celsius>\nExample: $fahrenheit 37' }, { quoted: message });
     const result = ((val * 9 / 5) + 32).toFixed(2);
     await sock.sendMessage(chatId, { text: `🌡️ *${val}°C = ${result}°F*\n\n_Daratech_ ⚡` }, { quoted: message });
 }
@@ -58,7 +58,7 @@ async function fahrenheitCommand(sock, chatId, message) {
 async function kmtomilesCommand(sock, chatId, message) {
     const args = getArgs(message);
     const val = parseFloat(args[0]);
-    if (isNaN(val)) return sock.sendMessage(chatId, { text: '📏 Usage: .kmtomiles <km>\nExample: .kmtomiles 100' }, { quoted: message });
+    if (isNaN(val)) return sock.sendMessage(chatId, { text: '📏 Usage: $kmtomiles <km>\nExample: $kmtomiles 100' }, { quoted: message });
     const result = (val * 0.621371).toFixed(4);
     await sock.sendMessage(chatId, { text: `📏 *${val} km = ${result} miles*\n\n_Daratech_ ⚡` }, { quoted: message });
 }
@@ -66,7 +66,7 @@ async function kmtomilesCommand(sock, chatId, message) {
 async function milestokmCommand(sock, chatId, message) {
     const args = getArgs(message);
     const val = parseFloat(args[0]);
-    if (isNaN(val)) return sock.sendMessage(chatId, { text: '📏 Usage: .milestokm <miles>\nExample: .milestokm 60' }, { quoted: message });
+    if (isNaN(val)) return sock.sendMessage(chatId, { text: '📏 Usage: $milestokm <miles>\nExample: $milestokm 60' }, { quoted: message });
     const result = (val * 1.60934).toFixed(4);
     await sock.sendMessage(chatId, { text: `📏 *${val} miles = ${result} km*\n\n_Daratech_ ⚡` }, { quoted: message });
 }
@@ -74,7 +74,7 @@ async function milestokmCommand(sock, chatId, message) {
 async function kgtolbsCommand(sock, chatId, message) {
     const args = getArgs(message);
     const val = parseFloat(args[0]);
-    if (isNaN(val)) return sock.sendMessage(chatId, { text: '⚖️ Usage: .kgtolbs <kg>\nExample: .kgtolbs 70' }, { quoted: message });
+    if (isNaN(val)) return sock.sendMessage(chatId, { text: '⚖️ Usage: $kgtolbs <kg>\nExample: $kgtolbs 70' }, { quoted: message });
     const result = (val * 2.20462).toFixed(3);
     await sock.sendMessage(chatId, { text: `⚖️ *${val} kg = ${result} lbs*\n\n_Daratech_ ⚡` }, { quoted: message });
 }
@@ -82,7 +82,7 @@ async function kgtolbsCommand(sock, chatId, message) {
 async function lbstokg(sock, chatId, message) {
     const args = getArgs(message);
     const val = parseFloat(args[0]);
-    if (isNaN(val)) return sock.sendMessage(chatId, { text: '⚖️ Usage: .lbstokg <lbs>\nExample: .lbstokg 154' }, { quoted: message });
+    if (isNaN(val)) return sock.sendMessage(chatId, { text: '⚖️ Usage: $lbstokg <lbs>\nExample: $lbstokg 154' }, { quoted: message });
     const result = (val * 0.453592).toFixed(3);
     await sock.sendMessage(chatId, { text: `⚖️ *${val} lbs = ${result} kg*\n\n_Daratech_ ⚡` }, { quoted: message });
 }

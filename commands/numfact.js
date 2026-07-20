@@ -20,7 +20,7 @@ async function datefactCommand(sock, chatId, message) {
     const today = new Date();
     const dateStr = input || `${today.getMonth() + 1}/${today.getDate()}`;
     const [month, day] = dateStr.split('/');
-    if (!month || !day) return sock.sendMessage(chatId, { text: '📅 Usage: .datefact <month/day>\nExample: .datefact 7/4' }, { quoted: message });
+    if (!month || !day) return sock.sendMessage(chatId, { text: '📅 Usage: $datefact <month/day>\nExample: $datefact 7/4' }, { quoted: message });
     try {
         const { data } = await axios.get(`http://numbersapi.com/${month}/${day}/date?json=true`, { timeout: 8000 });
         await sock.sendMessage(chatId, {

@@ -28,7 +28,7 @@ async function blockCommand(sock, chatId, message, senderId, msgText) {
             targetJid = chatId;
         }
 
-        // If still no target, try to extract from command text (e.g., .block 1234567890@s.whatsapp.net)
+        // If still no target, try to extract from command text (e.g., $block 1234567890@s.whatsapp.net)
         if (!targetJid) {
             const args = msgText.split(' ').slice(1);
             if (args.length > 0 && args[0].includes('@s.whatsapp.net')) {
@@ -40,8 +40,8 @@ async function blockCommand(sock, chatId, message, senderId, msgText) {
             return await sock.sendMessage(chatId, { 
                 text: '❌ Please mention a user, reply to their message, or provide their JID.\n' +
                       'Examples:\n' +
-                      '• .block @user\n' +
-                      '• .block 1234567890@s.whatsapp.net\n' +
+                      '• $block @user\n' +
+                      '• $block 1234567890@s.whatsapp.net\n' +
                       '• Use in user\'s DM' 
             }, { quoted: message });
         }

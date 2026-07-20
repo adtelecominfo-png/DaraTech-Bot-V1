@@ -1,6 +1,6 @@
 /**
  * Calculator command - safely evaluates math expressions
- * Usage: .calc 2+2 | .calc sqrt(144) | .calc (12*5)/3 | .calc 2^10
+ * Usage: $calc 2+2 | $calc sqrt(144) | $calc (12*5)/3 | $calc 2^10
  *
  * Security model: validate the raw user input BEFORE any substitution.
  * After substitution we only produce `Math.*` calls + numbers + operators,
@@ -24,15 +24,15 @@ function safeEval(expr) {
 
     // Safe substitutions (operate on the original sanitized string, not stripped)
     const safe = sanitized
-        .replace(/\^/g, '**')
-        .replace(/\bsqrt\b/g, 'Math.sqrt')
-        .replace(/\bsin\b/g, 'Math.sin')
-        .replace(/\bcos\b/g, 'Math.cos')
-        .replace(/\btan\b/g, 'Math.tan')
-        .replace(/\blog\b/g, 'Math.log')
-        .replace(/\babs\b/g, 'Math.abs')
-        .replace(/\bpi\b/g, 'Math.PI')
-        .replace(/\be\b/g, 'Math.E');
+        $replace(/\^/g, '**')
+        $replace(/\bsqrt\b/g, 'Math.sqrt')
+        $replace(/\bsin\b/g, 'Math.sin')
+        $replace(/\bcos\b/g, 'Math.cos')
+        $replace(/\btan\b/g, 'Math.tan')
+        $replace(/\blog\b/g, 'Math.log')
+        $replace(/\babs\b/g, 'Math.abs')
+        $replace(/\bpi\b/g, 'Math.PI')
+        $replace(/\be\b/g, 'Math.E');
 
     // eslint-disable-next-line no-new-func
     const result = Function('"use strict"; return (' + safe + ')')();
@@ -56,17 +56,17 @@ async function calcCommand(sock, chatId, message, userMessage) {
             text: [
                 '🧮 *Calculator*',
                 '',
-                'Usage: `.calc <expression>`',
+                'Usage: `$calc <expression>`',
                 '',
                 '*Examples:*',
-                '• `.calc 2 + 2`',
-                '• `.calc 10 * 5 / 2`',
-                '• `.calc sqrt(144)`',
-                '• `.calc 2^10`',
-                '• `.calc (15 + 3) * 4`',
-                '• `.calc sin(0.5)`',
-                '• `.calc log(100)`',
-                '• `.calc pi * 2`',
+                '• `$calc 2 + 2`',
+                '• `$calc 10 * 5 / 2`',
+                '• `$calc sqrt(144)`',
+                '• `$calc 2^10`',
+                '• `$calc (15 + 3) * 4`',
+                '• `$calc sin(0.5)`',
+                '• `$calc log(100)`',
+                '• `$calc pi * 2`',
                 '',
                 '*Supported:* `+  −  *  /  %  ^`',
                 '*Functions:* `sqrt  sin  cos  tan  log  abs`',
@@ -83,7 +83,7 @@ async function calcCommand(sock, chatId, message, userMessage) {
         }, { quoted: message });
     } catch (err) {
         await sock.sendMessage(chatId, {
-            text: `❌ *Calculation Error*\n\n${err.message || 'Invalid expression.'}\n\nTry: \`.calc 2+2\``
+            text: `❌ *Calculation Error*\n\n${err.message || 'Invalid expression.'}\n\nTry: \`$calc 2+2\``
         }, { quoted: message });
     }
 }

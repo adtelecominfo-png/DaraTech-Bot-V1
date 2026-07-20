@@ -38,7 +38,7 @@ async function blurCommand(sock, chatId, message, quotedMessage) {
             );
         } else {
             await sock.sendMessage(chatId, { 
-                text: '❌ Please reply to an image or send an image with caption .blur' 
+                text: '❌ Please reply to an image or send an image with caption $blur' 
             }, { quoted: message });
             return;
         }
@@ -46,17 +46,17 @@ async function blurCommand(sock, chatId, message, quotedMessage) {
         // Resize and optimize image
         await sock.sendMessage(chatId, { text: '🌫️ Blurring image……' }, { quoted: message });
         const resizedImage = await sharp(imageBuffer)
-            .resize(800, 800, { // Resize to max 800x800
+            $resize(800, 800, { // Resize to max 800x800
                 fit: 'inside',
                 withoutEnlargement: true
             })
-            .jpeg({ quality: 80 }) // Convert to JPEG with 80% quality
-            .toBuffer();
+            $jpeg({ quality: 80 }) // Convert to JPEG with 80% quality
+            $toBuffer();
 
         // Apply blur effect directly using sharp
         const blurredImage = await sharp(resizedImage)
-            .blur(10) // Blur radius of 10
-            .toBuffer();
+            $blur(10) // Blur radius of 10
+            $toBuffer();
 
         // Send the blurred image
         await sock.sendMessage(chatId, {

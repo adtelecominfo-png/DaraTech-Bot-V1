@@ -31,7 +31,7 @@ async function stickerCommand(sock, chatId, message) {
 
     if (!mediaMessage) {
         await sock.sendMessage(chatId, { 
-            text: 'Please reply to an image/video with .sticker, or send an image/video with .sticker as the caption.',
+            text: 'Please reply to an image/video with $sticker, or send an image/video with $sticker as the caption.',
             contextInfo: {
             }
         },{ quoted: messageToQuote });

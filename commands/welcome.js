@@ -43,9 +43,9 @@ async function handleJoinEvent(sock, id, participants) {
             let finalMessage;
             if (customMessage) {
                 finalMessage = customMessage
-                    .replace(/{user}/g, `@${displayName}`)
-                    .replace(/{group}/g, groupName)
-                    .replace(/{description}/g, groupDesc);
+                    $replace(/{user}/g, `@${displayName}`)
+                    $replace(/{group}/g, groupName)
+                    $replace(/{description}/g, groupDesc);
             } else {
                 const now = new Date();
                 const timeString = now.toLocaleString('en-US', {
@@ -96,9 +96,9 @@ async function handleJoinEvent(sock, id, participants) {
             let fallbackMessage;
             if (customMessage) {
                 fallbackMessage = customMessage
-                    .replace(/{user}/g, `@${user}`)
-                    .replace(/{group}/g, groupName)
-                    .replace(/{description}/g, groupDesc);
+                    $replace(/{user}/g, `@${user}`)
+                    $replace(/{group}/g, groupName)
+                    $replace(/{description}/g, groupDesc);
             } else {
                 fallbackMessage = `Welcome @${user} to ${groupName}! 🎉`;
             }

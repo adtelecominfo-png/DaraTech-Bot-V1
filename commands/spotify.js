@@ -21,7 +21,7 @@ async function spotifyCommand(sock, chatId, message) {
         const input = text.split(' ').slice(1).join(' ').trim();
         if (!input) {
             return sock.sendMessage(chatId,
-                { text: '🎵 Usage: .spotify <song name or Spotify URL>' },
+                { text: '🎵 Usage: $spotify <song name or Spotify URL>' },
                 { quoted: message });
         }
 

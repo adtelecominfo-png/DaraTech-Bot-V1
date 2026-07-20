@@ -66,7 +66,7 @@ async function autoStatusCommand(sock, chatId, msg, args) {
             // Handle react subcommand
             if (!args[1]) {
                 await sock.sendMessage(chatId, { 
-                    text: '❌ Please specify on/off for reactions!\nUse: .autostatus react on/off',
+                    text: '❌ Please specify on/off for reactions!\nUse: $autostatus react on/off',
                     ...channelInfo
                 });
                 return;
@@ -89,7 +89,7 @@ async function autoStatusCommand(sock, chatId, msg, args) {
                 });
             } else {
                 await sock.sendMessage(chatId, { 
-                    text: '❌ Invalid reaction command! Use: .autostatus react on/off',
+                    text: '❌ Invalid reaction command! Use: $autostatus react on/off',
                     ...channelInfo
                 });
             }

@@ -45,7 +45,7 @@ async function banCommand(sock, chatId, message) {
 
     if (!userToBan) {
         await sock.sendMessage(chatId, { 
-            text: "*Ban Command*\n\nUsage:\n`.ban @user` - Ban mentioned user\n`.ban` (reply to user) - Ban replied user",
+            text: "*Ban Command*\n\nUsage:\n`$ban @user` - Ban mentioned user\n`$ban` (reply to user) - Ban replied user",
         });
         return;
     }

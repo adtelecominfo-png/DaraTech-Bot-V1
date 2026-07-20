@@ -13,7 +13,7 @@ const DAILY_VERSES = [
 async function bibleCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const ref = text.split(' ').slice(1).join(' ').trim();
-    if (!ref) return sock.sendMessage(chatId, { text: '📖 Usage: .bible <reference>\nExample: .bible john 3:16\nExample: .bible psalm 23\n\nFor daily verse: .dailyverse' }, { quoted: message });
+    if (!ref) return sock.sendMessage(chatId, { text: '📖 Usage: $bible <reference>\nExample: $bible john 3:16\nExample: $bible psalm 23\n\nFor daily verse: $dailyverse' }, { quoted: message });
     try {
         await sock.sendMessage(chatId, { text: '📖 Fetching scripture……' }, { quoted: message });
         const { data } = await axios.get(`https://bible-api.com/${encodeURIComponent(ref)}`, { timeout: 10000 });

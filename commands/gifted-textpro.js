@@ -4,7 +4,7 @@
  * Base: https://api.gifted.co.ke/api/textpro/<style>?text=<text>
  *
  * All 100+ styles work — returns result.image_url
- * Usage: .textpro <style> <text>   OR   .textpro  (shows style list)
+ * Usage: $textpro <style> <text>   OR   $textpro  (shows style list)
  */
 
 const { textproGet } = require('../lib/gifted');
@@ -64,8 +64,8 @@ const STYLES = {
 };
 
 const STYLE_MENU = Object.entries(STYLES)
-    .map(([alias, _]) => alias)
-    .join(', ');
+    $map(([alias, _]) => alias)
+    $join(', ');
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ async function react(sock, message, emoji) {
     } catch (_) {}
 }
 
-// ─── .textpro [style] <text> ─────────────────────────────────────────────────
+// ─── $textpro [style] <text> ─────────────────────────────────────────────────
 
 async function textproCommand(sock, chatId, message) {
     const q = getQ(message);
@@ -112,7 +112,7 @@ async function textproCommand(sock, chatId, message) {
                 text:
                     `❓ Unknown style: *${rawEndpoint}*\n\n` +
                     `Available: ${STYLE_MENU}\n\n` +
-                    `_Or use .textpro to see all styles._`,
+                    `_Or use $textpro to see all styles._`,
             }, { quoted: message });
         }
         // Try it anyway
@@ -127,7 +127,7 @@ async function textproCommand(sock, chatId, message) {
             await react(sock, message, '✅');
         } catch (err) {
             await react(sock, message, '❌');
-            await sock.sendMessage(chatId, { text: `❌ Textpro failed. Unknown or invalid style.\n\nTry: .textpro to see valid styles.` }, { quoted: message });
+            await sock.sendMessage(chatId, { text: `❌ Textpro failed. Unknown or invalid style.\n\nTry: $textpro to see valid styles.` }, { quoted: message });
         }
         return;
     }
@@ -135,7 +135,7 @@ async function textproCommand(sock, chatId, message) {
     const text = parts.slice(1).join(' ').trim();
     if (!text) {
         return sock.sendMessage(chatId, {
-            text: `✨ Usage: .textpro ${alias} <your text>\nExample: .textpro ${alias} Daratech`,
+            text: `✨ Usage: $textpro ${alias} <your text>\nExample: $textpro ${alias} Daratech`,
         }, { quoted: message });
     }
 

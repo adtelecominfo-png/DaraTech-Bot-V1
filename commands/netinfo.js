@@ -1,11 +1,11 @@
 /**
  * Networking & system info commands
- * .netinfo  - public IP + ISP + location
- * .ipinfo   - detailed IP info (same as netinfo)
- * .cpuinfo  - CPU / platform info
- * .meminfo  - RAM usage
- * .diskinfo - Disk usage (df -h)
- * .timezone - Current timezone & time
+ * $netinfo  - public IP + ISP + location
+ * $ipinfo   - detailed IP info (same as netinfo)
+ * $cpuinfo  - CPU / platform info
+ * $meminfo  - RAM usage
+ * $diskinfo - Disk usage (df -h)
+ * $timezone - Current timezone & time
  */
 
 // Uses global fetch (Node.js 18+) — no require needed

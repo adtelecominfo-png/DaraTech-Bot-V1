@@ -56,7 +56,7 @@ async function sudoCommand(sock, chatId, message) {
     }
 
     if (!isOwner) {
-        await sock.sendMessage(chatId, { text: '❌ Only owner can add/remove sudo users. Use .sudo list to view.' }, {quoted: message});
+        await sock.sendMessage(chatId, { text: '❌ Only owner can add/remove sudo users. Use $sudo list to view.' }, {quoted: message});
         return;
     }
 

@@ -1,5 +1,5 @@
 /**
- * .listadmins — Lists all admins and the group owner.
+ * $listadmins — Lists all admins and the group owner.
  */
 async function listadminsCommand(sock, chatId, message) {
     try {

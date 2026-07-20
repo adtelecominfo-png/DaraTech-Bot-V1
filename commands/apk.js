@@ -6,7 +6,7 @@ async function apkCommand(sock, chatId, message) {
         const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const query = text.split(' ').slice(1).join(' ').trim();
         if (!query) {
-            return sock.sendMessage(chatId, { text: '📲 Usage: .apk <app name>\nExample: .apk WhatsApp' }, { quoted: message });
+            return sock.sendMessage(chatId, { text: '📲 Usage: $apk <app name>\nExample: $apk WhatsApp' }, { quoted: message });
         }
         await sock.sendMessage(chatId, { text: `📲 Searching APK: *${query}*...` }, { quoted: message });
         const data = await get('/download/apkdl', { appName: query });

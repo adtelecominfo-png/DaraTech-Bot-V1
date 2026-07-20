@@ -137,7 +137,7 @@ module.exports = {
             // Check if message is provided
             if (!args) {
                 await sock.sendMessage(m.chat, {
-                    text: '⚠️ Please provide a message to broadcast.\nExample: .bc Hello everyone!'
+                    text: '⚠️ Please provide a message to broadcast.\nExample: $bc Hello everyone!'
                 }, { quoted: message });
                 return;
             }

@@ -1,5 +1,5 @@
 /**
- * .react <emoji> — React to a quoted/replied message with an emoji.
+ * $react <emoji> — React to a quoted/replied message with an emoji.
  */
 async function reactCommand(sock, chatId, message, userMessage) {
     try {

@@ -31,14 +31,14 @@ async function toBuffer(url) {
     return Buffer.from(res.data);
 }
 
-// ─── .video / .ytmp4 — YouTube video (720p) ──────────────────────────────────
+// ─── $video / $ytmp4 — YouTube video (720p) ──────────────────────────────────
 
 async function videoCommand(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.(video|ytmp4)\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId,
-            { text: '🎬 Usage: .video <title or YouTube URL>' }, { quoted: message });
+            { text: '🎬 Usage: $video <title or YouTube URL>' }, { quoted: message });
 
         const { url, title } = await ytSearch(input);
         await sock.sendMessage(chatId, { text: `🎬 *Downloading:* ${title}…` }, { quoted: message });
@@ -59,14 +59,14 @@ async function videoCommand(sock, chatId, message) {
     }
 }
 
-// ─── .video2 / .savetube — YouTube video via SaveTube (360p) ─────────────────
+// ─── $video2 / $savetube — YouTube video via SaveTube (360p) ─────────────────
 
 async function video2Command(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.(video2|savetube)\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
-            text: '🎬 Usage: .video2 <title or YouTube URL>',
+            text: '🎬 Usage: $video2 <title or YouTube URL>',
         }, { quoted: message });
 
         const { url, title } = await ytSearch(input);
@@ -84,18 +84,18 @@ async function video2Command(sock, chatId, message) {
         }, { quoted: message });
     } catch (err) {
         console.error('[video2]', err.message);
-        await sock.sendMessage(chatId, { text: '❌ Video download failed. Try .video instead.' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: '❌ Video download failed. Try $video instead.' }, { quoted: message });
     }
 }
 
-// ─── .videodoc — YouTube video as downloadable document ──────────────────────
+// ─── $videodoc — YouTube video as downloadable document ──────────────────────
 
 async function videoDocCommand(sock, chatId, message) {
     try {
         const text  = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const input = text.replace(/^\.videodoc\s*/i, '').trim();
         if (!input) return sock.sendMessage(chatId, {
-            text: '🎬 Usage: .videodoc <title or YouTube URL>',
+            text: '🎬 Usage: $videodoc <title or YouTube URL>',
         }, { quoted: message });
 
         const { url, title } = await ytSearch(input);

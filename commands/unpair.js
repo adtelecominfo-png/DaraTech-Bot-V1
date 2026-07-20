@@ -1,6 +1,6 @@
 'use strict';
 /**
- * .unpair — Instructions to disconnect the bot from your WhatsApp.
+ * $unpair — Instructions to disconnect the bot from your WhatsApp.
  */
 
 const SESSION_SITE = 'https://darabot-session.onrender.com';

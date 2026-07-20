@@ -20,7 +20,7 @@ function startHangman(sock, chatId) {
 
 function guessLetter(sock, chatId, letter) {
     if (!hangmanGames[chatId]) {
-        sock.sendMessage(chatId, { text: 'No game in progress. Start a new game with .hangman' });
+        sock.sendMessage(chatId, { text: 'No game in progress. Start a new game with $hangman' });
         return;
     }
 

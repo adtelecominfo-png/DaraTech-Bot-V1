@@ -5,7 +5,7 @@ async function ytsearchCommand(sock, chatId, message) {
     try {
         const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const q = text.split(' ').slice(1).join(' ').trim();
-        if (!q) return sock.sendMessage(chatId, { text: '🔍 Usage: .yts <search query>\nExample: .yts faded alan walker' }, { quoted: message });
+        if (!q) return sock.sendMessage(chatId, { text: '🔍 Usage: $yts <search query>\nExample: $yts faded alan walker' }, { quoted: message });
         await sock.sendMessage(chatId, { text: '▶️ Searching YouTube……' }, { quoted: message });
         const results = await yts(q);
         if (!results?.videos?.length) return sock.sendMessage(chatId, { text: '❌ No YouTube results found.' }, { quoted: message });

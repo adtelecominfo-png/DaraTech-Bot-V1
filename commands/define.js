@@ -6,7 +6,7 @@ const BASE = 'https://api.dictionaryapi.dev/api/v2/entries/en';
 async function defineCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const word = text.split(' ').slice(1).join(' ').trim();
-    if (!word) return sock.sendMessage(chatId, { text: '📖 Usage: .define <word>\nExample: .define serendipity' }, { quoted: message });
+    if (!word) return sock.sendMessage(chatId, { text: '📖 Usage: $define <word>\nExample: $define serendipity' }, { quoted: message });
     try {
         await sock.sendMessage(chatId, { text: '📖 Searching dictionary……' }, { quoted: message });
         const { data } = await axios.get(`${BASE}/${encodeURIComponent(word)}`, { timeout: 10000 });
@@ -35,7 +35,7 @@ async function defineCommand(sock, chatId, message) {
 async function synonymCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const word = text.split(' ').slice(1).join(' ').trim();
-    if (!word) return sock.sendMessage(chatId, { text: '🔁 Usage: .synonym <word>' }, { quoted: message });
+    if (!word) return sock.sendMessage(chatId, { text: '🔁 Usage: $synonym <word>' }, { quoted: message });
     try {
         await sock.sendMessage(chatId, { text: '🔁 Searching synonyms……' }, { quoted: message });
         const { data } = await axios.get(`${BASE}/${encodeURIComponent(word)}`, { timeout: 10000 });
@@ -58,7 +58,7 @@ async function synonymCommand(sock, chatId, message) {
 async function antonymCommand(sock, chatId, message) {
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const word = text.split(' ').slice(1).join(' ').trim();
-    if (!word) return sock.sendMessage(chatId, { text: '↔️ Usage: .antonym <word>' }, { quoted: message });
+    if (!word) return sock.sendMessage(chatId, { text: '↔️ Usage: $antonym <word>' }, { quoted: message });
     try {
         await sock.sendMessage(chatId, { text: '↔️ Searching antonyms……' }, { quoted: message });
         const { data } = await axios.get(`${BASE}/${encodeURIComponent(word)}`, { timeout: 10000 });

@@ -28,7 +28,7 @@ async function muteUserCommand(sock, chatId, message, userMessage) {
         const mentioned = message.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
         if (mentioned.length === 0) {
             return await sock.sendMessage(chatId, { 
-                text: '❌ Please mention the user to mute.\nExample: .mute-user @user' 
+                text: '❌ Please mention the user to mute.\nExample: $mute-user @user' 
             }, { quoted: message });
         }
 

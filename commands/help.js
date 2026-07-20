@@ -16,7 +16,7 @@ async function sendOverview(sock, chatId, message) {
     const lines = [
         `📖 *COMMAND GUIDE* · Daratech\n`,
         `👤 Hey *${userName}* 👋  ·  v${ver}  ·  ⏱ ${h}h ${m}m\n`,
-        `*📂 CATEGORIES — type .help <name> for details:*\n`,
+        `*📂 CATEGORIES — type $help <name> for details:*\n`,
     ];
 
     for (const cat of CATEGORIES) {

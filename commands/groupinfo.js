@@ -35,7 +35,7 @@ ${listAdmin}
 
 ▢ *📌Description* :
    • ${groupMetadata.desc?.toString() || 'No description'}
-`.trim();
+`$trim();
 
         // Send the message with image and mentions
         await sock.sendMessage(chatId, {

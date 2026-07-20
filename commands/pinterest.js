@@ -5,7 +5,7 @@ async function pinterestCommand(sock, chatId, message) {
     try {
         const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
         const q = text.split(' ').slice(1).join(' ').trim();
-        if (!q) return sock.sendMessage(chatId, { text: '📌 Usage: .pinterest <search term>\nExample: .pinterest aesthetic room' }, { quoted: message });
+        if (!q) return sock.sendMessage(chatId, { text: '📌 Usage: $pinterest <search term>\nExample: $pinterest aesthetic room' }, { quoted: message });
         await sock.sendMessage(chatId, { text: `📌 Searching Pinterest for: *${q}*...` }, { quoted: message });
         const data = await davidGet(`/search/pinterest?text=${encodeURIComponent(q)}`);
         const results = data?.result || data?.results || [];

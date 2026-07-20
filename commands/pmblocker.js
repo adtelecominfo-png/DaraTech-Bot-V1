@@ -55,7 +55,7 @@ async function pmblockerCommand(sock, chatId, message, args) {
     if (sub.toLowerCase() === 'setmsg') {
         const newMsg = rest.join(' ').trim();
         if (!newMsg) {
-            await sock.sendMessage(chatId, { text: 'Usage: .pmblocker setmsg <message>' }, { quoted: message });
+            await sock.sendMessage(chatId, { text: 'Usage: $pmblocker setmsg <message>' }, { quoted: message });
             return;
         }
         writeState(state.enabled, newMsg);

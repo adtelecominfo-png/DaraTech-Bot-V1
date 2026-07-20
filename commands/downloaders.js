@@ -54,12 +54,12 @@ async function sendErr(sock, chatId, message, platform) {
     }, { quoted: message });
 }
 
-// ─── .twitter / .twdl ────────────────────────────────────────────────────────
+// ─── $twitter / $twdl ────────────────────────────────────────────────────────
 
 async function twitterDlCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '🐦 Usage: .twitter <tweet URL>\nExample: .twitter https://x.com/user/status/123456789',
+        text: '🐦 Usage: $twitter <tweet URL>\nExample: $twitter https://x.com/user/status/123456789',
     }, { quoted: message });
 
     try {
@@ -75,12 +75,12 @@ async function twitterDlCommand(sock, chatId, message) {
     } catch { await sendErr(sock, chatId, message, 'Twitter/X'); }
 }
 
-// ─── .igdl — Instagram (GiftedTech fallback) ─────────────────────────────────
+// ─── $igdl — Instagram (GiftedTech fallback) ─────────────────────────────────
 
 async function igdlCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '📸 Usage: .igdl <Instagram post/reel URL>',
+        text: '📸 Usage: $igdl <Instagram post/reel URL>',
     }, { quoted: message });
 
     try {
@@ -104,12 +104,12 @@ async function igdlCommand(sock, chatId, message) {
     } catch { await sendErr(sock, chatId, message, 'Instagram'); }
 }
 
-// ─── .pinterestdl ─────────────────────────────────────────────────────────────
+// ─── $pinterestdl ─────────────────────────────────────────────────────────────
 
 async function pinterestDlCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '📌 Usage: .pinterestdl <Pinterest pin URL>',
+        text: '📌 Usage: $pinterestdl <Pinterest pin URL>',
     }, { quoted: message });
 
     try {
@@ -140,12 +140,12 @@ async function pinterestDlCommand(sock, chatId, message) {
     } catch { await sendErr(sock, chatId, message, 'Pinterest'); }
 }
 
-// ─── .douyin ──────────────────────────────────────────────────────────────────
+// ─── $douyin ──────────────────────────────────────────────────────────────────
 
 async function douyinCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '🎵 Usage: .douyin <Douyin URL>',
+        text: '🎵 Usage: $douyin <Douyin URL>',
     }, { quoted: message });
 
     try {
@@ -161,12 +161,12 @@ async function douyinCommand(sock, chatId, message) {
     } catch { await sendErr(sock, chatId, message, 'Douyin'); }
 }
 
-// ─── .snackvideo ──────────────────────────────────────────────────────────────
+// ─── $snackvideo ──────────────────────────────────────────────────────────────
 
 async function snackVideoCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '🍿 Usage: .snackvideo <SnackVideo URL>',
+        text: '🍿 Usage: $snackvideo <SnackVideo URL>',
     }, { quoted: message });
 
     try {
@@ -182,12 +182,12 @@ async function snackVideoCommand(sock, chatId, message) {
     } catch { await sendErr(sock, chatId, message, 'SnackVideo'); }
 }
 
-// ─── .soundcloud ──────────────────────────────────────────────────────────────
+// ─── $soundcloud ──────────────────────────────────────────────────────────────
 
 async function soundcloudCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '🎧 Usage: .soundcloud <SoundCloud track URL>',
+        text: '🎧 Usage: $soundcloud <SoundCloud track URL>',
     }, { quoted: message });
 
     try {
@@ -204,12 +204,12 @@ async function soundcloudCommand(sock, chatId, message) {
     } catch { await sendErr(sock, chatId, message, 'SoundCloud'); }
 }
 
-// ─── .mediafire ───────────────────────────────────────────────────────────────
+// ─── $mediafire ───────────────────────────────────────────────────────────────
 
 async function mediafireCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '🔥 Usage: .mediafire <MediaFire file URL>',
+        text: '🔥 Usage: $mediafire <MediaFire file URL>',
     }, { quoted: message });
 
     try {
@@ -227,13 +227,13 @@ async function mediafireCommand(sock, chatId, message) {
     } catch { await sendErr(sock, chatId, message, 'MediaFire'); }
 }
 
-// ─── .gdrive — Google Drive ───────────────────────────────────────────────────
+// ─── $gdrive — Google Drive ───────────────────────────────────────────────────
 // Drive's usercontent CDN is stable; no expiry — buffer anyway for consistency
 
 async function gdriveCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '💾 Usage: .gdrive <Google Drive file URL>\n_File must be publicly shared._',
+        text: '💾 Usage: $gdrive <Google Drive file URL>\n_File must be publicly shared._',
     }, { quoted: message });
 
     try {
@@ -255,12 +255,12 @@ async function gdriveCommand(sock, chatId, message) {
     }
 }
 
-// ─── .videy ───────────────────────────────────────────────────────────────────
+// ─── $videy ───────────────────────────────────────────────────────────────────
 
 async function videyCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '📹 Usage: .videy <Videy URL>\nExample: .videy https://videy.co/video?id=abc123',
+        text: '📹 Usage: $videy <Videy URL>\nExample: $videy https://videy.co/video?id=abc123',
     }, { quoted: message });
 
     try {
@@ -278,12 +278,12 @@ async function videyCommand(sock, chatId, message) {
     }
 }
 
-// ─── .webdl — Direct URL download ────────────────────────────────────────────
+// ─── $webdl — Direct URL download ────────────────────────────────────────────
 
 async function webDlCommand(sock, chatId, message) {
     const url = extractArg(message);
     if (!url || !isUrl(url)) return sock.sendMessage(chatId, {
-        text: '🌐 Usage: .webdl <direct media URL>',
+        text: '🌐 Usage: $webdl <direct media URL>',
     }, { quoted: message });
 
     try {
@@ -311,7 +311,7 @@ async function webDlCommand(sock, chatId, message) {
     } catch { await sendErr(sock, chatId, message, 'WebDL'); }
 }
 
-// ─── .aio — All-in-one downloader ────────────────────────────────────────────
+// ─── $aio — All-in-one downloader ────────────────────────────────────────────
 
 async function aioCommand(sock, chatId, message) {
     const url = extractArg(message);
@@ -320,11 +320,11 @@ async function aioCommand(sock, chatId, message) {
             '🔗 *.aio <URL>* — All-in-one downloader',
             '',
             'Supports: Twitter/X, Facebook, Bilibili, and more.',
-            'For YouTube use .play / .video',
-            'For TikTok use .tiktok',
-            'For Instagram use .ig or .igdl',
+            'For YouTube use $play / $video',
+            'For TikTok use $tiktok',
+            'For Instagram use $ig or $igdl',
             '',
-            'Example: .aio https://x.com/user/status/123',
+            'Example: $aio https://x.com/user/status/123',
         ].join('\n'),
     }, { quoted: message });
 

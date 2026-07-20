@@ -4,21 +4,21 @@
  * Football & basketball commands powered by https://api.gifted.co.ke/api/
  *
  * Commands:
- *   .flivescore / .fls       — all live football matches
- *   .fnews / .footballnews   — football news
- *   .fleagues                — list available leagues
- *   .fstream                 — football streaming links
- *   .fplayer <name>          — search a football player
- *   .fteam <name>            — search a football team
- *   .fvenue <name>           — search a stadium / venue
- *   .eplstand                — EPL standings
- *   .eplmatches              — EPL match results
- *   .eplupcoming             — EPL upcoming fixtures
- *   .laligastand             — La Liga standings
- *   .laligamatches           — La Liga match results
- *   .laligaupcoming          — La Liga upcoming fixtures
- *   .bundesstand             — Bundesliga standings
- *   .blive / .bball          — basketball live scores
+ *   $flivescore / $fls       — all live football matches
+ *   $fnews / $footballnews   — football news
+ *   $fleagues                — list available leagues
+ *   $fstream                 — football streaming links
+ *   $fplayer <name>          — search a football player
+ *   $fteam <name>            — search a football team
+ *   $fvenue <name>           — search a stadium / venue
+ *   $eplstand                — EPL standings
+ *   $eplmatches              — EPL match results
+ *   $eplupcoming             — EPL upcoming fixtures
+ *   $laligastand             — La Liga standings
+ *   $laligamatches           — La Liga match results
+ *   $laligaupcoming          — La Liga upcoming fixtures
+ *   $bundesstand             — Bundesliga standings
+ *   $blive / $bball          — basketball live scores
  */
 
 const { sportsGet } = require('../lib/gifted');
@@ -42,7 +42,7 @@ function fmtScore(m) {
     return `${m.homeTeam} *${home} - ${away}* ${m.awayTeam}`;
 }
 
-// ─── .flivescore / .fls ───────────────────────────────────────────────────────
+// ─── $flivescore / $fls ───────────────────────────────────────────────────────
 async function flivescoreCommand(sock, chatId, message) {
     await react(sock, message, '⏳');
     try {
@@ -72,7 +72,7 @@ async function flivescoreCommand(sock, chatId, message) {
     }
 }
 
-// ─── .fnews / .footballnews ───────────────────────────────────────────────────
+// ─── $fnews / $footballnews ───────────────────────────────────────────────────
 async function fnewsCommand(sock, chatId, message) {
     await react(sock, message, '⏳');
     try {
@@ -96,7 +96,7 @@ async function fnewsCommand(sock, chatId, message) {
     }
 }
 
-// ─── .fleagues ────────────────────────────────────────────────────────────────
+// ─── $fleagues ────────────────────────────────────────────────────────────────
 async function fleaguesCommand(sock, chatId, message) {
     await react(sock, message, '⏳');
     try {
@@ -110,7 +110,7 @@ async function fleaguesCommand(sock, chatId, message) {
             if (l.endpoints?.length) text += `  📋 ${l.endpoints.join(' · ')}\n`;
             text += '\n';
         });
-        text += `_Use .eplstand / .laligastand / .bundesstand for standings_\n_Daratech_ ⚡`;
+        text += `_Use $eplstand / $laligastand / $bundesstand for standings_\n_Daratech_ ⚡`;
         await sock.sendMessage(chatId, { text }, { quoted: message });
         await react(sock, message, '✅');
     } catch (err) {
@@ -120,7 +120,7 @@ async function fleaguesCommand(sock, chatId, message) {
     }
 }
 
-// ─── .fstream ─────────────────────────────────────────────────────────────────
+// ─── $fstream ─────────────────────────────────────────────────────────────────
 async function fstreamCommand(sock, chatId, message) {
     await react(sock, message, '⏳');
     try {
@@ -152,7 +152,7 @@ async function fstreamCommand(sock, chatId, message) {
     }
 }
 
-// ─── .fplayer <name> ──────────────────────────────────────────────────────────
+// ─── $fplayer <name> ──────────────────────────────────────────────────────────
 async function fplayerCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
@@ -197,7 +197,7 @@ async function fplayerCommand(sock, chatId, message) {
     }
 }
 
-// ─── .fteam <name> ────────────────────────────────────────────────────────────
+// ─── $fteam <name> ────────────────────────────────────────────────────────────
 async function fteamCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {
@@ -238,7 +238,7 @@ async function fteamCommand(sock, chatId, message) {
     }
 }
 
-// ─── .fvenue <name> ───────────────────────────────────────────────────────────
+// ─── $fvenue <name> ───────────────────────────────────────────────────────────
 async function fvenueCommand(sock, chatId, message) {
     const q = getQ(message);
     if (!q) return sock.sendMessage(chatId, {

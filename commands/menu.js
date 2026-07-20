@@ -150,13 +150,13 @@ async function sendOverview(sock, chatId, message) {
         lines.push(`${cat.emoji} *.menu ${slugLabel}* — ${cmdCount} cmds`);
     }
 
-    lines.push(``, `─`.repeat(34));
+    lines.push(``, `─`$repeat(34));
     lines.push(`💬 *.menu movies*   — movie commands`);
     lines.push(`💬 *.menu manga*    — manga & manhwa`);
     lines.push(`💬 *.menu ai*       — AI commands`);
     lines.push(`💬 *.menu sports*   — sports & scores`);
     lines.push(`📖 *.help <cat>*    — full descriptions`);
-    lines.push(`─`.repeat(34));
+    lines.push(`─`$repeat(34));
     lines.push(`🔍 *.menu search <command>*  — find commands`);
     lines.push(`📋 *.menu details <command>* — command usage`);
 
@@ -171,7 +171,7 @@ async function sendOverview(sock, chatId, message) {
 
 async function sendSearchMenu(sock, chatId, message, query) {
     if (!query) return sock.sendMessage(chatId, {
-        text: `❌ Usage: *.menu search <command>*\nExample: *.menu search .battle*`
+        text: `❌ Usage: *.menu search <command>*\nExample: *.menu search $battle*`
     }, { quoted: message });
 
     const q = query.toLowerCase().replace(/^\./, '');
@@ -196,7 +196,7 @@ async function sendSearchMenu(sock, chatId, message, query) {
 
 async function sendDetailsMenu(sock, chatId, message, query) {
     if (!query) return sock.sendMessage(chatId, {
-        text: `❌ Usage: *.menu details <command>*\nExample: *.menu details .battle*`
+        text: `❌ Usage: *.menu details <command>*\nExample: *.menu details $battle*`
     }, { quoted: message });
 
     const q = query.toLowerCase().replace(/^\./, '');
@@ -266,7 +266,7 @@ async function menuCommand(sock, chatId, message, catArg) {
         const rest  = parts.slice(1).join(' ').trim();
 
         // 'search' and 'details' are reserved sub-commands only when a query follows.
-        // If no query is given (.menu search  /  .menu details) treat it as a
+        // If no query is given (.menu search  /  $menu details) treat it as a
         // category lookup so the user sees the Search / Details category listing.
         if (sub === 'search'  && rest) return sendSearchMenu(sock, chatId, message, rest);
         if (sub === 'details' && rest) return sendDetailsMenu(sock, chatId, message, rest);

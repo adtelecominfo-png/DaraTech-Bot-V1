@@ -4,9 +4,9 @@
  * New seasonal / themed fun commands powered by https://api.gifted.co.ke/api/fun/
  *
  * Commands:
- *   .friendship  .lovetext   .heartbreak  .gratitude   .thankyou
- *   .newyear     .xmas       .halloween   .valentines
- *   .mothersday  .fathersday .bfday       .gfday
+ *   $friendship  $lovetext   $heartbreak  $gratitude   $thankyou
+ *   $newyear     $xmas       $halloween   $valentines
+ *   $mothersday  $fathersday $bfday       $gfday
  */
 
 const { funGet } = require('../lib/gifted');

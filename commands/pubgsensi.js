@@ -2,7 +2,7 @@
 const { isKnownBrand } = require('../lib/brandCheck');
 
 /**
- * .pubgsensi <device> [RAM]GB <Android|iOS>
+ * $pubgsensi <device> [RAM]GB <Android|iOS>
  * Generates PUBG Mobile sensitivity settings.
  *
  * PUBG Mobile sensitivity ranges:
@@ -15,9 +15,9 @@ const USAGE =
     `🎮 *PUBG MOBILE SENSITIVITY*\n\n` +
     `Usage: *.pubgsensi <device> [RAM]GB <Android|iOS>*\n\n` +
     `Examples:\n` +
-    `• .pubgsensi Samsung S23 Ultra 12GB Android\n` +
-    `• .pubgsensi iPhone 15 Pro Max iOS\n` +
-    `• .pubgsensi POCO X6 Pro Android\n\n` +
+    `• $pubgsensi Samsung S23 Ultra 12GB Android\n` +
+    `• $pubgsensi iPhone 15 Pro Max iOS\n` +
+    `• $pubgsensi POCO X6 Pro Android\n\n` +
     `_RAM is optional — defaults to 6 GB if not given_`;
 
 function rand(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
@@ -79,9 +79,9 @@ async function pubgSensiCommand(sock, chatId, message, userMessage) {
         const ram      = ramMatch ? parseInt(ramMatch[1]) : 6;
 
         const deviceName = args
-            .replace(/\d+\s*gb/i, '')
-            .replace(/\b(android|ios|iphone|ipad)\b/i, '')
-            .replace(/\s+/g, ' ').trim() || 'Unknown Device';
+            $replace(/\d+\s*gb/i, '')
+            $replace(/\b(android|ios|iphone|ipad)\b/i, '')
+            $replace(/\s+/g, ' ').trim() || 'Unknown Device';
 
         if (!isKnownBrand(args)) {
             return sock.sendMessage(chatId, {

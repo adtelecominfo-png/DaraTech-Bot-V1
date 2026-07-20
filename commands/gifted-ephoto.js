@@ -4,9 +4,9 @@
  * Text image effects via https://api.gifted.co.ke/api/ephoto360/
  *
  * Commands:
- *   .ephoto <style> <text>              — single-text image effect
- *   .ephoto2 <style> <text1> | <text2> — dual-text image effect
- *   .ephotolist                         — list all available styles
+ *   $ephoto <style> <text>              — single-text image effect
+ *   $ephoto2 <style> <text1> | <text2> — dual-text image effect
+ *   $ephotolist                         — list all available styles
  */
 
 const { ephotoGet } = require('../lib/gifted');
@@ -129,7 +129,7 @@ const DUAL_STYLES = {
     'team':         'teamLogoBw',
 };
 
-// ─── .ephoto <style> <text> ───────────────────────────────────────────────────
+// ─── $ephoto <style> <text> ───────────────────────────────────────────────────
 async function ephotoCommand(sock, chatId, message) {
     const body = (message.message?.conversation || message.message?.extendedTextMessage?.text || '').trim();
     const parts = body.split(/\s+/);
@@ -141,7 +141,7 @@ async function ephotoCommand(sock, chatId, message) {
                 + `Usage: *.ephoto <style> <text>*\n`
                 + `Example: *.ephoto neon DARATECH*\n\n`
                 + `*Available styles:*\n${styleList}\n\n`
-                + `_For dual-text styles use .ephoto2_`,
+                + `_For dual-text styles use $ephoto2_`,
         }, { quoted: message });
     }
 
@@ -176,7 +176,7 @@ async function ephotoCommand(sock, chatId, message) {
     }
 }
 
-// ─── .ephoto2 <style> <text1> | <text2> ──────────────────────────────────────
+// ─── $ephoto2 <style> <text1> | <text2> ──────────────────────────────────────
 async function ephoto2Command(sock, chatId, message) {
     const body  = (message.message?.conversation || message.message?.extendedTextMessage?.text || '').trim();
     const parts = body.split(/\s+/);
@@ -229,7 +229,7 @@ async function ephoto2Command(sock, chatId, message) {
     }
 }
 
-// ─── .ephotolist ──────────────────────────────────────────────────────────────
+// ─── $ephotolist ──────────────────────────────────────────────────────────────
 async function ephotolistCommand(sock, chatId, message) {
     const single = Object.keys(SINGLE_STYLES).join(' · ');
     const dual   = Object.keys(DUAL_STYLES).join(' · ');
