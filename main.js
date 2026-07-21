@@ -118,6 +118,9 @@ const stickerTelegramCommand = require('./commands/stickertelegram');
 const textmakerCommand = require('./commands/textmaker');
 const { handleAntideleteCommand, handleMessageRevocation, storeMessage } = require('./commands/antidelete');
 const { handleAntiViewOnceCommand, handleAntiViewOnce } = require('./commands/antiviewonce');
+const { handleAntiLeaveCommand, handleAntiLeave } = require('./commands/antileave');
+const { humanizeCommand, summarizeCommand, rewriteCommand, grammarCommand } = require('./commands/aitools');
+const { toaudioCommand, tovideoCommand, togifCommand, toimageCommand } = require('./commands/mediaconvert');
 const clearTmpCommand = require('./commands/cleartmp');
 const setProfilePicture = require('./commands/setpp');
 const { setGroupDescription, setGroupName, setGroupPhoto } = require('./commands/groupmanage');
@@ -464,7 +467,7 @@ if (checkAFK(senderId)) {
         }
 
         // List of admin commands
-        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp'];
+        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave'];
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
@@ -1239,6 +1242,33 @@ case userMessage.startsWith('$bssensi'):
                 break;
             case userMessage.startsWith('$antiviewonce'):
                 await handleAntiViewOnceCommand(sock, chatId, message, userMessage.slice(13).trim());
+                break;
+            case userMessage.startsWith('$antileave'):
+                await handleAntiLeaveCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$humanize'):
+                await humanizeCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$summarize') || userMessage.startsWith('$summary'):
+                await summarizeCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$rewrite'):
+                await rewriteCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$grammar'):
+                await grammarCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$toaudio'):
+                await toaudioCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$tovideo'):
+                await tovideoCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$togif'):
+                await togifCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$toimage'):
+                await toimageCommand(sock, chatId, message);
                 break;
             case userMessage === '$surrender':
                 // Handle surrender command for tictactoe game
@@ -2978,6 +3008,7 @@ async function handleGroupParticipantUpdate(sock, update) {
         // Handle leave events
         if (action === 'remove') {
             await handleLeaveEvent(sock, id, participants);
+            await handleAntiLeave(sock, id, participants);
         }
     } catch (error) {
         console.error('Error in handleGroupParticipantUpdate:', error);
