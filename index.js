@@ -218,11 +218,17 @@ async function startXeonBotInc() {
             const mek = chatUpdate.messages[0]
             if (!mek.message) return
 
-            // Track user for broadcast (ADD THIS BLOCK)
+            // Track user for broadcast — only real incoming DMs, never bot-outgoing or LID/group/broadcast JIDs
             try {
                 const userId = mek.key?.remoteJid;
-                if (userId && !userId?.includes('@g.us')) { // Only track individual users, not groups
-                    // Import bcCommand
+                const isIncoming = !mek.key?.fromMe && chatUpdate.type === 'notify';
+                if (
+                    isIncoming &&
+                    userId &&
+                    !userId.includes('@g.us') &&
+                    !userId.includes('@lid') &&
+                    !userId.includes('@broadcast')
+                ) {
                     const bcCommand = require('./commands/bc');
                     bcCommand.addConnectedUser(userId);
                 }

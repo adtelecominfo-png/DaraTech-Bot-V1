@@ -375,7 +375,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
             console.log(`📝 Command used in ${isGroup ? 'group' : 'private'}: ${userMessage}`);
         }
         // Read bot mode once; don't early-return so moderation can still run in private mode
-        let isPublic = true;
+        let isPublic = false;   // default private — only owner/sudo can run commands
         let disabledGroups = [];
         try {
             const modeData = JSON.parse(fs.readFileSync('./data/messageCount.json'));
@@ -383,7 +383,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
             if (Array.isArray(modeData.disabledGroups)) disabledGroups = modeData.disabledGroups;
         } catch (error) {
             console.error('Error checking access mode:', error);
-            // default isPublic=true on error
+            // default stays false on error — safer than opening to everyone
         }
         // Fast check: fromMe covers the bot owner; senderIsSudo covers sudo users.
         // Full isOwnerOrSudo (which may fetch group metadata) is only called for commands.
