@@ -1850,6 +1850,13 @@ case userMessage.startsWith('$bssensi'):
                 await soraCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
+            case userMessage === '$apimovie':
+                await sock.sendMessage(chatId, {
+                    text: `╭─〔 🎬 MOVIE API 〕─╮\n│\n│  🌐 *Daratech Movie API*\n│\n│  Access our full movie database,\n│  streaming links, and download\n│  endpoints via the API below:\n│\n│  🔗 https://movieapi.runflix.name.ng\n│\n╰────────────────────────────────────╯\n\n_Daratech_ ⚡`,
+                }, { quoted: message });
+                commandExecuted = true;
+                break;
+
             case userMessage.startsWith('$movie') ||
                  userMessage.startsWith('$movietrailer') ||
                  userMessage.startsWith('$trailer') ||
