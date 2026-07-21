@@ -186,7 +186,10 @@ function formatInfo(data, subtitles) {
     if (id) {
         msg += `\n\n🆔 *ID:* \`${id}\``;
         msg += `\n💡 *$movie dl ${id}* — Resolution picker & download`;
-        if (d.trailer?.VideoAddress?.url) msg += `\n🎬 *$movietrailer ${id}* — Watch official trailer`;
+        if (d.trailer?.VideoAddress?.url)
+            msg += `\n🎬 *$movietrailer ${id}* — Watch official trailer`;
+        else
+            msg += `\n🎞 *Trailer Unavailable* — Check YouTube for a trailer`;
         if (subtitles && subtitles.length) {
             const subLangs = subtitles
                 .map(s => s.language || s.languageCode || s.lang)
@@ -448,7 +451,10 @@ function showResolutionPicker(sock, chatId, message, sorted, audioTracks, subtit
         msg += `_${dlCmd}1080p audio:2_ — 1080p + dub #2\n`;
     }
 
-    if (hasTrailer)        msg += `\n🎬 *$movietrailer ${id}* — Watch trailer first`;
+    if (hasTrailer)
+        msg += `\n🎬 *$movietrailer ${id}* — Watch trailer first`;
+    else
+        msg += `\n🎞 *Trailer Unavailable* — Check YouTube for a trailer`;
     if (subtitles && subtitles.length) {
         const subLangs = subtitles.map(s => s.language || s.languageCode).join(', ');
         msg += `\n📜 *Subtitles available:* ${subLangs}`;
