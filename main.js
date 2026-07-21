@@ -117,6 +117,7 @@ const { stupidCommand } = require('./commands/stupid');
 const stickerTelegramCommand = require('./commands/stickertelegram');
 const textmakerCommand = require('./commands/textmaker');
 const { handleAntideleteCommand, handleMessageRevocation, storeMessage } = require('./commands/antidelete');
+const { handleAntiViewOnceCommand, handleAntiViewOnce } = require('./commands/antiviewonce');
 const clearTmpCommand = require('./commands/cleartmp');
 const setProfilePicture = require('./commands/setpp');
 const { setGroupDescription, setGroupName, setGroupPhoto } = require('./commands/groupmanage');
@@ -272,6 +273,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
         // Store message for antidelete feature
         if (message.message) {
             storeMessage(sock, message);
+            handleAntiViewOnce(sock, message);
         }
 
         // Handle message revocation
@@ -466,7 +468,7 @@ if (checkAFK(senderId)) {
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate'];
+        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -1234,6 +1236,9 @@ case userMessage.startsWith('$bssensi'):
             case userMessage.startsWith('$antidelete'):
                 const antideleteMatch = userMessage.slice(11).trim();
                 await handleAntideleteCommand(sock, chatId, message, antideleteMatch);
+                break;
+            case userMessage.startsWith('$antiviewonce'):
+                await handleAntiViewOnceCommand(sock, chatId, message, userMessage.slice(13).trim());
                 break;
             case userMessage === '$surrender':
                 // Handle surrender command for tictactoe game
