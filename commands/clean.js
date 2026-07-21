@@ -12,10 +12,37 @@
 
 const isOwnerOrSudo = require('../lib/isOwner');
 
-// Small in-memory rolling store: last 200 messages per chat
-// (resets on bot restart — that's fine for a purge command)
-const recentMessages = new Map(); // chatId → [{key, senderId}]
+// Rolling store: last 200 messages per chat — persisted to disk so it survives restarts
+const STORE_PATH = path.join(__dirname, '../data/clean_store.json');
 const MAX_STORED = 200;
+// Flush to disk at most every 10 s to avoid hammering the FS on busy groups
+let _flushTimer = null;
+
+function loadStore() {
+    try {
+        if (fs.existsSync(STORE_PATH)) {
+            const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
+            const m = new Map();
+            for (const [k, v] of Object.entries(raw)) m.set(k, v);
+            return m;
+        }
+    } catch {}
+    return new Map();
+}
+
+function scheduleFlush(store) {
+    if (_flushTimer) return;
+    _flushTimer = setTimeout(() => {
+        _flushTimer = null;
+        try {
+            const obj = {};
+            for (const [k, v] of store) obj[k] = v;
+            fs.writeFileSync(STORE_PATH, JSON.stringify(obj), 'utf8');
+        } catch {}
+    }, 10_000);
+}
+
+const recentMessages = loadStore();
 
 function storeForClean(message) {
     const chatId = message.key?.remoteJid;
@@ -28,6 +55,7 @@ function storeForClean(message) {
         fromMe:   !!message.key.fromMe,
     });
     if (list.length > MAX_STORED) list.shift();
+    scheduleFlush(recentMessages);
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
