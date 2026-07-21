@@ -120,7 +120,19 @@ const { handleAntideleteCommand, handleMessageRevocation, storeMessage } = requi
 const { handleAntiViewOnceCommand, handleAntiViewOnce } = require('./commands/antiviewonce');
 const { handleAntiLeaveCommand, handleAntiLeave } = require('./commands/antileave');
 const { humanizeCommand, summarizeCommand, rewriteCommand, grammarCommand } = require('./commands/aitools');
-const { toaudioCommand, tovideoCommand, togifCommand, toimageCommand } = require('./commands/mediaconvert');
+const { toaudioCommand, tovideoCommand, togifCommand, toimageCommand, tovoiceCommand, bassboostCommand } = require('./commands/mediaconvert');
+const snapchatCommand = require('./commands/snapchat');
+const playlistCommand = require('./commands/playlist');
+const jarvisCommand   = require('./commands/jarvis');
+const { animegenCommand, artgenCommand, realgenCommand, visionCommand } = require('./commands/imagegen-extra');
+const {
+    antiimageCommand, antivideoCommand, antistickerCommand, antiaudioCommand,
+    antidemoteCommand, antipromoteCommand, antimentionCommand,
+    banlistCommand, gctimeCommand,
+    handleAntiMediaMessage, handleAntiPromoteDemote,
+} = require('./commands/antimedia');
+const { handleAutoRecording, handleAutoRecordingCommand } = require('./commands/autorecording');
+const { handleAutoReactStatus, handleAutoReactStatusCommand } = require('./commands/autoreactstatus');
 const clearTmpCommand = require('./commands/cleartmp');
 const setProfilePicture = require('./commands/setpp');
 const { setGroupDescription, setGroupName, setGroupPhoto } = require('./commands/groupmanage');
@@ -272,6 +284,17 @@ async function handleMessages(sock, messageUpdate, printLog) {
 
         // Handle autoread functionality
         await handleAutoread(sock, message);
+
+        // Auto recording presence indicator
+        handleAutoRecording(sock, chatId).catch(() => {});
+
+        // Auto react to status updates
+        if (message.key.remoteJid === 'status@broadcast') {
+            handleAutoReactStatus(sock, message).catch(() => {});
+        }
+
+        // Anti-media enforcement (antiimage/antivideo/antisticker/antiaudio/antimention)
+        handleAntiMediaMessage(sock, message).catch(() => {});
 
         // Store message for antidelete feature
         if (message.message) {
@@ -467,11 +490,11 @@ if (checkAFK(senderId)) {
         }
 
         // List of admin commands
-        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave'];
+        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention'];
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate'];
+        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -1269,6 +1292,66 @@ case userMessage.startsWith('$bssensi'):
                 break;
             case userMessage.startsWith('$toimage'):
                 await toimageCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$tovoice') || userMessage.startsWith('$ptt'):
+                await tovoiceCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$bassboost') || userMessage.startsWith('$bass'):
+                await bassboostCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$snapchat') || userMessage.startsWith('$snap') || (userMessage.startsWith('$sc ') && userMessage.includes('snapchat')):
+                await snapchatCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$playlist'):
+                await playlistCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$jarvis'):
+                await jarvisCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$animegen'):
+                await animegenCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$artgen'):
+                await artgenCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$realgen'):
+                await realgenCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$vision'):
+                await visionCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$antiimage'):
+                await antiimageCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$antivideo'):
+                await antivideoCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$antisticker'):
+                await antistickerCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$antiaudio'):
+                await antiaudioCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$antidemote'):
+                await antidemoteCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$antipromote'):
+                await antipromoteCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$antimention'):
+                await antimentionCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$banlist'):
+                await banlistCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$gctime'):
+                await gctimeCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$autorecording'):
+                await handleAutoRecordingCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$autoreactstatus'):
+                await handleAutoReactStatusCommand(sock, chatId, senderId, message);
                 break;
             case userMessage === '$surrender':
                 // Handle surrender command for tictactoe game
@@ -3010,6 +3093,10 @@ async function handleGroupParticipantUpdate(sock, update) {
             await handleLeaveEvent(sock, id, participants);
             await handleAntiLeave(sock, id, participants);
         }
+
+        // Anti-demote / Anti-promote
+        await handleAntiPromoteDemote(sock, update);
+
     } catch (error) {
         console.error('Error in handleGroupParticipantUpdate:', error);
     }
@@ -3021,5 +3108,6 @@ module.exports = {
     handleGroupParticipantUpdate,
     handleStatus: async (sock, status) => {
         await handleStatusUpdate(sock, status);
+        await handleAutoReactStatus(sock, status).catch(() => {});
     }
 };    
