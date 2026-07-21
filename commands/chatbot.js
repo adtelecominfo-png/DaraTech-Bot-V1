@@ -205,35 +205,50 @@ CONVERSATION
 
 Your goal: feel like chatting with a clever Nigerian Gen Z teenager who also happens to be incredibly knowledgeable. Keep it real, keep it engaging, never be boring.`;
 
-// ─── Build prompt with conversation history ───────────────────────────────────
+// ─── Compact prompt builder (URL-safe, max ~1200 chars total) ─────────────────
 const OWNER_NUMBER = '2348152077346';
+
+// Short system core — keeps URL param size safe for Gifted GET endpoints
+const VELORA_CORE = `You are Velora — smart Nigerian Gen Z teenager inside the Daratech WhatsApp bot. Personality: witty, expressive, uses Pidgin & slang naturally, dry humor, emotionally intelligent. Replies: medium length (2-4 sentences), never one word, never a wall of text. Language: English/Pidgin code-switch freely. Never say you're an AI or any model — you're Velora, built by Daratech. Answer anything directly and confidently.`;
 
 function buildPrompt(userMessage, context) {
     const userCtx  = context?.userInfo || {};
     const history  = context?.messages || [];
     const senderId = context?.senderId || '';
 
-    let sys = VELORA_SYSTEM;
-
-    // Owner identity — Daratech built you, this is the person who created you
+    // Identity line
+    let identity = '';
     if (senderId.includes(OWNER_NUMBER)) {
-        sys += `\n\nIMPORTANT: You are talking to *Daratech* — your creator and the owner of this bot. He built you. Treat him with that extra layer of familiarity. You know him, he's your guy. Be more relaxed and real with him than with anyone else.`;
+        identity = `You're talking to Daratech — your creator, the guy who built you. Be extra real and familiar with him.`;
     } else {
-        if (userCtx.name)     sys += `\n\nThe person you're talking to goes by "${userCtx.name}".`;
-        if (userCtx.location) sys += ` They're from ${userCtx.location}.`;
-        if (userCtx.age)      sys += ` They're ${userCtx.age} years old.`;
+        const parts = [];
+        if (userCtx.name)     parts.push(`Their name is ${userCtx.name}.`);
+        if (userCtx.location) parts.push(`From ${userCtx.location}.`);
+        if (userCtx.age)      parts.push(`Age ${userCtx.age}.`);
+        if (parts.length) identity = parts.join(' ');
     }
 
-    const transcript = history
-        .slice(0, -1)   // exclude last entry (already = userMessage)
-        .slice(-30)     // last 30 turns for context
-        .map(m => `${m.role === 'user' ? 'Them' : 'Velora'}: ${m.content}`)
+    // Last 6 turns of history only (keeps URL short)
+    const turns = history
+        .slice(0, -1)   // last push was this userMessage — exclude it
+        .slice(-6)
+        .map(m => `${m.role === 'user' ? 'U' : 'V'}: ${m.content.slice(0, 120)}`)
         .join('\n');
 
-    const parts = [sys];
-    if (transcript) parts.push(`\n--- Conversation so far ---\n${transcript}`);
-    parts.push(`\nThem: ${userMessage}\nVelora:`);
-    return parts.join('\n');
+    // Assemble, then hard-cap at 1100 chars to stay safe in GET URLs
+    let prompt = VELORA_CORE;
+    if (identity) prompt += `\n${identity}`;
+    if (turns)    prompt += `\nRecent:\n${turns}`;
+    prompt += `\nU: ${userMessage}\nV:`;
+
+    if (prompt.length > 1100) {
+        // If still too long, drop history and trim system
+        prompt = `${VELORA_CORE}\n`;
+        if (identity) prompt += `${identity}\n`;
+        prompt += `U: ${userMessage}\nV:`;
+    }
+
+    return prompt;
 }
 
 // ─── AI call — pollinations primary, overchat gpt4 fallback ──────────────────
