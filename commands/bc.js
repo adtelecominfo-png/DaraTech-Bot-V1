@@ -16,14 +16,16 @@ let connectedUsers = [];
 
 // Function to add user when they interact
 function addConnectedUser(userId) {
-    // Only add individual users (not groups)
-    if (userId && !userId.includes('@g.us') && !connectedUsers.includes(userId)) {
-        connectedUsers.push(userId);
-        console.log(`✅ Added user to broadcast list: ${userId}`);
-        
-        // Save to file occasionally to persist data
-        saveConnectedUsers();
-    }
+    // Only add real phone JIDs — skip groups and LID (opaque internal IDs)
+    if (!userId) return;
+    if (userId.includes('@g.us')) return;   // group
+    if (userId.includes('@lid')) return;    // LID — not a real phone number
+    if (userId.includes('@broadcast')) return;
+    if (connectedUsers.includes(userId)) return;
+
+    connectedUsers.push(userId);
+    console.log(`✅ Added user to broadcast list: ${userId}`);
+    saveConnectedUsers();
 }
 
 // Save connected users to file
@@ -41,13 +43,21 @@ function saveConnectedUsers() {
     }
 }
 
-// Load connected users from file
+// Load connected users from file — strip LID / group / broadcast JIDs on load
 function loadConnectedUsers() {
     try {
         const filePath = path.join(__dirname, '../data/connected_users.json');
         if (fs.existsSync(filePath)) {
             const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            connectedUsers = data.users || [];
+            const raw = data.users || [];
+            connectedUsers = raw.filter(u =>
+                u && !u.includes('@g.us') && !u.includes('@lid') && !u.includes('@broadcast')
+            );
+            const removed = raw.length - connectedUsers.length;
+            if (removed > 0) {
+                console.log(`🧹 Removed ${removed} invalid JID(s) (LID/group) from connected users`);
+                saveConnectedUsers();
+            }
             console.log(`📊 Loaded ${connectedUsers.length} connected users from file`);
         }
     } catch (error) {
