@@ -133,6 +133,7 @@ const {
 } = require('./commands/antimedia');
 const { handleAutoRecording, handleAutoRecordingCommand } = require('./commands/autorecording');
 const { handleAutoReactStatus, handleAutoReactStatusCommand } = require('./commands/autoreactstatus');
+const gcstatusCommand = require('./commands/gcstatus');
 const clearTmpCommand = require('./commands/cleartmp');
 const setProfilePicture = require('./commands/setpp');
 const { setGroupDescription, setGroupName, setGroupPhoto } = require('./commands/groupmanage');
@@ -490,7 +491,7 @@ if (checkAFK(senderId)) {
         }
 
         // List of admin commands
-        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention'];
+        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus'];
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
@@ -1346,6 +1347,9 @@ case userMessage.startsWith('$bssensi'):
                 break;
             case userMessage.startsWith('$gctime'):
                 await gctimeCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('$gcstatus'):
+                await gcstatusCommand(sock, chatId, senderId, message);
                 break;
             case userMessage.startsWith('$autorecording'):
                 await handleAutoRecordingCommand(sock, chatId, senderId, message);
