@@ -134,7 +134,7 @@ function formatResult(item, i) {
     return `${em} *${i + 1}.* ${item.title || item.name}\n    📅 ${year || '—'}  •  ${type}${rStr}${genreStr}\n    🆔 \`${id}\``;
 }
 
-function formatInfo(data) {
+function formatInfo(data, subtitles) {
     const d  = data.results || data;
     const em = mediaEmoji(d.type);
     let msg  = `${em} *${d.title || d.name}*\n`;
@@ -187,8 +187,14 @@ function formatInfo(data) {
         msg += `\n\n🆔 *ID:* \`${id}\``;
         msg += `\n💡 *$movie dl ${id}* — Resolution picker & download`;
         if (d.trailer?.VideoAddress?.url) msg += `\n🎬 *$movietrailer ${id}* — Watch official trailer`;
-        msg += `\n📜 *$moviesub ${id}* — Download subtitle .srt file(s)`;
-        msg += `\n📜 *$moviecaptions ${id}* — View available subtitles & audio`;
+        if (subtitles && subtitles.length) {
+            const subLangs = subtitles
+                .map(s => s.language || s.languageCode || s.lang)
+                .filter(Boolean).join(', ');
+            msg += `\n📜 *Subtitle:* ${subLangs || 'Available'}`;
+            msg += `\n💡 *$moviesub ${id}* — Download subtitle .srt file(s)`;
+            msg += `\n💡 *$moviecaptions ${id}* — View all subtitles & audio tracks`;
+        }
     }
     return msg;
 }
@@ -633,9 +639,13 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                 }
             }
 
-            const data   = await apiFetch(`/info/${encodeURIComponent(infoId)}`);
-            // Response: data.results (object)
-            const text   = formatInfo(data);
+            // Fetch info + sources in parallel so we know subtitle availability
+            const [data, srcData] = await Promise.all([
+                apiFetch(`/info/${encodeURIComponent(infoId)}`),
+                apiFetch(`/sources/${encodeURIComponent(infoId)}`).catch(() => null)
+            ]);
+            const { subtitles: infoSubs } = srcData ? parseSources(srcData) : { subtitles: [] };
+            const text   = formatInfo(data, infoSubs);
             const poster = data.results?.cover?.url || data.results?.thumbnail;
             if (poster) {
                 await sock.sendMessage(chatId, { image: { url: poster }, caption: text }, { quoted: message });
@@ -1404,9 +1414,61 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
 
     } catch (err) {
         console.error('[movie.js] Error:', err.message);
-        await sock.sendMessage(chatId, {
-            text: `❌ Movie command failed.\n\n_${err.message}_\n\nTry again in a moment.`
-        }, { quoted: message });
+
+        const e = (err.message || '').toLowerCase();
+        const isNoSource   = e.includes('no sources') || e.includes('legacy mirrors') || e.includes('v3');
+        const isNotFound   = e.includes('not found') || e.includes('404');
+        const isTimeout    = e.includes('timeout') || e.includes('econnreset') || e.includes('network');
+        const isRateLimit  = e.includes('rate limit') || e.includes('429') || e.includes('too many');
+
+        let errText;
+        if (subcommand === 'subtitle' || subcommand === 'captions') {
+            if (isNoSource || isNotFound) {
+                errText = `📭 No subtitles found for this title.\n\n_The subtitle source returned nothing — this movie/episode may not have subtitles indexed yet._`;
+            } else if (isTimeout) {
+                errText = `⏳ Subtitle server timed out. Try again in a moment.`;
+            } else {
+                errText = `❌ Couldn't fetch subtitles.\n\n_${err.message}_`;
+            }
+        } else if (subcommand === 'dl') {
+            if (isNoSource) {
+                errText = `📭 No download sources available for this title yet.\n\n_The movie/episode hasn't been indexed on the download server. Try again later or search for an alternate version._`;
+            } else if (isNotFound) {
+                errText = `🔍 Title not found on the download server.\n\n_Double-check the ID with *$movie <title>* and try again._`;
+            } else if (isTimeout) {
+                errText = `⏳ Download server timed out. Try again in a moment.`;
+            } else if (isRateLimit) {
+                errText = `🚦 Too many requests — slow down a bit and try again in 30 seconds.`;
+            } else {
+                errText = `❌ Download failed.\n\n_${err.message}_`;
+            }
+        } else if (subcommand === 'info') {
+            if (isNotFound || isNoSource) {
+                errText = `🔍 Movie info not found.\n\n_The ID may be wrong or the title isn't in the database. Search first: *$movie <title>*_`;
+            } else if (isTimeout) {
+                errText = `⏳ Info server timed out. Try again in a moment.`;
+            } else {
+                errText = `❌ Couldn't fetch movie info.\n\n_${err.message}_`;
+            }
+        } else if (subcommand === 'trailer') {
+            if (isNoSource || isNotFound) {
+                errText = `🎬 No trailer found for this title.`;
+            } else {
+                errText = `❌ Trailer fetch failed.\n\n_${err.message}_`;
+            }
+        } else {
+            if (isNoSource) {
+                errText = `📭 No results from the movie server.\n\n_Try a different title or ID, or try again in a moment._`;
+            } else if (isTimeout) {
+                errText = `⏳ Movie server timed out. Try again in a moment.`;
+            } else if (isRateLimit) {
+                errText = `🚦 Too many requests — wait 30 seconds and try again.`;
+            } else {
+                errText = `❌ Movie command failed.\n\n_${err.message}_`;
+            }
+        }
+
+        await sock.sendMessage(chatId, { text: errText }, { quoted: message });
     }
 }
 
