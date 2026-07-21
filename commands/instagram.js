@@ -6,6 +6,7 @@
 
 const { igdl } = require('ruhend-scraper');
 const { get }  = require('../lib/gifted');
+const { toMp4, toBuffer } = require('../lib/media');
 
 // Prevent duplicate processing of the same message
 const processedMessages = new Set();
@@ -117,11 +118,27 @@ async function instagramCommand(sock, chatId, message) {
 
             try {
                 if (isVideo) {
-                    await sock.sendMessage(chatId, {
-                        video:    { url: mediaUrl },
-                        mimetype: 'video/mp4',
-                        caption:  i === 0 ? caption : '',
-                    }, { quoted: i === 0 ? message : undefined });
+                    // Download + re-encode to H.264/AAC/faststart — Baileys requires this
+                    let vidBuf = null;
+                    try { vidBuf = await toBuffer(mediaUrl); } catch {}
+                    if (vidBuf) {
+                        const mp4 = await toMp4(vidBuf);
+                        vidBuf = mp4 || vidBuf; // use re-encoded, fall back to raw
+                    }
+                    if (vidBuf) {
+                        await sock.sendMessage(chatId, {
+                            video:    vidBuf,
+                            mimetype: 'video/mp4',
+                            caption:  i === 0 ? caption : '',
+                        }, { quoted: i === 0 ? message : undefined });
+                    } else {
+                        // Last resort — direct URL
+                        await sock.sendMessage(chatId, {
+                            video:    { url: mediaUrl },
+                            mimetype: 'video/mp4',
+                            caption:  i === 0 ? caption : '',
+                        }, { quoted: i === 0 ? message : undefined });
+                    }
                 } else {
                     await sock.sendMessage(chatId, {
                         image:   { url: mediaUrl },

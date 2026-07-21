@@ -1,5 +1,6 @@
 'use strict';
 const { get } = require('../lib/gifted');
+const { toMp4, toBuffer } = require('../lib/media');
 
 // Lazy-load ruhend-scraper
 let _scraper;
@@ -57,11 +58,28 @@ async function facebookCommand(sock, chatId, message) {
         if (!dl) throw new Error('No download URL returned from any source');
 
         await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
-        await sock.sendMessage(chatId, {
-            video:    { url: dl },
-            mimetype: 'video/mp4',
-            caption:  `📘 *Facebook Video*\n\n_Daratech_ ⚡`,
-        }, { quoted: message });
+
+        // Download + re-encode to H.264/AAC/faststart — Baileys requires this
+        let vidBuf = null;
+        try { vidBuf = await toBuffer(dl); } catch {}
+        if (vidBuf) {
+            const mp4 = await toMp4(vidBuf);
+            vidBuf = mp4 || vidBuf;
+        }
+
+        if (vidBuf) {
+            await sock.sendMessage(chatId, {
+                video:    vidBuf,
+                mimetype: 'video/mp4',
+                caption:  `📘 *Facebook Video*\n\n_Daratech_ ⚡`,
+            }, { quoted: message });
+        } else {
+            await sock.sendMessage(chatId, {
+                video:    { url: dl },
+                mimetype: 'video/mp4',
+                caption:  `📘 *Facebook Video*\n\n_Daratech_ ⚡`,
+            }, { quoted: message });
+        }
 
     } catch (err) {
         console.error('[facebook]', err.message);

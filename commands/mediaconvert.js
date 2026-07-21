@@ -10,7 +10,7 @@
 
 const { spawn }  = require('child_process');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const { toOgg }  = require('../lib/media');
+const { toOgg, toMp4 } = require('../lib/media');
 const fs   = require('fs');
 const path = require('path');
 const os   = require('os');
@@ -150,7 +150,10 @@ async function tovideoCommand(sock, chatId, message) {
             '-i', inFile,
             '-f', 'lavfi', '-i', 'color=c=black:s=640x360:r=1',
             '-shortest', '-map', '1:v', '-map', '0:a',
-            '-c:v', 'libx264', '-c:a', 'aac', '-strict', '-2',
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '28',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-b:a', '128k', '-strict', '-2',
+            '-movflags', '+faststart',
             outFile
         ]);
 
