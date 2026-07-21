@@ -1198,11 +1198,32 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
 
         // ── CAPTIONS / SUBTITLES ─────────────────────────────────────────────
         if (subcommand === 'captions') {
-            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a movie ID.\n*Example:* _$moviecaptions <id>_' }, { quoted: message });
+            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a movie ID.\n*Example:* _$moviecaptions <id>_\n*Quick pick:* _$moviecaptions 1_ (result #1 from last search)' }, { quoted: message });
+
+            // Resolve numeric pick → real ID from last search
+            let captionId = query;
+            const capPickNum = parseInt(captionId);
+            if (!isNaN(capPickNum) && capPickNum >= 1 && capPickNum <= 10 && captionId === String(capPickNum)) {
+                const saved  = lastSearches.get(chatId) || [];
+                const picked = saved[capPickNum - 1];
+                if (!picked) {
+                    return sock.sendMessage(chatId, {
+                        text: `❌ No result #${capPickNum} in your last search.\nSearch first: *$movie <title>*`
+                    }, { quoted: message });
+                }
+                const resolvedId = picked.subjectId || picked.id || '';
+                if (!resolvedId) {
+                    return sock.sendMessage(chatId, {
+                        text: `❌ Could not read the ID for result #${capPickNum}. Search again: *$movie <title>*`
+                    }, { quoted: message });
+                }
+                captionId = resolvedId;
+            }
+
             await sock.sendMessage(chatId, { react: { text: '📜', key: message.key } });
 
             // Sources endpoint provides subtitles + audioTracks alongside download links
-            const srcData = await apiFetch(`/sources/${encodeURIComponent(query)}`);
+            const srcData = await apiFetch(`/sources/${encodeURIComponent(captionId)}`);
             const subs    = srcData.subtitles   || [];
             const audio   = srcData.audioTracks || [];
 
