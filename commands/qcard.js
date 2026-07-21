@@ -1,44 +1,61 @@
 'use strict';
-const axios  = require('axios');
-const fs     = require('fs');
-const path   = require('path');
-const { exec } = require('child_process');
-
 /**
- * $q — Quote card command
- * Reply to any message with $q to generate a stylish quote card sticker.
- * Uses the sender's name, profile pic, and the replied message text.
+ * $q — Quote card sticker
+ * Reply to any text message with $q to generate a Telegram-style quote sticker.
+ *
+ * Fix: API returns JSON { success, data: { image: { url } } } — must download
+ * the image URL separately, then convert to WebP sticker via ffmpeg + webpmux.
  */
 
-// Convert any image buffer → WebP sticker buffer via ffmpeg
-function toWebp(buffer) {
-    return new Promise((resolve, reject) => {
-        const tmpDir  = path.join(process.cwd(), 'tmp');
-        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+const fs     = require('fs');
+const path   = require('path');
+const crypto = require('crypto');
+const { exec } = require('child_process');
+const axios  = require('axios');
+const webp   = require('node-webpmux');
 
-        const inFile  = path.join(tmpDir, `qcard_in_${Date.now()}.png`);
-        const outFile = path.join(tmpDir, `qcard_out_${Date.now()}.webp`);
+const API_URL = 'https://zquote.onrender.com/api/quote';
 
-        fs.writeFileSync(inFile, buffer);
+// ── WebP sticker conversion ────────────────────────────────────────────────────
+async function convertToSticker(imageBuffer) {
+    const tmpDir  = path.join(process.cwd(), 'tmp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
 
+    const ts      = Date.now();
+    const inFile  = path.join(tmpDir, `qcard_in_${ts}.png`);
+    const outFile = path.join(tmpDir, `qcard_out_${ts}.webp`);
+
+    fs.writeFileSync(inFile, imageBuffer);
+
+    await new Promise((resolve, reject) => {
         exec(
-            `ffmpeg -y -i "${inFile}" -vf "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=white" "${outFile}"`,
-            (err) => {
-                try { fs.unlinkSync(inFile); } catch {}
-                if (err) {
-                    try { fs.unlinkSync(outFile); } catch {}
-                    return reject(err);
-                }
-                try {
-                    const result = fs.readFileSync(outFile);
-                    fs.unlinkSync(outFile);
-                    resolve(result);
-                } catch (e) { reject(e); }
-            }
+            `ffmpeg -y -i "${inFile}" -vf "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000" -c:v libwebp -preset default -loop 0 -vsync 0 -pix_fmt yuva420p -quality 80 -compression_level 6 "${outFile}"`,
+            (err) => (err ? reject(err) : resolve())
         );
     });
+
+    try { fs.unlinkSync(inFile); } catch {}
+
+    if (!fs.existsSync(outFile)) throw new Error('ffmpeg produced no output file');
+
+    const webpBuf = fs.readFileSync(outFile);
+    try { fs.unlinkSync(outFile); } catch {}
+
+    // Add EXIF sticker metadata
+    const img  = new webp.Image();
+    await img.load(webpBuf);
+
+    const json       = { 'sticker-pack-id': crypto.randomBytes(32).toString('hex'), 'sticker-pack-name': 'Daratech', emojis: ['💬'] };
+    const exifAttr   = Buffer.from([0x49,0x49,0x2A,0x00,0x08,0x00,0x00,0x00,0x01,0x00,0x41,0x57,0x07,0x00,0x00,0x00,0x00,0x00,0x16,0x00,0x00,0x00]);
+    const jsonBuf    = Buffer.from(JSON.stringify(json), 'utf8');
+    const exif       = Buffer.concat([exifAttr, jsonBuf]);
+    exif.writeUIntLE(jsonBuf.length, 14, 4);
+    img.exif = exif;
+
+    return img.save(null);
 }
 
+// ── Main command ───────────────────────────────────────────────────────────────
 async function qcardCommand(sock, chatId, message) {
     try {
         const ctx       = message.message?.extendedTextMessage?.contextInfo;
@@ -47,67 +64,89 @@ async function qcardCommand(sock, chatId, message) {
 
         if (!quotedMsg || !quotedJid) {
             return sock.sendMessage(chatId, {
-                text: '🖼️ *Usage:* Reply to any message with *$q* to turn it into a quote card sticker.',
+                text: '💬 *Usage:* Reply to any message with *$q* to turn it into a quote sticker.',
             }, { quoted: message });
         }
 
-        // Extract text from the quoted message
-        const text =
+        // Extract quoted text
+        const text = (
             quotedMsg.conversation ||
             quotedMsg.extendedTextMessage?.text ||
             quotedMsg.imageMessage?.caption ||
             quotedMsg.videoMessage?.caption ||
-            quotedMsg.documentMessage?.caption || '';
+            quotedMsg.documentMessage?.caption || ''
+        ).trim();
 
-        if (!text.trim()) {
+        if (!text) {
             return sock.sendMessage(chatId, {
                 text: '❌ Can only quote text messages.',
             }, { quoted: message });
         }
 
+        if (text.length > 500) {
+            return sock.sendMessage(chatId, {
+                text: `❌ Quote too long (${text.length}/500 chars). Reply to a shorter message.`,
+            }, { quoted: message });
+        }
+
         const username = ctx.pushName || quotedJid.split('@')[0];
 
-        // Profile picture with fallback
-        let avatar = 'https://i.ibb.co/9Hb9Kjry/85fc730b7326.jpg';
-        try {
-            avatar = await sock.profilePictureUrl(quotedJid, 'image');
-        } catch {}
+        // Profile picture — 'default' tells the API to use its own fallback
+        let avatar = 'default';
+        try { avatar = await sock.profilePictureUrl(quotedJid, 'image'); } catch {}
 
         await sock.sendMessage(chatId, { react: { text: '⏳', key: message.key } });
 
-        // Fetch quote card image
-        let imageBuf;
+        // Step 1 — call API, get JSON back
+        let imageUrl;
         try {
             const res = await axios.post(
-                'https://zquote.onrender.com/api/quote',
-                { username, text: text.trim(), avatar },
-                {
-                    responseType: 'arraybuffer',
-                    timeout: 45000,
-                    headers: { 'Content-Type': 'application/json' },
-                }
+                API_URL,
+                { username, text, avatar },
+                { timeout: 45000, headers: { 'Content-Type': 'application/json' } }
             );
-            imageBuf = Buffer.from(res.data);
+
+            if (!res.data?.success) {
+                throw new Error(res.data?.error || 'API returned success: false');
+            }
+
+            imageUrl = res.data.data?.image?.url || res.data.image;
+            if (!imageUrl) throw new Error('No image URL in API response');
+
         } catch (apiErr) {
             console.error('[qcard/api]', apiErr.message);
             await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
             return sock.sendMessage(chatId, {
-                text: `❌ Quote card API failed — server may be down. Try again shortly.\n\n_${apiErr.message}_`,
+                text: `❌ Quote API failed — server may be down.\n\n_${apiErr.message}_`,
             }, { quoted: message });
         }
 
-        // Convert to WebP sticker
+        // Step 2 — download the image from the returned URL
+        let imageBuf;
+        try {
+            const imgRes = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 20000 });
+            imageBuf = Buffer.from(imgRes.data);
+        } catch (dlErr) {
+            console.error('[qcard/download]', dlErr.message);
+            await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
+            return sock.sendMessage(chatId, {
+                text: `❌ Failed to download quote image.\n\n_${dlErr.message}_`,
+            }, { quoted: message });
+        }
+
+        // Step 3 — convert to WebP sticker
         let stickerBuf;
         try {
-            stickerBuf = await toWebp(imageBuf);
+            stickerBuf = await convertToSticker(imageBuf);
         } catch (convErr) {
             console.error('[qcard/webp]', convErr.message);
             await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
             return sock.sendMessage(chatId, {
-                text: `❌ Failed to convert quote card to sticker.\n\n_${convErr.message}_`,
+                text: `❌ Failed to convert to sticker.\n\n_${convErr.message}_`,
             }, { quoted: message });
         }
 
+        // Step 4 — send
         await sock.sendMessage(chatId, { sticker: stickerBuf }, { quoted: message });
         await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
 
@@ -115,7 +154,7 @@ async function qcardCommand(sock, chatId, message) {
         console.error('[qcard]', err.message);
         await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } }).catch(() => {});
         await sock.sendMessage(chatId, {
-            text: `❌ Quote card failed.\n\n_${err.message}_`,
+            text: `❌ Quote sticker failed.\n\n_${err.message}_`,
         }, { quoted: message });
     }
 }
