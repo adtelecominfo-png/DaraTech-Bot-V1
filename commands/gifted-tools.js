@@ -636,9 +636,7 @@ const adfocCommand     = makeShortener('adfoc');
 const ssurCommand      = makeShortener('ssur');
 
 // ─── $codeai ─────────────────────────────────────────────────────────────────
-const { callPollinationsAI } = require('../lib/pollinations');
-
-const SUPPORTED_LANGS = ['HTML', 'CSS', 'JavaScript', 'Python', 'Ruby', 'Java', 'C++', 'Go', 'Rust', 'PHP', 'SQL'];
+const { get: giftedGet } = require('../lib/gifted');
 
 const CODE_AI_HELP = `
 ╭─〔 💻 CODE AI 〕─╮
@@ -680,12 +678,13 @@ async function codeaiCommand(sock, chatId, message, userMessage) {
     await sock.sendMessage(chatId, { text: '💻 Generating code…' }, { quoted: message });
 
     try {
-        const systemPrompt =
-            `You are an expert ${lang} developer. ` +
-            `When given a task, respond ONLY with clean, working ${lang} code — no markdown fences, no explanation before or after. ` +
-            `If a brief comment is needed inside the code, use the language's native comment syntax.`;
+        // Build a crafted query that instructs the AI to return only code
+        const q = `Write clean, working ${lang} code only (no markdown fences, no extra explanation) for: ${prompt}`;
 
-        const code = await callPollinationsAI(prompt, 'openai-large', systemPrompt, 2000, 0.3);
+        const data = await giftedGet('/ai/overchat', { q, model: 'gpt4' }, 60000);
+        if (!data?.success) throw new Error(data?.message || 'No response from AI');
+
+        const code = (typeof data.result === 'string' ? data.result : data.result?.answer || '').trim();
 
         const reply =
             `╭─〔 💻 CODE AI 〕─╮\n` +
@@ -697,7 +696,7 @@ async function codeaiCommand(sock, chatId, message, userMessage) {
             `├──────────────────────────────────────┤\n` +
             `│  🖥️ *GENERATED CODE :*\n` +
             `│\n` +
-            code.trim() + '\n' +
+            code + '\n' +
             `╰────────────────────────────────────╯\n` +
             `_Daratech_ ⚡`;
 
