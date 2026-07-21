@@ -635,7 +635,83 @@ const vurlCommand      = makeShortener('vurl');
 const adfocCommand     = makeShortener('adfoc');
 const ssurCommand      = makeShortener('ssur');
 
+// ─── $codeai ─────────────────────────────────────────────────────────────────
+const { callPollinationsAI } = require('../lib/pollinations');
+
+const SUPPORTED_LANGS = ['HTML', 'CSS', 'JavaScript', 'Python', 'Ruby', 'Java', 'C++', 'Go', 'Rust', 'PHP', 'SQL'];
+
+const CODE_AI_HELP = `
+╭─〔 💻 CODE AI 〕─╮
+│
+│  🖥️ *AI CODE GENERATOR*
+│
+│  💡 *USAGE :*
+│  \`$codeai <prompt> --lang <language>\`
+│
+│  📝 *EXAMPLES :*
+│  \`$codeai a smooth calculator website\`
+│  \`$codeai a login form --lang html\`
+│  \`$codeai fibonacci function --lang python\`
+│
+│  🌐 *SUPPORTED LANGUAGES :*
+│  HTML, CSS, JavaScript, Python, Ruby,
+│  Java, C++, Go, Rust, PHP, SQL
+│
+╰────────────────────────────────────╯
+_Daratech_ ⚡`.trim();
+
+async function codeaiCommand(sock, chatId, message, userMessage) {
+    const raw = userMessage.slice(7).trim(); // strip "$codeai"
+
+    if (!raw) {
+        return sock.sendMessage(chatId, { text: CODE_AI_HELP }, { quoted: message });
+    }
+
+    // Parse --lang flag
+    const langMatch = raw.match(/--lang\s+(\S+)/i);
+    const lang      = langMatch ? langMatch[1].toUpperCase() : 'HTML';
+    const prompt    = raw.replace(/--lang\s+\S+/i, '').trim();
+
+    if (!prompt) {
+        return sock.sendMessage(chatId, { text: CODE_AI_HELP }, { quoted: message });
+    }
+
+    await react(sock, message, '⏳');
+    await sock.sendMessage(chatId, { text: '💻 Generating code…' }, { quoted: message });
+
+    try {
+        const systemPrompt =
+            `You are an expert ${lang} developer. ` +
+            `When given a task, respond ONLY with clean, working ${lang} code — no markdown fences, no explanation before or after. ` +
+            `If a brief comment is needed inside the code, use the language's native comment syntax.`;
+
+        const code = await callPollinationsAI(prompt, 'openai-large', systemPrompt, 2000, 0.3);
+
+        const reply =
+            `╭─〔 💻 CODE AI 〕─╮\n` +
+            `│\n` +
+            `│  💬 *PROMPT :*\n` +
+            `│  ${prompt}\n` +
+            `│  🔤 *LANGUAGE : ${lang}*\n` +
+            `│\n` +
+            `├──────────────────────────────────────┤\n` +
+            `│  🖥️ *GENERATED CODE :*\n` +
+            `│\n` +
+            code.trim() + '\n' +
+            `╰────────────────────────────────────╯\n` +
+            `_Daratech_ ⚡`;
+
+        await sock.sendMessage(chatId, { text: reply }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[codeai]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId, { text: `❌ Code generation failed.\n\n_${err.message}_` }, { quoted: message });
+    }
+}
+
 module.exports = {
+    codeaiCommand,
     ttpCommand,
     canvasCommand,
     topdfCommand,
