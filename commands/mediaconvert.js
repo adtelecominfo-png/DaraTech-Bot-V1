@@ -10,6 +10,7 @@
 
 const { spawn }  = require('child_process');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+const { toOgg }  = require('../lib/media');
 const fs   = require('fs');
 const path = require('path');
 const os   = require('os');
@@ -108,10 +109,14 @@ async function toaudioCommand(sock, chatId, message) {
         const mp3 = fs.readFileSync(outFile);
         cleanup(inFile, outFile);
 
+        // WhatsApp/Baileys requires OGG/OPUS for audio bubbles — convert MP3 → OGG
+        const oggBuf = await toOgg(mp3);
+        const audioBuf  = oggBuf || mp3;
+        const audioMime = oggBuf ? 'audio/ogg; codecs=opus' : 'audio/mpeg';
+
         await react(sock, message, '✅');
         await sock.sendMessage(chatId, {
-            audio: mp3, mimetype: 'audio/mpeg', ptt: false,
-            caption: `🎵 *Audio file*\n\n_Daratech_ ⚡`
+            audio: audioBuf, mimetype: audioMime, ptt: false,
         }, { quoted: message });
 
     } catch (err) {
