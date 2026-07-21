@@ -48,7 +48,7 @@ async function resolve(sock, chatId, { number, jid, lid }) {
         }
     }
 
-    // ── 2. If in a group, scan participants (richest source of LID↔JID map) ─
+    // ── 2. Scan current group participants (richest realtime source) ──────────
     if (chatId && chatId.endsWith('@g.us')) {
         try {
             const meta = await sock.groupMetadata(chatId);
@@ -69,6 +69,30 @@ async function resolve(sock, chatId, { number, jid, lid }) {
                 }
             }
         } catch { /* group meta unavailable — skip */ }
+    }
+
+    // ── 3. Still no LID? Scan all known groups until found ───────────────────
+    if (!result.lid) {
+        try {
+            const allGroups = await sock.groupFetchAllParticipating();
+            outer: for (const [, meta] of Object.entries(allGroups || {})) {
+                for (const p of (meta.participants || [])) {
+                    const pNum = jidToNum(p.id);
+                    const pLid = p.lid || '';
+
+                    const matchByNum = result.number && pNum === result.number;
+                    const matchByJid = result.jid   && p.id  === result.jid;
+                    const matchByLid = result.lid   && pLid  === result.lid;
+
+                    if (matchByNum || matchByJid || matchByLid) {
+                        if (pLid)         result.lid    = pLid;
+                        if (p.id)         result.jid    = p.id;
+                        if (pNum)         result.number = pNum;
+                        if (result.lid)   break outer;   // found — stop searching
+                    }
+                }
+            }
+        } catch { /* no group access — skip */ }
     }
 
     return result;
