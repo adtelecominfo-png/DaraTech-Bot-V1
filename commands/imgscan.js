@@ -1,5 +1,5 @@
 'use strict';
-const { davidGet } = require('../lib/gifted');
+const { get } = require('../lib/gifted');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const FormData = require('form-data');
 const axios = require('axios');
@@ -66,8 +66,11 @@ async function imgscanCommand(sock, chatId, message) {
         if (!buffer || buffer.length === 0) throw new Error('Media download returned empty buffer');
 
         const imageUrl = await uploadImage(buffer, mimetype || 'image/jpeg');
-        const data = await davidGet(`/imgscan?url=${encodeURIComponent(imageUrl)}`);
-        if (!data?.success) throw new Error('Image scan returned no result');
+        const data = await get('/ai/overchat', {
+            model: 'gpt4',
+            q: `Analyze and describe in detail what is shown in this image: ${imageUrl}`,
+        });
+        if (!data?.success || !data?.result) throw new Error('Image scan returned no result');
 
         await sock.sendMessage(chatId, {
             text: `╭━═ 『 *SCAN RESULT* 』 ═━╮\n\n${data.result}\n\n╰━━━━━━━━━━━━━━━━━━╯\n\n🚀 *Daratech Bot*`,
