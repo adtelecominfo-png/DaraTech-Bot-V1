@@ -1400,7 +1400,7 @@ case userMessage.startsWith('$bssensi'):
                 await sspcCommand(sock, chatId, message);
                 break;
 
-            case (userMessage.startsWith('$ss') && !userMessage.startsWith('$ssphone') && !userMessage.startsWith('$sstab') && !userMessage.startsWith('$sspc')) || userMessage.startsWith('$ssweb') || userMessage.startsWith('$screenshot'):
+            case (userMessage.startsWith('$ss') && !userMessage.startsWith('$ssphone') && !userMessage.startsWith('$sstab') && !userMessage.startsWith('$sspc') && !userMessage.startsWith('$ssur')) || userMessage.startsWith('$ssweb') || userMessage.startsWith('$screenshot'):
                 const ssCommandLength = userMessage.startsWith('$screenshot') ? 11 : (userMessage.startsWith('$ssweb') ? 6 : 3);
                 await handleSsCommand(sock, chatId, message, userMessage.slice(ssCommandLength).trim());
                 break;
