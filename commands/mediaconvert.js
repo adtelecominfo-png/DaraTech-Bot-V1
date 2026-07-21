@@ -188,21 +188,32 @@ async function togifCommand(sock, chatId, message) {
         await react(sock, message, '⏳');
         await sock.sendMessage(chatId, { text: '🎞️ Converting to GIF… (may take a moment)' }, { quoted: message });
 
-        const inFile  = tmpFile('.mp4');
-        const outFile = tmpFile('.gif');
+        const inFile      = tmpFile('.mp4');
+        const paletteFile = tmpFile('.png');
+        const outFile     = tmpFile('.gif');
         fs.writeFileSync(inFile, result.buffer);
 
-        // Scale to max 480px wide, 10fps, first 15s only
+        // Two-pass palette GIF — much lighter on memory than the split-filter approach
+        // Pass 1: generate palette from first 10s at 320px / 8fps
         await ffmpeg([
             '-i', inFile,
-            '-t', '15',
-            '-vf', 'fps=10,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',
+            '-t', '10',
+            '-vf', 'fps=8,scale=320:-2:flags=lanczos,palettegen=max_colors=64',
+            '-y', paletteFile,
+        ]);
+
+        // Pass 2: apply palette to produce the GIF
+        await ffmpeg([
+            '-i', inFile,
+            '-i', paletteFile,
+            '-t', '10',
+            '-filter_complex', 'fps=8,scale=320:-2:flags=lanczos[v];[v][1:v]paletteuse=dither=bayer',
             '-loop', '0',
-            outFile
+            outFile,
         ]);
 
         const gif = fs.readFileSync(outFile);
-        cleanup(inFile, outFile);
+        cleanup(inFile, paletteFile, outFile);
 
         await react(sock, message, '✅');
         await sock.sendMessage(chatId, {
