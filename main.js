@@ -505,7 +505,7 @@ if (checkAFK(senderId)) {
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$mongostats'];
+        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -1376,7 +1376,6 @@ case userMessage.startsWith('$bssensi'):
                 await cleanCommand(sock, chatId, senderId, message);
                 break;
             case userMessage.startsWith('$dbstats'):
-            case userMessage.startsWith('$mongostats'):
                 await dbstatsCommand(sock, chatId, senderId, message);
                 break;
             case userMessage.startsWith('$autorecording'):
