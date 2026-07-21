@@ -20,6 +20,8 @@ const TMP = path.join(os.tmpdir(), 'daratech-convert');
 if (!fs.existsSync(TMP)) fs.mkdirSync(TMP, { recursive: true });
 
 function tmpFile(ext) {
+    // Ensure dir exists every time — it may be wiped by $cleartmp or the OS
+    if (!fs.existsSync(TMP)) fs.mkdirSync(TMP, { recursive: true });
     return path.join(TMP, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
 }
 
