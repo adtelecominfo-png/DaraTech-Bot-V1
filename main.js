@@ -286,7 +286,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
         await handleAutoread(sock, message);
 
         // Auto recording presence indicator
-        handleAutoRecording(sock, chatId).catch(() => {});
+        handleAutoRecording(sock, message.key.remoteJid).catch(() => {});
 
         // Auto react to status updates
         if (message.key.remoteJid === 'status@broadcast') {
