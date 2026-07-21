@@ -1877,7 +1877,8 @@ case userMessage.startsWith('$bssensi'):
 
                 if (userMessage.startsWith('$movietrailer') ||
                     userMessage.startsWith('$trailer'))                                  mSub = 'trailer';
-                else if (userMessage.startsWith('$movieinfo'))                           mSub = 'info';
+                else if (userMessage.startsWith('$movieinfo') ||
+                         userMessage.startsWith('$moviedetails'))                       mSub = 'info';
                 else if (userMessage.startsWith('$moviedl') ||
                          userMessage.startsWith('$moviedownload'))                       mSub = 'dl';
                 else if (userMessage.startsWith('$moviefilter'))                         mSub = 'filter';
