@@ -25,8 +25,8 @@ AI chat & image generation · Movie & anime streaming/download · YouTube, TikTo
 ## Quick Start
 
 ```bash
-git clone https://github.com/adtelecominfo-png/dara-studio-bot.git
-cd dara-studio-bot
+git clone https://github.com/adtelecominfo-png/DaraTech-Bot-V1.git
+cd DaraTech-Bot-V1
 npm install
 cp .env.example .env        # fill in OWNER_NUMBER and SESSION_ID
 node index.js
@@ -454,7 +454,7 @@ Powered by RosyScans.
 ## Project Structure
 
 ```
-dara-studio-bot/
+DaraTech-Bot-V1/
 ├── index.js            → entry point, WhatsApp connection & session bootstrap
 ├── main.js             → message router — all command switch cases
 ├── settings.js         → bot config (name, number, update URL)

@@ -4,7 +4,7 @@ const path = require('path');
 async function githubCommand(sock, chatId, message) {
     try {
         let txt = `*Dara Studio Bot REPO* \n\n`;
-        txt += `\`\`\`Repo : https://github.com/adtelecominfo-png/dara-studio-bot\`\`\`\n\n`;
+        txt += `\`\`\`Repo : https://github.com/adtelecominfo-png/DaraTech-Bot-V1\`\`\`\n\n`;
         txt += `\`\`\`Kindly fork and star the repo ⭐\`\`\`\n\n`;
         txt += `> DEV : Daratech SHOP ✪`;
 
@@ -30,7 +30,7 @@ async function githubCommand(sock, chatId, message) {
     } catch (error) {
         console.error('Error in github command:', error);
         await sock.sendMessage(chatId, {
-            text: `*Dara Studio Bot REPO*\n\n\`\`\`https://github.com/adtelecominfo-png/dara-studio-bot\`\`\`\n\n> DEV : Daratech SHOP ✪`
+            text: `*DaraTech Bot V1 REPO*\n\n\`\`\`https://github.com/adtelecominfo-png/DaraTech-Bot-V1\`\`\`\n\n> DEV : Daratech SHOP ✪`
         }, { quoted: message });
     }
 }

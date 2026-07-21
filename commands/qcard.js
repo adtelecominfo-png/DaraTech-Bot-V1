@@ -1,62 +1,221 @@
 'use strict';
 /**
- * $q — Quote card sticker
- * Reply to any text message with $q to generate a Telegram-style quote sticker.
+ * $q / $qcard — Quote card sticker (local render, no external API)
  *
- * Fix: API returns JSON { success, data: { image: { url } } } — must download
- * the image URL separately, then convert to WebP sticker via ffmpeg + webpmux.
+ * Reply to any text message with $q to generate a styled quote card sticker.
+ * Rendered locally with ImageMagick + ffmpeg — no third-party API needed.
+ *
+ * Design: Dark glass card · accent bar · circular avatar · name · quote text · watermark
  */
 
-const fs     = require('fs');
-const path   = require('path');
-const crypto = require('crypto');
+const fs      = require('fs');
+const path    = require('path');
+const crypto  = require('crypto');
 const { exec } = require('child_process');
-const axios  = require('axios');
-const webp   = require('node-webpmux');
+const axios   = require('axios');
+const webp    = require('node-webpmux');
 
-const API_URL = 'https://zquote.onrender.com/api/quote';
+// ── helpers ───────────────────────────────────────────────────────────────────
+const TMP = path.join(process.cwd(), 'tmp');
+function tmpFile(suffix) {
+    return path.join(TMP, `qcard_${Date.now()}_${crypto.randomBytes(4).toString('hex')}${suffix}`);
+}
+function sh(cmd) {
+    return new Promise((res, rej) =>
+        exec(cmd, { maxBuffer: 20 * 1024 * 1024 }, (e, out, err) =>
+            e ? rej(new Error(err || e.message)) : res(out)));
+}
+function cleanup(...files) {
+    for (const f of files) try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch {}
+}
 
-// ── WebP sticker conversion ────────────────────────────────────────────────────
-async function convertToSticker(imageBuffer) {
-    const tmpDir  = path.join(process.cwd(), 'tmp');
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+// ── accent colour palette (cycle by first char of name) ──────────────────────
+const ACCENT_PALETTE = [
+    '#7C3AED','#2563EB','#059669','#DC2626',
+    '#D97706','#DB2777','#0891B2','#65A30D',
+];
+function accentFor(name = '') {
+    const idx = name.charCodeAt(0) % ACCENT_PALETTE.length;
+    return ACCENT_PALETTE[isNaN(idx) ? 0 : idx];
+}
 
-    const ts      = Date.now();
-    const inFile  = path.join(tmpDir, `qcard_in_${ts}.png`);
-    const outFile = path.join(tmpDir, `qcard_out_${ts}.webp`);
+// ── circular avatar from buffer (or initials fallback) ───────────────────────
+async function makeAvatarCircle(avatarBuf, name, accent, size = 90) {
+    if (!fs.existsSync(TMP)) fs.mkdirSync(TMP, { recursive: true });
 
-    fs.writeFileSync(inFile, imageBuffer);
+    const initials = (name || '?')
+        .split(/\s+/)
+        .slice(0, 2)
+        .map(w => w[0]?.toUpperCase() || '')
+        .join('') || '?';
 
-    await new Promise((resolve, reject) => {
-        exec(
-            `ffmpeg -y -i "${inFile}" -vf "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000" -c:v libwebp -preset default -loop 0 -vsync 0 -pix_fmt yuva420p -quality 80 -compression_level 6 "${outFile}"`,
-            (err) => (err ? reject(err) : resolve())
-        );
-    });
+    const circlePng = tmpFile('_av.png');
 
-    try { fs.unlinkSync(inFile); } catch {}
+    if (avatarBuf) {
+        const rawPng = tmpFile('_avraw.png');
+        const maskPng = tmpFile('_avmask.png');
+        try {
+            fs.writeFileSync(rawPng, avatarBuf);
+            // crop square, resize, round to circle
+            await sh(
+                `convert "${rawPng}" -resize ${size}x${size}^ -gravity center -extent ${size}x${size} ` +
+                `\\( -size ${size}x${size} xc:black -fill white -draw "circle ${size/2-1},${size/2-1} ${size/2-1},0" \\) ` +
+                `-alpha off -compose CopyOpacity -composite "${circlePng}"`
+            );
+            cleanup(rawPng, maskPng);
+            return circlePng;
+        } catch {
+            cleanup(rawPng, maskPng, circlePng);
+        }
+    }
 
-    if (!fs.existsSync(outFile)) throw new Error('ffmpeg produced no output file');
+    // Initials fallback circle
+    const half = Math.round(size / 2) - 1;
+    await sh(
+        `convert -size ${size}x${size} xc:"${accent}" ` +
+        `-fill none -strokewidth 0 ` +
+        `\\( -size ${size}x${size} xc:black -fill white -draw "circle ${half},${half} ${half},0" \\) ` +
+        `-alpha off -compose CopyOpacity -composite ` +
+        `-gravity center -font DejaVu-Sans-Bold -pointsize ${Math.round(size * 0.38)} -fill white -annotate 0 "${initials}" ` +
+        `"${circlePng}"`
+    );
+    return circlePng;
+}
 
-    const webpBuf = fs.readFileSync(outFile);
-    try { fs.unlinkSync(outFile); } catch {}
+// ── word-wrap helper via ImageMagick caption: ─────────────────────────────────
+async function makeTextBlock(text, width, pointsize, colour, font) {
+    const out = tmpFile('_txt.png');
+    // escape special chars for IM
+    const safe = text.replace(/[\\'"]/g, '\\$&').replace(/`/g, '\\`');
+    await sh(
+        `convert -size ${width}x -background none ` +
+        `-font "${font}" -pointsize ${pointsize} -fill "${colour}" ` +
+        `-gravity NorthWest caption:"${safe}" "${out}"`
+    );
+    return out;
+}
 
-    // Add EXIF sticker metadata
-    const img  = new webp.Image();
-    await img.load(webpBuf);
+// ── main card builder ─────────────────────────────────────────────────────────
+async function buildCard(username, text, avatarBuf) {
+    if (!fs.existsSync(TMP)) fs.mkdirSync(TMP, { recursive: true });
 
-    const json       = { 'sticker-pack-id': crypto.randomBytes(32).toString('hex'), 'sticker-pack-name': 'Daratech', emojis: ['💬'] };
-    const exifAttr   = Buffer.from([0x49,0x49,0x2A,0x00,0x08,0x00,0x00,0x00,0x01,0x00,0x41,0x57,0x07,0x00,0x00,0x00,0x00,0x00,0x16,0x00,0x00,0x00]);
-    const jsonBuf    = Buffer.from(JSON.stringify(json), 'utf8');
-    const exif       = Buffer.concat([exifAttr, jsonBuf]);
-    exif.writeUIntLE(jsonBuf.length, 14, 4);
-    img.exif = exif;
+    const accent  = accentFor(username);
+    const W       = 720;   // card width
+    const PAD     = 24;    // outer padding
+    const AVSIZE  = 92;    // avatar diameter
+    const BARCOL  = accent;
+    const BAR_W   = 6;
+    const TEXT_X  = PAD + BAR_W + 14 + AVSIZE + 20;  // left of text column
+    const TEXT_W  = W - TEXT_X - PAD;                  // width of text column
+    const NAME_PT = 30;
+    const TEXT_PT = 24;
+    const WM_PT   = 18;
+
+    // 1. build text block to measure height
+    const textPng = await makeTextBlock(text, TEXT_W, TEXT_PT, '#E2E8F0', 'DejaVu-Sans');
+    const sizeOut = await sh(`identify -format "%wx%h" "${textPng}"`);
+    const [, textH] = sizeOut.trim().split('x').map(Number);
+
+    // dynamic card height: name(44) + gap(10) + text + gap(24) + watermark(28) + padding×2
+    const CONTENT_H = 44 + 10 + Math.max(textH, AVSIZE) + 24 + 28;
+    const H         = Math.max(CONTENT_H + PAD * 2, 180);
+
+    // 2. avatar
+    const avPng = await makeAvatarCircle(avatarBuf, username, accent, AVSIZE);
+
+    // 3. compose card
+    const cardPng = tmpFile('_card.png');
+    const AV_Y    = Math.round((H - AVSIZE) / 2);
+    const NAME_Y  = AV_Y + 28;          // baseline of name
+    const TEXT_Y  = NAME_Y + 10;        // top of text block
+    const WM_Y    = H - PAD - WM_PT;   // watermark baseline
+
+    // escape username for shell
+    const safeUser = username.replace(/[\\'"]/g, '\\$&').replace(/`/g, '\\`');
+
+    await sh(
+        // Base: dark gradient background
+        `convert -size ${W}x${H} gradient:"#0F1020-#1A1B2E" ` +
+        // Inner card panel with rounded rect
+        `\\( -size ${W - PAD*2}x${H - PAD*2} xc:"#1E2140" -fill "#1E2140" ` +
+        `   -draw "roundrectangle 0,0 ${W-PAD*2-1},${H-PAD*2-1} 14,14" \\) ` +
+        `-gravity NorthWest -geometry +${PAD}+${PAD} -composite ` +
+        // Accent bar
+        `\\( -size ${BAR_W}x${H - PAD*2 - 28} xc:"${BARCOL}" ` +
+        `   -draw "roundrectangle 0,0 ${BAR_W-1},${H-PAD*2-29} 3,3" \\) ` +
+        `-gravity NorthWest -geometry +${PAD+2}+${PAD+14} -composite ` +
+        // Avatar circle
+        `\\( "${avPng}" \\) -gravity NorthWest -geometry +${PAD+BAR_W+14}+${AV_Y} -composite ` +
+        // Name label
+        `-font "DejaVu-Sans-Bold" -pointsize ${NAME_PT} -fill "${accent}" ` +
+        `-gravity NorthWest -annotate +${TEXT_X}+${NAME_Y} "${safeUser}" ` +
+        // Quote text block
+        `\\( "${textPng}" \\) -gravity NorthWest -geometry +${TEXT_X}+${TEXT_Y} -composite ` +
+        // Decorative large quote mark top-right
+        `-font "DejaVu-Sans-Bold" -pointsize 80 -fill "#ffffff08" ` +
+        `-gravity NorthEast -annotate +${PAD}+${PAD - 20} '"' ` +
+        // Watermark
+        `-font "DejaVu-Sans" -pointsize ${WM_PT} -fill "#4A5568" ` +
+        `-gravity NorthWest -annotate +${TEXT_X}+${WM_Y} "✦ Daratech" ` +
+        `"${cardPng}"`
+    );
+
+    cleanup(textPng, avPng);
+    return cardPng;
+}
+
+// ── WebP sticker packaging ────────────────────────────────────────────────────
+async function toSticker(pngPath) {
+    const webpPath = tmpFile('_stk.webp');
+
+    // Scale to 512 wide (sticker max), preserve ratio, transparent bg
+    await sh(
+        `ffmpeg -y -i "${pngPath}" ` +
+        `-vf "scale=512:-1:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000" ` +
+        `-c:v libwebp -preset default -loop 0 -vsync 0 -pix_fmt yuva420p -quality 85 -compression_level 5 ` +
+        `"${webpPath}"`
+    );
+
+    const buf    = fs.readFileSync(webpPath);
+    cleanup(webpPath);
+
+    const img    = new webp.Image();
+    await img.load(buf);
+
+    const meta   = { 'sticker-pack-id': crypto.randomBytes(32).toString('hex'), 'sticker-pack-name': 'Daratech', emojis: ['💬'] };
+    const attr   = Buffer.from([0x49,0x49,0x2A,0x00,0x08,0x00,0x00,0x00,0x01,0x00,0x41,0x57,0x07,0x00,0x00,0x00,0x00,0x00,0x16,0x00,0x00,0x00]);
+    const jBuf   = Buffer.from(JSON.stringify(meta), 'utf8');
+    const exif   = Buffer.concat([attr, jBuf]);
+    exif.writeUIntLE(jBuf.length, 14, 4);
+    img.exif     = exif;
 
     return img.save(null);
 }
 
-// ── Main command ───────────────────────────────────────────────────────────────
+// ── Name extraction: handles JID / LID gracefully ─────────────────────────────
+function resolveName(ctx, quotedJid) {
+    // 1. pushName from contextInfo (most reliable — always the display name)
+    if (ctx?.pushName && ctx.pushName.trim()) return ctx.pushName.trim();
+
+    // 2. Don't show LID numbers as names — they look like "239213085720600"
+    if (!quotedJid) return 'Unknown';
+    const [local, domain] = quotedJid.split('@');
+
+    // LID (@lid) — opaque internal ID, meaningless as a name
+    if (domain === 'lid') return 'Unknown';
+
+    // JID (@s.whatsapp.net) — format as phone number if numeric
+    if (/^\d+$/.test(local)) {
+        // strip country code heuristic: show last 9 digits max with +prefix
+        return `+${local}`;
+    }
+
+    return local || 'Unknown';
+}
+
+// ── Command entry point ───────────────────────────────────────────────────────
 async function qcardCommand(sock, chatId, message) {
+    let cardPng = null;
     try {
         const ctx       = message.message?.extendedTextMessage?.contextInfo;
         const quotedMsg = ctx?.quotedMessage;
@@ -68,7 +227,7 @@ async function qcardCommand(sock, chatId, message) {
             }, { quoted: message });
         }
 
-        // Extract quoted text
+        // Extract text from all message types
         const text = (
             quotedMsg.conversation ||
             quotedMsg.extendedTextMessage?.text ||
@@ -79,79 +238,39 @@ async function qcardCommand(sock, chatId, message) {
 
         if (!text) {
             return sock.sendMessage(chatId, {
-                text: '❌ Can only quote text messages.',
+                text: '❌ Can only quote text messages (no media-only messages).',
             }, { quoted: message });
         }
-
         if (text.length > 500) {
             return sock.sendMessage(chatId, {
                 text: `❌ Quote too long (${text.length}/500 chars). Reply to a shorter message.`,
             }, { quoted: message });
         }
 
-        const username = ctx.pushName || quotedJid.split('@')[0];
+        const username = resolveName(ctx, quotedJid);
 
-        // Profile picture — 'default' tells the API to use its own fallback
-        let avatar = 'default';
-        try { avatar = await sock.profilePictureUrl(quotedJid, 'image'); } catch {}
+        // Download profile picture (silent fail → initials fallback)
+        let avatarBuf = null;
+        try {
+            const picUrl = await sock.profilePictureUrl(quotedJid, 'image');
+            const res    = await axios.get(picUrl, { responseType: 'arraybuffer', timeout: 8000 });
+            avatarBuf    = Buffer.from(res.data);
+        } catch {}
 
         await sock.sendMessage(chatId, { react: { text: '⏳', key: message.key } });
 
-        // Step 1 — call API, get JSON back
-        let imageUrl;
-        try {
-            const res = await axios.post(
-                API_URL,
-                { username, text, avatar },
-                { timeout: 45000, headers: { 'Content-Type': 'application/json' } }
-            );
+        // Build & send
+        cardPng = await buildCard(username, text, avatarBuf);
+        const stickerBuf = await toSticker(cardPng);
+        cleanup(cardPng);
+        cardPng = null;
 
-            if (!res.data?.success) {
-                throw new Error(res.data?.error || 'API returned success: false');
-            }
-
-            imageUrl = res.data.data?.image?.url || res.data.image;
-            if (!imageUrl) throw new Error('No image URL in API response');
-
-        } catch (apiErr) {
-            console.error('[qcard/api]', apiErr.message);
-            await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
-            return sock.sendMessage(chatId, {
-                text: `❌ Quote API failed — server may be down.\n\n_${apiErr.message}_`,
-            }, { quoted: message });
-        }
-
-        // Step 2 — download the image from the returned URL
-        let imageBuf;
-        try {
-            const imgRes = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 20000 });
-            imageBuf = Buffer.from(imgRes.data);
-        } catch (dlErr) {
-            console.error('[qcard/download]', dlErr.message);
-            await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
-            return sock.sendMessage(chatId, {
-                text: `❌ Failed to download quote image.\n\n_${dlErr.message}_`,
-            }, { quoted: message });
-        }
-
-        // Step 3 — convert to WebP sticker
-        let stickerBuf;
-        try {
-            stickerBuf = await convertToSticker(imageBuf);
-        } catch (convErr) {
-            console.error('[qcard/webp]', convErr.message);
-            await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
-            return sock.sendMessage(chatId, {
-                text: `❌ Failed to convert to sticker.\n\n_${convErr.message}_`,
-            }, { quoted: message });
-        }
-
-        // Step 4 — send
         await sock.sendMessage(chatId, { sticker: stickerBuf }, { quoted: message });
         await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
 
     } catch (err) {
         console.error('[qcard]', err.message);
+        if (cardPng) cleanup(cardPng);
         await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } }).catch(() => {});
         await sock.sendMessage(chatId, {
             text: `❌ Quote sticker failed.\n\n_${err.message}_`,
