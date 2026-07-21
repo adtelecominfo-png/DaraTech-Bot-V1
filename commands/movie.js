@@ -1249,7 +1249,7 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
         // Uses /captions/{subjectId}/{streamId} to get signed .srt URLs,
         // then downloads and sends each matching subtitle as a document file.
         if (subcommand === 'subtitle') {
-            const subjectId = args[0] || '';
+            let subjectId = args[0] || '';
             const langFilter = args.slice(1).join(' ').trim().toLowerCase();
 
             if (!subjectId) {
