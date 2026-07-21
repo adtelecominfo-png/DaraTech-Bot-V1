@@ -187,6 +187,8 @@ function formatInfo(data) {
         msg += `\n\n🆔 *ID:* \`${id}\``;
         msg += `\n💡 *$movie dl ${id}* — Resolution picker & download`;
         if (d.trailer?.VideoAddress?.url) msg += `\n🎬 *$movietrailer ${id}* — Watch official trailer`;
+        msg += `\n📜 *$moviesub ${id}* — Download subtitle .srt file(s)`;
+        msg += `\n📜 *$moviecaptions ${id}* — View available subtitles & audio`;
     }
     return msg;
 }
@@ -441,7 +443,12 @@ function showResolutionPicker(sock, chatId, message, sorted, audioTracks, subtit
     }
 
     if (hasTrailer)        msg += `\n🎬 *$movietrailer ${id}* — Watch trailer first`;
-    if (subtitles && subtitles.length) msg += `\n📜 *Subs:* ${subtitles.map(s => s.language || s.languageCode).join(', ')}`;
+    if (subtitles && subtitles.length) {
+        const subLangs = subtitles.map(s => s.language || s.languageCode).join(', ');
+        msg += `\n📜 *Subtitles available:* ${subLangs}`;
+        msg += `\n💡 *$moviesub ${id}* — Download subtitle file(s)`;
+        msg += `\n💡 *$moviesub ${id} english* — English only`;
+    }
 
     return sock.sendMessage(chatId, { text: msg }, { quoted: message });
 }
