@@ -315,37 +315,38 @@ async function creategcCommand(sock, chatId, senderId, userMessage, message) {
         const groupName = userMessage.slice(9).trim();
         if (!groupName) {
             return sock.sendMessage(chatId, {
-                text: 'Example:\n$creategc DevAfeez Community'
+                text: `🏗️ *CREATE GROUP*\n\n▸ Usage: *$creategc <group name>*\n▸ Example: *$creategc Daratech Squad*\n\n_Daratech_ ⚡`
             }, { quoted: message });
         }
 
-        await sock.sendMessage(chatId, { react: { text: '🛠️', key: message.key } });
+        await sock.sendMessage(chatId, { react: { text: '⚙️', key: message.key } });
 
         // WhatsApp auto-adds the creator — no need to pre-fill members
         const group = await sock.groupCreate(groupName, []);
 
-        let invite = '';
+        let invite = 'Unavailable';
         try {
-            invite = await sock.groupInviteCode(group.id);
-        } catch {
-            invite = 'Unavailable';
-        }
+            const code = await sock.groupInviteCode(group.id);
+            if (code) invite = `https://chat.whatsapp.com/${code}`;
+        } catch { /* unavailable */ }
 
         await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
         await sock.sendMessage(chatId, {
-            text: `✅ *Group Created Successfully*\n\n` +
-                  `📛 Name: ${group.subject}\n` +
-                  `🆔 ID: ${group.id}\n` +
-                  (invite !== 'Unavailable'
-                      ? `🔗 https://chat.whatsapp.com/${invite}`
-                      : `⚠️ Invite link unavailable`)
+            text: `╭━━━「 🏗️ *GROUP SPAWNED* 」━━━\n` +
+                  `┃\n` +
+                  `┃ 📛 *Name:* ${group.subject}\n` +
+                  `┃ 👥 *Members:* 1\n` +
+                  `┃ 🔗 *Link:* ${invite}\n` +
+                  `┃\n` +
+                  `╰━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                  `_Daratech_ ⚡`
         }, { quoted: message });
 
     } catch (err) {
         console.error('[creategc]', err);
         await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
         await sock.sendMessage(chatId, {
-            text: `❌ Error:\n${err.message}`
+            text: `❌ *Failed to create group*\n\n▸ ${err.message}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 }
