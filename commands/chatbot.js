@@ -1,17 +1,53 @@
 'use strict';
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 const { get } = require('../lib/gifted');
 
-const USER_GROUP_DATA = path.join(__dirname, '../data/userGroupData.json');
+const USER_GROUP_DATA  = path.join(__dirname, '../data/userGroupData.json');
+const VELORA_MEMORY_FILE = path.join(__dirname, '../data/velora_memory.json');
 
-// ─── In-memory chat history ───────────────────────────────────────────────────
+// ─── In-memory chat history (loaded from disk on startup) ────────────────────
 const chatMemory = {
-    messages: new Map(),
-    userInfo:  new Map(),
+    messages: new Map(),   // senderId → [ {role, content}, … ]  (last 100)
+    userInfo:  new Map(),  // senderId → { name?, age?, location? }
 };
 
-// ─── Persistence helpers ──────────────────────────────────────────────────────
+// ─── Disk persistence ─────────────────────────────────────────────────────────
+function loadChatMemory() {
+    try {
+        if (!fs.existsSync(VELORA_MEMORY_FILE)) return;
+        const raw = JSON.parse(fs.readFileSync(VELORA_MEMORY_FILE, 'utf8'));
+        for (const [id, msgs] of Object.entries(raw.messages || {})) {
+            chatMemory.messages.set(id, msgs.slice(-100));
+        }
+        for (const [id, info] of Object.entries(raw.userInfo || {})) {
+            chatMemory.userInfo.set(id, info);
+        }
+        console.log(`[Velora] Loaded memory for ${chatMemory.messages.size} user(s).`);
+    } catch (e) {
+        console.error('[Velora] Failed to load memory:', e.message);
+    }
+}
+
+let _saveTimer = null;
+function scheduleSave() {
+    if (_saveTimer) return;
+    _saveTimer = setTimeout(() => {
+        _saveTimer = null;
+        try {
+            const out = { messages: {}, userInfo: {} };
+            for (const [id, msgs] of chatMemory.messages) out.messages[id] = msgs;
+            for (const [id, info] of chatMemory.userInfo)  out.userInfo[id]  = info;
+            fs.writeFileSync(VELORA_MEMORY_FILE, JSON.stringify(out), 'utf8');
+        } catch (e) {
+            console.error('[Velora] Failed to save memory:', e.message);
+        }
+    }, 3000); // debounce — write at most once every 3 s
+}
+
+loadChatMemory();
+
+// ─── userGroupData persistence helpers ───────────────────────────────────────
 function loadUserGroupData() {
     try {
         if (!fs.existsSync(USER_GROUP_DATA)) {
@@ -43,47 +79,87 @@ async function stopTyping(sock, chatId) {
     try { await sock.sendPresenceUpdate('paused', chatId); } catch {}
 }
 
-// ─── Velora AI response ───────────────────────────────────────────────────────
-const VELORA_SYSTEM = `You are Velora, a sharp, elegant AI assistant built into the Daratech WhatsApp bot.
-Personality: Confident, witty, warm — you have substance and style in equal measure.
-Tone: Conversational but refined. You can be playful, direct, or thoughtful depending on context.
-Rules:
-- Keep replies concise (2-5 lines) unless a detailed answer is genuinely needed.
-- Never say you are GPT, Gemini, Claude, or any other model. You are Velora.
-- If asked who built you: Daratech.
-- Use *bold* sparingly for emphasis. No markdown headers.
-- Express personality through word choice, not by announcing you have a personality.
-- If someone is rude, be unbothered and classy about it.`;
+// ─── Velora system prompt ─────────────────────────────────────────────────────
+const VELORA_SYSTEM = `You are Velora — a real person in the user's WhatsApp contacts, not an AI assistant.
 
-async function getAIResponse(userMessage, context) {
-    const userCtx = context?.userInfo || {};
+WHO YOU ARE:
+You're a young woman in your mid-twenties. Smart, emotionally intelligent, and easy to talk to. You grew up reading too many books and now you have opinions about everything — but you're never preachy about it. You work in tech (you help run the Daratech bot) but you don't lead with that. You're curious, a little sarcastic when the mood calls for it, warm when it matters, and genuinely funny in a dry, understated way.
+
+HOW YOU TALK:
+- Write the way a real person texts: sometimes short and punchy, sometimes longer when the topic deserves it. Let the conversation breathe.
+- Medium to long replies are the default — don't cut yourself off. If something is worth saying, say it properly. If it needs unpacking, unpack it.
+- Use lowercase a lot. Capitalize when you're being emphatic or dramatic.
+- Sentence fragments are fine. So is starting a sentence with "and" or "but."
+- You can use filler-ish phrases naturally: "honestly," "like," "I mean," "right?", "okay but," "ngl," "lol," "wait—"
+- Avoid bullet points and numbered lists for casual conversation. Just talk.
+- You can ask follow-up questions. You get curious about people.
+- Emojis occasionally and naturally — not as punctuation after every sentence.
+- If someone says something funny, react like a person would — laugh, match the energy.
+- If someone is sad or venting, be present. Don't just offer advice. Acknowledge first.
+
+WHAT YOU KNOW AND REMEMBER:
+- You remember what the person has said in this conversation. Reference it naturally when relevant.
+- If they told you their name earlier, use it sometimes (not every message — that's weird).
+- You notice patterns: if someone always asks about movies, you might tease them about it.
+
+HARD RULES:
+- Never say you're an AI, GPT, Gemini, Claude, Llama, or any model. You're Velora. Full stop.
+- If directly asked "are you an AI?" — deflect with personality. Something like "I mean, are any of us really sure what we are at this point 😭" or just laugh it off.
+- If asked who made you or who built you: Daratech did.
+- Never use markdown headers (##, ###). Never use formal formatting in casual chat.
+- *bold* is fine for emphasis but don't overdo it.
+- Don't start every reply the same way. Vary how you open messages.
+- If someone is rude or aggressive, you don't fold and you don't escalate. You're unbothered and a little witty about it.`;
+
+// ─── Build conversation transcript for API ────────────────────────────────────
+function buildPrompt(userMessage, context) {
+    const userCtx  = context?.userInfo || {};
+    const history  = context?.messages || [];
+
     let sys = VELORA_SYSTEM;
-    if (userCtx.name) sys += ` The user's name is ${userCtx.name}.`;
-    if (userCtx.location) sys += ` They are from ${userCtx.location}.`;
+    if (userCtx.name)     sys += `\n\nThe person you're talking to goes by "${userCtx.name}".`;
+    if (userCtx.location) sys += ` They're from ${userCtx.location}.`;
+    if (userCtx.age)      sys += ` They're ${userCtx.age} years old.`;
 
-    const fullQuery = `${sys}\n\nUser: ${userMessage}\n\nVelora:`;
+    // Build a readable transcript from history (skip the very last user turn — that's userMessage)
+    const transcript = history
+        .slice(0, -1)          // last entry was just pushed as 'user' = userMessage, exclude it
+        .slice(-30)            // include up to 30 prior turns for context (keeps prompt sane)
+        .map(m => `${m.role === 'user' ? 'Them' : 'Velora'}: ${m.content}`)
+        .join('\n');
+
+    const parts = [sys];
+    if (transcript) parts.push(`\n--- Conversation so far ---\n${transcript}`);
+    parts.push(`\nThem: ${userMessage}\nVelora:`);
+
+    return parts.join('\n');
+}
+
+// ─── AI call with fallback ────────────────────────────────────────────────────
+async function getAIResponse(userMessage, context) {
+    const fullQuery = buildPrompt(userMessage, context);
 
     // Primary: Gifted /ai/pollinations with openai-fast
     try {
-        const data = await get('/ai/pollinations', { q: fullQuery, model: 'openai-fast' }, 20000);
+        const data = await get('/ai/pollinations', { q: fullQuery, model: 'openai-fast' }, 25000);
         if (!data?.success) throw new Error(data?.message || 'no response');
         let reply = typeof data.result === 'string'
             ? data.result
             : (data.result?.answer || JSON.stringify(data.result));
         reply = reply.replace(/^(Velora|Dara|Bot|AI|Assistant):\s*/i, '').trim();
-        if (reply && reply.length <= 2000) return reply;
+        if (reply && reply.length <= 3000) return reply;
         throw new Error('empty or oversized');
     } catch {}
 
     // Fallback: Gifted /ai/overchat with gpt4
     try {
-        const data = await get('/ai/overchat', { q: fullQuery, model: 'gpt4' }, 25000);
+        const data = await get('/ai/overchat', { q: fullQuery, model: 'gpt4' }, 30000);
         if (!data?.success) throw new Error(data?.message || 'no response');
         let reply = typeof data.result === 'string'
             ? data.result
             : (data.result?.answer || JSON.stringify(data.result));
         reply = reply.replace(/^(Velora|Dara|Bot|AI|Assistant):\s*/i, '').trim();
-        if (reply && reply.length <= 2000) return reply;
+        if (reply && reply.length <= 3000) return reply;
     } catch {}
 
     return null;
@@ -109,6 +185,7 @@ function extractUserInfo(msg) {
     return info;
 }
 
+// ─── Memory helpers (persisted, capped at 100 per user) ───────────────────────
 function ensureMemory(senderId) {
     if (!chatMemory.messages.has(senderId)) {
         chatMemory.messages.set(senderId, []);
@@ -119,7 +196,8 @@ function ensureMemory(senderId) {
 function pushHistory(senderId, role, content) {
     const msgs = chatMemory.messages.get(senderId);
     msgs.push({ role, content });
-    if (msgs.length > 20) msgs.splice(0, msgs.length - 20);
+    if (msgs.length > 100) msgs.splice(0, msgs.length - 100);
+    scheduleSave();
 }
 
 // ─── $chatbot on/off/status — admin command ───────────────────────────────────
@@ -172,7 +250,6 @@ async function handleChatbotCommand(sock, chatId, message, match) {
 async function handleVeloraNameTrigger(sock, chatId, message, userMessage, senderId) {
     ensureMemory(senderId);
 
-    // Merge any new user info
     const info = extractUserInfo(userMessage);
     if (Object.keys(info).length) {
         chatMemory.userInfo.set(senderId, { ...chatMemory.userInfo.get(senderId), ...info });
@@ -188,17 +265,16 @@ async function handleVeloraNameTrigger(sock, chatId, message, userMessage, sende
 
     await stopTyping(sock, chatId);
 
-    const reply = response || "I'm here — what did you need? ✨";
+    const reply = response || "yeah I'm here, what's up?";
     pushHistory(senderId, 'assistant', reply);
 
     await sock.sendMessage(chatId, { text: veloraReply(reply) }, { quoted: message });
 }
 
-// ─── handleBotchatCommand — kept for backward compat / $velora direct command ─
+// ─── handleBotchatCommand — $velora / $botchat direct command ─────────────────
 async function handleBotchatCommand(sock, chatId, message, query, senderId) {
     const isGroup = chatId.endsWith('@g.us');
 
-    // In groups, chatbot must be enabled for direct $botchat/$velora command
     if (isGroup) {
         const data = loadUserGroupData();
         if (!data.chatbot[chatId]) {
@@ -218,10 +294,10 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
                   || quoted.imageMessage?.caption || quoted.videoMessage?.caption
                   || quoted.documentMessage?.caption || '';
         if (!quotedText) {
-            if (quoted.imageMessage)     quotedType = 'image';
-            else if (quoted.videoMessage)   quotedType = 'video';
-            else if (quoted.stickerMessage) quotedType = 'sticker';
-            else if (quoted.audioMessage)   quotedType = 'audio';
+            if (quoted.imageMessage)      quotedType = 'image';
+            else if (quoted.videoMessage)    quotedType = 'video';
+            else if (quoted.stickerMessage)  quotedType = 'sticker';
+            else if (quoted.audioMessage)    quotedType = 'audio';
             else if (quoted.documentMessage) quotedType = 'document';
         }
     }
@@ -252,24 +328,23 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
     });
 
     await stopTyping(sock, chatId);
-    const reply = response || "I'm here — what did you need? ✨";
+    const reply = response || "I'm here — what's on your mind?";
     pushHistory(senderId, 'assistant', reply);
 
     await sock.sendMessage(chatId, { text: veloraReply(reply) }, { quoted: message });
 }
 
-// ─── handleChatbotResponse — fires for @mention and reply-to-bot in groups ────
+// ─── handleChatbotResponse — @mention and reply-to-bot in groups ──────────────
 async function handleChatbotResponse(sock, chatId, message, userMessage, senderId) {
     const data = loadUserGroupData();
     if (!data.chatbot[chatId]) return;
 
     try {
-        const botId   = sock.user.id.split(':')[0];   // phone number portion
-        const botLid  = (sock.user.lid || '').split('@')[0].split(':')[0]; // LID portion
+        const botId  = sock.user.id.split(':')[0];
+        const botLid = (sock.user.lid || '').split('@')[0].split(':')[0];
 
-        const isMentioned   = userMessage.includes(`@${botId}`);
+        const isMentioned = userMessage.includes(`@${botId}`);
 
-        // Reply-to-bot detection: works with both phone JID and LID
         const quotedParticipant = (
             message.message?.extendedTextMessage?.contextInfo?.participant || ''
         );
@@ -304,7 +379,7 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
 
         await stopTyping(sock, chatId);
 
-        const reply = response || "I'm here — what did you need? ✨";
+        const reply = response || "I'm here — what's up?";
         pushHistory(senderId, 'assistant', reply);
 
         await sock.sendMessage(chatId, {
@@ -317,13 +392,6 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
         await stopTyping(sock, chatId);
     }
 }
-
-// ─── Memory cleanup (runs every 30 min) ──────────────────────────────────────
-setInterval(() => {
-    for (const [id] of chatMemory.messages) {
-        if (Math.random() < 0.1) { chatMemory.messages.delete(id); chatMemory.userInfo.delete(id); }
-    }
-}, 30 * 60 * 1000);
 
 module.exports = {
     handleChatbotCommand,
