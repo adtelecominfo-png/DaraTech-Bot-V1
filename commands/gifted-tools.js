@@ -686,21 +686,36 @@ async function codeaiCommand(sock, chatId, message, userMessage) {
 
         const code = (typeof data.result === 'string' ? data.result : data.result?.answer || '').trim();
 
-        const reply =
+        const header =
             `╭─〔 💻 CODE AI 〕─╮\n` +
-            `│\n` +
-            `│  💬 *PROMPT :*\n` +
-            `│  ${prompt}\n` +
+            `│  💬 *PROMPT :* ${prompt}\n` +
             `│  🔤 *LANGUAGE : ${lang}*\n` +
-            `│\n` +
-            `├──────────────────────────────────────┤\n` +
-            `│  🖥️ *GENERATED CODE :*\n` +
-            `│\n` +
-            code + '\n' +
-            `╰────────────────────────────────────╯\n` +
-            `_Daratech_ ⚡`;
+            `╰────────────────────────────────────╯`;
 
-        await sock.sendMessage(chatId, { text: reply }, { quoted: message });
+        await sock.sendMessage(chatId, { text: header }, { quoted: message });
+
+        const MAX = 3000;
+        if (code.length <= MAX) {
+            await sock.sendMessage(chatId, {
+                text: `🖥️ *GENERATED CODE :*\n${'─'.repeat(28)}\n\`\`\`\n${code}\n\`\`\`\n\n_Daratech_ ⚡`,
+            }, { quoted: message });
+        } else {
+            // Too long — send as a .txt document so nothing gets cut
+            const ext = lang === 'PYTHON' ? 'py' : lang === 'JAVASCRIPT' ? 'js' :
+                        lang === 'HTML' ? 'html' : lang === 'CSS' ? 'css' :
+                        lang === 'PHP' ? 'php' : lang === 'SQL' ? 'sql' :
+                        lang === 'JAVA' ? 'java' : lang === 'GO' ? 'go' :
+                        lang === 'RUST' ? 'rs' : lang === 'C++' ? 'cpp' :
+                        lang === 'RUBY' ? 'rb' : 'txt';
+            const fileName = `codeai_${Date.now()}.${ext}`;
+            await sock.sendMessage(chatId, {
+                document: Buffer.from(code, 'utf8'),
+                mimetype: 'text/plain',
+                fileName,
+                caption: `📄 Full generated code — _Daratech_ ⚡`,
+            }, { quoted: message });
+        }
+
         await react(sock, message, '✅');
     } catch (err) {
         console.error('[codeai]', err.message);
