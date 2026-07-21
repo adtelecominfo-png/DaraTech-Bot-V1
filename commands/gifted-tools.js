@@ -19,7 +19,7 @@
  */
 
 const { toolsGet, toolsBuf } = require('../lib/gifted');
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { UploadFileUgu } = require('../lib/uploader');
 const fs   = require('fs');
 const path = require('path');
@@ -196,6 +196,21 @@ async function proxyCommand(sock, chatId, message) {
 
 // ─── Developer Tools ──────────────────────────────────────────────────────────
 
+/** Local JS obfuscation fallback using javascript-obfuscator (if installed) */
+function localObfuscate(code) {
+    try {
+        const JO = require('javascript-obfuscator');
+        return JO.obfuscate(code, {
+            compact: true,
+            controlFlowFlattening: true,
+            controlFlowFlatteningThreshold: 0.75,
+            deadCodeInjection: true,
+            deadCodeInjectionThreshold: 0.4,
+            stringEncryption: true,
+        }).getObfuscatedCode();
+    } catch (_) { return null; }
+}
+
 /** $obfuscate <js code> — obfuscate / encrypt JavaScript code */
 async function obfuscateCommand(sock, chatId, message) {
     const q = getQ(message);
@@ -204,9 +219,15 @@ async function obfuscateCommand(sock, chatId, message) {
     }, { quoted: message });
     await processing(sock, message, chatId, '🔐 Obfuscating code……');
     try {
-        const data = await toolsGet('encrypt', { code: q });
-        if (!data?.success || !data?.encrypted_code) throw new Error(data?.message || 'Obfuscation failed');
-        const result = data.encrypted_code;
+        let result = null;
+        // Try GiftedTech API first
+        try {
+            const data = await toolsGet('encrypt', { code: q });
+            if (data?.success && data?.encrypted_code) result = data.encrypted_code;
+        } catch (_) { /* fall through to local */ }
+        // Local fallback (javascript-obfuscator package)
+        if (!result) result = localObfuscate(q);
+        if (!result) throw new Error('Obfuscation failed — try again shortly');
         const txt = `🔐 *JS OBFUSCATOR*\n\n\`\`\`\n${result.slice(0, 3000)}${result.length > 3000 ? '\n…(truncated)' : ''}\n\`\`\`\n\n_Daratech_ ⚡`;
         await sock.sendMessage(chatId, { text: txt }, { quoted: message });
         await react(sock, message, '✅');
@@ -378,15 +399,13 @@ async function fantext2Command(sock, chatId, message) {
 // ─── AI Cloth Remover ────────────────────────────────────────────────────────
 
 /** $rc [url] — AI cloth/clothing remover. Works with URL, replied image, or sent image. */
-/** Download an imageMessage to a temp file, upload to uguu.se, return URL */
-async function uploadRcImage(imgMsg) {
-    const stream = await downloadContentFromMessage(imgMsg, 'image');
-    const chunks = [];
-    for await (const chunk of stream) chunks.push(chunk);
+
+/** Upload a buffer to uguu.se and return a public URL */
+async function uploadRcBuffer(buffer) {
     const tmpDir = path.join(__dirname, '../temp');
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
     const tmpPath = path.join(tmpDir, `rc_${Date.now()}.jpg`);
-    fs.writeFileSync(tmpPath, Buffer.concat(chunks));
+    fs.writeFileSync(tmpPath, buffer);
     try {
         const res = await UploadFileUgu(tmpPath);
         const uploadedUrl = typeof res === 'string' ? res : (res?.url || res?.url_full);
@@ -404,15 +423,28 @@ async function rcCommand(sock, chatId, message) {
         let imageUrl = getQ(message);
         if (imageUrl && !imageUrl.startsWith('http')) imageUrl = null;
 
-        // 2. Try quoted image (reply to an image)
+        // 2. Try quoted image (reply to image with $rc)
         if (!imageUrl) {
-            const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            if (quoted?.imageMessage) imageUrl = await uploadRcImage(quoted.imageMessage);
+            const ctx    = message.message?.extendedTextMessage?.contextInfo;
+            const quoted = ctx?.quotedMessage;
+            if (quoted?.imageMessage) {
+                const buf = await downloadMediaMessage(
+                    { key: ctx.stanzaId, message: quoted },
+                    'buffer', {},
+                    { reuploadRequest: sock.updateMediaMessage }
+                );
+                if (buf?.length > 0) imageUrl = await uploadRcBuffer(buf);
+            }
         }
 
-        // 3. Try image sent alongside the command
+        // 3. Try image sent alongside the command (image with caption $rc)
         if (!imageUrl && message.message?.imageMessage) {
-            imageUrl = await uploadRcImage(message.message.imageMessage);
+            const buf = await downloadMediaMessage(
+                { key: message.key, message: message.message },
+                'buffer', {},
+                { reuploadRequest: sock.updateMediaMessage }
+            );
+            if (buf?.length > 0) imageUrl = await uploadRcBuffer(buf);
         }
 
         if (!imageUrl) {
@@ -496,9 +528,15 @@ async function obfuscate2Command(sock, chatId, message) {
     }, { quoted: message });
     await processing(sock, message, chatId, '🔐 Obfuscating code v2……');
     try {
-        const data = await toolsGet('encryptv2', { code: q });
-        if (!data?.success || !data?.result?.encrypted_code) throw new Error(data?.message || 'Obfuscation failed');
-        const result = data.result.encrypted_code;
+        let result = null;
+        // Try GiftedTech API first
+        try {
+            const data = await toolsGet('encryptv2', { code: q });
+            if (data?.success && data?.result?.encrypted_code) result = data.result.encrypted_code;
+        } catch (_) { /* fall through to local */ }
+        // Local fallback (javascript-obfuscator package)
+        if (!result) result = localObfuscate(q);
+        if (!result) throw new Error('Obfuscation failed — try again shortly');
         const txt = `🔐 *JS OBFUSCATOR V2*\n\n\`\`\`\n${result.slice(0, 3000)}${result.length > 3000 ? '\n…(truncated)' : ''}\n\`\`\`\n\n_Daratech_ ⚡`;
         await sock.sendMessage(chatId, { text: txt }, { quoted: message });
         await react(sock, message, '✅');

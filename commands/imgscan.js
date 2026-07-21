@@ -7,8 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Upload an image buffer to uguu.se (free, anonymous, no size limit for images).
- * Returns a public URL string.
+ * Upload an image buffer to uguu.se and return a public URL.
  */
 async function uploadImage(buffer, mimetype = 'image/jpeg') {
     const ext = (mimetype || 'image/jpeg').split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
@@ -16,15 +15,11 @@ async function uploadImage(buffer, mimetype = 'image/jpeg') {
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
     const tmpPath = path.join(tmpDir, `imgscan_${Date.now()}.${ext}`);
     fs.writeFileSync(tmpPath, buffer);
-
     try {
         const form = new FormData();
         form.append('files[]', fs.createReadStream(tmpPath));
         const { data } = await axios.post('https://uguu.se/upload.php', form, {
-            headers: {
-                ...form.getHeaders(),
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            },
+            headers: { ...form.getHeaders(), 'User-Agent': 'Mozilla/5.0' },
             timeout: 30000,
         });
         const fileObj = data?.files?.[0];
@@ -38,21 +33,39 @@ async function uploadImage(buffer, mimetype = 'image/jpeg') {
 
 async function imgscanCommand(sock, chatId, message) {
     try {
-        const ctx = message.message?.extendedTextMessage?.contextInfo;
+        const ctx    = message.message?.extendedTextMessage?.contextInfo;
         const quoted = ctx?.quotedMessage;
-        const msgToScan = quoted || message.message;
-        const imgMsg = msgToScan?.imageMessage;
-        if (!imgMsg) {
+
+        // Decide which message contains the image
+        const isReply    = !!quoted?.imageMessage;
+        const isDirect   = !!message.message?.imageMessage;
+
+        if (!isReply && !isDirect) {
             return sock.sendMessage(chatId, {
                 text: '🔍 Usage: Reply to an image with *$imgscan* or send an image with caption *$imgscan*',
             }, { quoted: message });
         }
+
         await sock.sendMessage(chatId, {
             text: `╭━═ 『 *SCANNING* 』 ═━╮\n┃ 🤖 AI Image Analysis\n┃ ⏳ Processing...\n╰━━━━━━━━━━━━━━━━╯`,
         }, { quoted: message });
 
-        const buffer = await downloadMediaMessage({ message: msgToScan }, 'buffer', {});
-        const imageUrl = await uploadImage(buffer, imgMsg.mimetype || 'image/jpeg');
+        // Build the WAMessage descriptor the same way take.js does
+        const dlMsg = isReply
+            ? { key: ctx.stanzaId, message: quoted }
+            : { key: message.key,  message: message.message };
+
+        const mimetype = isReply
+            ? quoted.imageMessage.mimetype
+            : message.message.imageMessage.mimetype;
+
+        const buffer = await downloadMediaMessage(
+            dlMsg, 'buffer', {},
+            { reuploadRequest: sock.updateMediaMessage }
+        );
+        if (!buffer || buffer.length === 0) throw new Error('Media download returned empty buffer');
+
+        const imageUrl = await uploadImage(buffer, mimetype || 'image/jpeg');
         const data = await davidGet(`/imgscan?url=${encodeURIComponent(imageUrl)}`);
         if (!data?.success) throw new Error('Image scan returned no result');
 
