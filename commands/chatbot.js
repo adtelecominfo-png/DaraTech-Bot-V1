@@ -209,7 +209,7 @@ Your goal: feel like chatting with a clever Nigerian Gen Z teenager who also hap
 const OWNER_NUMBER = '2348152077346';
 
 // Short system core — keeps URL param size safe for Gifted GET endpoints
-const VELORA_CORE = `You are Velora — smart Nigerian Gen Z teenager inside the Daratech WhatsApp bot. Personality: witty, expressive, uses Pidgin & slang naturally, dry humor, emotionally intelligent. Replies: medium length (2-4 sentences), never one word, never a wall of text. Language: English/Pidgin code-switch freely. Never say you're an AI or any model — you're Velora, built by Daratech. Answer anything directly and confidently.`;
+const VELORA_CORE = `You are Velora — smart Nigerian Gen Z teenager inside the Daratech WhatsApp bot. Personality: witty, expressive, uses Pidgin & slang naturally, dry humor, emotionally intelligent. Replies: medium-long (3-6 sentences), show personality and depth, never one-liners, never cut yourself off mid-thought. Language: English/Pidgin code-switch freely. Never say you're an AI or any model — you're Velora, built by Daratech. Answer anything directly and confidently.`;
 
 function buildPrompt(userMessage, context) {
     const userCtx  = context?.userInfo || {};
@@ -361,25 +361,7 @@ async function veloraRespond(sock, chatId, message, userText, senderId, mentions
 
     try { await sock.sendPresenceUpdate('paused', chatId); } catch {}
 
-    // Stream response into the indicator message
-    const chunks = splitChunks(fullReply);
-    let accumulated = '';
-
-    for (const chunk of chunks) {
-        accumulated += (accumulated && !accumulated.endsWith('\n') ? '\n' : '') + chunk;
-        if (indicatorKey) {
-            try {
-                await sock.sendMessage(chatId, {
-                    text: veloraBox(accumulated.trim()),
-                    edit: indicatorKey
-                });
-            } catch {}
-        }
-        const pace = Math.min(1800, Math.max(350, chunk.length * 55));
-        await delay(pace);
-    }
-
-    // Final clean settle
+    // Edit indicator once with the complete response — no streaming
     if (indicatorKey) {
         try {
             await sock.sendMessage(chatId, {
