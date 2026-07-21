@@ -275,7 +275,7 @@ function buildFileName(title, epLabel, quality) {
     if (epLabel) parts.push(epLabel.replace(/\s+/g, ''));   // "S01E03" already clean
     if (quality)  parts.push(safe(quality));
     parts.push('Daratech');
-    return parts.filter(Boolean).join('.') + '$mp4';
+    return parts.filter(Boolean).join('.') + '.mp4';
 }
 
 /**
@@ -293,8 +293,9 @@ function parseSources(data) {
 
 /**
  * sendAsDocument — core sender.
- * Tries to send as a video message (inline player, ≤ VIDEO_LIMIT).
- * If that fails or the file is too large, sends a plain-text link instead.
+ * Tier 1: send as video  (inline player, buffer ≤ 64 MB)
+ * Tier 2: send as document/file  (buffer if available, else URL directly)
+ * Tier 3: plain-text link fallback
  *
  * @param epLabel  e.g. "S01E03" — used in caption; pass null for movies
  */
@@ -307,13 +308,14 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
         `_Downloaded by Daratech_`,
     ].filter(l => l !== undefined).join('\n').replace(/\n\n\n+/g, '\n\n');
 
-    // Download to buffer — CDN URLs are short-lived signed tokens; passing
-    // them directly to WA's servers often results in a 403 after expiry.
+    const fileName = buildFileName(title, epLabel, quality);
+
+    // Download to buffer (capped at 64 MB) — CDN URLs are short-lived signed
+    // tokens; passing them directly to WA often results in 403 after expiry.
     const buf      = await downloadBuffer(dlUrl, sizeHint);
     const size     = buf?.length || parseInt(sizeHint) || 0;
-    const sizeStr  = size ? fileSize(String(size)) : '';
 
-    // ── Attempt: send as video (inline player, ≤ VIDEO_LIMIT) ───────────────────
+    // ── Tier 1: send as video (inline player, ≤ 64 MB) ──────────────────────────
     if (buf && size <= VIDEO_LIMIT) {
         try {
             await sock.sendMessage(chatId, {
@@ -322,19 +324,36 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
             if (linksText) await sock.sendMessage(chatId, { text: linksText }, { quoted: message });
             return;
         } catch (videoErr) {
-            console.warn('[movie:send] video send failed, falling back to link:', videoErr.message);
+            console.warn('[movie:send] video send failed, trying document:', videoErr.message);
         }
     }
 
-    // ── Fallback: links message ───────────────────────────────────────────────────
-    // Determine why we couldn't send as video
-    const tooLarge = size > VIDEO_LIMIT || (!buf && parseInt(sizeHint) > VIDEO_LIMIT);
-    const reasonLine = tooLarge
-        ? `⚠️ File too large to send as video _(${quality ? quality + ' is ' : ''}${sizeStr} — too large to send directly)_`
-        : `⚠️ Couldn't send the video directly _(download failed or link expired)_`;
+    // ── Tier 2: send as document/file ────────────────────────────────────────────
+    // Use the downloaded buffer if we have it; otherwise pass the URL directly
+    // and let WA's servers fetch it (works when the CDN link is still fresh).
+    try {
+        const docMedia = buf
+            ? { document: buf }
+            : { document: { url: dlUrl } };
 
-    const fallback = [reasonLine, '', linksText || `🔗 *Direct link:*\n${dlUrl}`]
-        .join('\n').replace(/\n\n\n+/g, '\n\n');
+        await sock.sendMessage(chatId, {
+            ...docMedia,
+            mimetype: 'video/mp4',
+            fileName,
+            caption,
+        }, { quoted: message });
+        if (linksText) await sock.sendMessage(chatId, { text: linksText }, { quoted: message });
+        return;
+    } catch (docErr) {
+        console.warn('[movie:send] document send failed, falling back to link:', docErr.message);
+    }
+
+    // ── Tier 3: plain-text link fallback ─────────────────────────────────────────
+    const fallback = [
+        `⚠️ Couldn't send the file directly — here are the download links:`,
+        '',
+        linksText || `🔗 *Direct link:*\n${dlUrl}`,
+    ].join('\n').replace(/\n\n\n+/g, '\n\n');
     await sock.sendMessage(chatId, { text: fallback }, { quoted: message });
 }
 
