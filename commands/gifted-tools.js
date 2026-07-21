@@ -691,25 +691,35 @@ async function codeaiCommand(sock, chatId, message, userMessage) {
             if (!data?.success) throw new Error(data?.message || 'No response from AI');
         }
 
-        const code = (typeof data.result === 'string' ? data.result : data.result?.answer || '').trim();
+        let code = (typeof data.result === 'string' ? data.result : data.result?.answer || '').trim();
+        // Extract code from inside the FIRST fence block if present (AI often wraps
+        // with ```lang … ``` even when told not to, and may add prose before the fence)
+        const fenceMatch = code.match(/```[\w]*\n?([\s\S]*?)\n?```/);
+        if (fenceMatch) {
+            code = fenceMatch[1].trim();
+        } else {
+            // No fenced block — strip any stray backtick-fence lines
+            code = code.replace(/^```[\w]*\s*$/gm, '').replace(/^```\s*$/gm, '').trim();
+        }
 
         const header =
             `╭─〔 💻 CODE AI 〕─╮\n` +
             `│  💬 *PROMPT :* ${prompt}\n` +
             `│  🔤 *LANGUAGE : ${lang}*\n` +
-            `╰────────────────────────────────────╯`;
-
-        await sock.sendMessage(chatId, { text: header }, { quoted: message });
+            `╰────────────────────────────────────╯\n\n` +
+            `🖥️ *GENERATED CODE :*\n${'─'.repeat(28)}`;
 
         // WhatsApp limit is ~65536 chars — stay well under it
-        const WA_MAX = 60000;
-        if (code.length <= WA_MAX) {
-            // Send as plain text; WhatsApp shows "read more" automatically for long messages
+        const WA_MAX = 58000;
+        const body = `\`\`\`\n${code}\n\`\`\`\n\n_Daratech_ ⚡`;
+        if ((header + '\n' + body).length <= WA_MAX) {
+            // Everything in one message; WhatsApp shows "read more" automatically for long ones
             await sock.sendMessage(chatId, {
-                text: `🖥️ *GENERATED CODE :*\n${'─'.repeat(28)}\n\`\`\`\n${code}\n\`\`\`\n\n_Daratech_ ⚡`,
+                text: `${header}\n${body}`,
             }, { quoted: message });
         } else {
-            // Genuinely huge — send as a file so nothing gets cut
+            // Genuinely huge — send header as text, code as file
+            await sock.sendMessage(chatId, { text: header }, { quoted: message });
             const ext = { PYTHON:'py', JAVASCRIPT:'js', HTML:'html', CSS:'css',
                           PHP:'php', SQL:'sql', JAVA:'java', GO:'go',
                           RUST:'rs', 'C++':'cpp', RUBY:'rb' }[lang] || 'txt';
