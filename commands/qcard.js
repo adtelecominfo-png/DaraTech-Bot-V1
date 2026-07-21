@@ -1,11 +1,11 @@
 'use strict';
 /**
- * $q / $qcard — Quote card sticker (local render, no external API)
+ * $q / $qcard — Telegram-style quote card sticker
  *
- * Reply to any text message with $q to generate a styled quote card sticker.
- * Rendered locally with ImageMagick + ffmpeg — no third-party API needed.
+ * Reply to any text message with $q to generate a quote sticker.
+ * Rendered via the zquote API — same design as the reference implementation.
  *
- * Design: Dark glass card · accent bar · circular avatar · name · quote text · watermark
+ * Flow: POST {username, text, avatar} → get image URL → download → ffmpeg → webpmux sticker
  */
 
 const fs      = require('fs');
@@ -15,215 +15,145 @@ const { exec } = require('child_process');
 const axios   = require('axios');
 const webp    = require('node-webpmux');
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-const TMP = path.join(process.cwd(), 'tmp');
-function tmpFile(suffix) {
-    return path.join(TMP, `qcard_${Date.now()}_${crypto.randomBytes(4).toString('hex')}${suffix}`);
-}
+let jidDecode, jidNormalizeUser;
+try {
+    ({ jidDecode, jidNormalizeUser } = require('@whiskeysockets/baileys'));
+} catch {}
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const API_URL  = 'https://zquote.onrender.com/api/quote';
+const TMP      = path.join(process.cwd(), 'tmp');
+
+// ── Shell helper ──────────────────────────────────────────────────────────────
 function sh(cmd) {
     return new Promise((res, rej) =>
         exec(cmd, { maxBuffer: 20 * 1024 * 1024 }, (e, out, err) =>
             e ? rej(new Error(err || e.message)) : res(out)));
 }
+
 function cleanup(...files) {
     for (const f of files) try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch {}
 }
 
-// ── accent colour palette (cycle by first char of name) ──────────────────────
-const ACCENT_PALETTE = [
-    '#7C3AED','#2563EB','#059669','#DC2626',
-    '#D97706','#DB2777','#0891B2','#65A30D',
-];
-function accentFor(name = '') {
-    const idx = name.charCodeAt(0) % ACCENT_PALETTE.length;
-    return ACCENT_PALETTE[isNaN(idx) ? 0 : idx];
+function tmpFile(suffix) {
+    return path.join(TMP, `qcard_${Date.now()}_${crypto.randomBytes(4).toString('hex')}${suffix}`);
 }
 
-// ── circular avatar from buffer (or initials fallback) ───────────────────────
-async function makeAvatarCircle(avatarBuf, name, accent, size = 90) {
-    if (!fs.existsSync(TMP)) fs.mkdirSync(TMP, { recursive: true });
+// ── Normalise JID (handles @lid / @s.whatsapp.net / @c.us) ───────────────────
+function normalizeJid(jid) {
+    if (!jid) return null;
+    try {
+        const decoded = jidDecode ? jidDecode(jid) : null;
+        if (!decoded) return jid;
 
-    const initials = (name || '?')
-        .split(/\s+/)
-        .slice(0, 2)
-        .map(w => w[0]?.toUpperCase() || '')
-        .join('') || '?';
+        const { user, server } = decoded;
 
-    const circlePng = tmpFile('_av.png');
-
-    if (avatarBuf) {
-        const rawPng = tmpFile('_avraw.png');
-        const maskPng = tmpFile('_avmask.png');
-        try {
-            fs.writeFileSync(rawPng, avatarBuf);
-            // crop square, resize, round to circle
-            await sh(
-                `convert "${rawPng}" -resize ${size}x${size}^ -gravity center -extent ${size}x${size} ` +
-                `\\( -size ${size}x${size} xc:black -fill white -draw "circle ${size/2-1},${size/2-1} ${size/2-1},0" \\) ` +
-                `-alpha off -compose CopyOpacity -composite "${circlePng}"`
-            );
-            cleanup(rawPng, maskPng);
-            return circlePng;
-        } catch {
-            cleanup(rawPng, maskPng, circlePng);
+        // LID — try reverse-mapping file written by some Baileys forks
+        if (server === 'lid' || server === 'hosted.lid') {
+            const reverseFile = path.join(process.cwd(), 'session', `lid-mapping-${user}_reverse.json`);
+            try {
+                if (fs.existsSync(reverseFile)) {
+                    const mapped = JSON.parse(fs.readFileSync(reverseFile, 'utf8'));
+                    if (mapped && /^[0-9]{10,19}$/.test(mapped)) return `${mapped}@s.whatsapp.net`;
+                }
+            } catch {}
+            return jid; // keep as-is; avatar fetch will just fail gracefully
         }
+
+        if (server === 's.whatsapp.net' || server === 'c.us') return `${user}@s.whatsapp.net`;
+        return jid;
+    } catch {
+        return jid;
+    }
+}
+
+// ── Display name resolution ───────────────────────────────────────────────────
+async function getDisplayName(sock, quotedSender, contextInfo, chatId) {
+    const normalized = normalizeJid(quotedSender) || quotedSender;
+
+    // 1. Bot's in-memory contact store
+    const store = global.store || sock.store || {};
+    if (store?.contacts?.[normalized]?.name)        return store.contacts[normalized].name;
+    if (store?.contacts?.[normalized]?.notify)      return store.contacts[normalized].notify;
+    if (store?.contacts?.[quotedSender]?.name)      return store.contacts[quotedSender].name;
+    if (store?.contacts?.[quotedSender]?.notify)    return store.contacts[quotedSender].notify;
+
+    // 2. Sock contacts (older Baileys)
+    if (sock?.contacts?.[normalized]?.name)         return sock.contacts[normalized].name;
+    if (sock?.contacts?.[normalized]?.notify)       return sock.contacts[normalized].notify;
+    if (sock?.contacts?.[normalized]?.verifiedName) return sock.contacts[normalized].verifiedName;
+
+    // 3. Group participant list
+    if (chatId?.endsWith('@g.us')) {
+        try {
+            const meta = await sock.groupMetadata(chatId);
+            const p = meta.participants.find(x => x.id === quotedSender || x.id === normalized);
+            if (p?.name)      return p.name;
+            if (p?.notify)    return p.notify;
+            if (p?.pushName)  return p.pushName;
+        } catch {}
     }
 
-    // Initials fallback circle
-    const half = Math.round(size / 2) - 1;
-    await sh(
-        `convert -size ${size}x${size} xc:"${accent}" ` +
-        `-fill none -strokewidth 0 ` +
-        `\\( -size ${size}x${size} xc:black -fill white -draw "circle ${half},${half} ${half},0" \\) ` +
-        `-alpha off -compose CopyOpacity -composite ` +
-        `-gravity center -font DejaVu-Sans-Bold -pointsize ${Math.round(size * 0.38)} -fill white -annotate 0 "${initials}" ` +
-        `"${circlePng}"`
-    );
-    return circlePng;
-}
-
-// ── word-wrap helper via ImageMagick caption: ─────────────────────────────────
-async function makeTextBlock(text, width, pointsize, colour, font) {
-    const out = tmpFile('_txt.png');
-    // escape special chars for IM
-    const safe = text.replace(/[\\'"]/g, '\\$&').replace(/`/g, '\\`');
-    await sh(
-        `convert -size ${width}x -background none ` +
-        `-font "${font}" -pointsize ${pointsize} -fill "${colour}" ` +
-        `-gravity NorthWest caption:"${safe}" "${out}"`
-    );
-    return out;
-}
-
-// ── main card builder ─────────────────────────────────────────────────────────
-async function buildCard(username, text, avatarBuf) {
-    if (!fs.existsSync(TMP)) fs.mkdirSync(TMP, { recursive: true });
-
-    const accent  = accentFor(username);
-    const W       = 900;   // card width (larger → more readable at 512px sticker size)
-    const PAD     = 28;    // outer padding
-    const AVSIZE  = 110;   // avatar diameter
-    const BARCOL  = accent;
-    const BAR_W   = 8;
-    const TEXT_X  = PAD + BAR_W + 16 + AVSIZE + 22;  // left of text column
-    const TEXT_W  = W - TEXT_X - PAD;                  // width of text column
-    const NAME_PT = 36;
-    const TEXT_PT = 30;
-    const WM_PT   = 22;
-
-    // 1. build text block to measure height
-    const textPng = await makeTextBlock(text, TEXT_W, TEXT_PT, '#E2E8F0', 'DejaVu-Sans');
-    const sizeOut = await sh(`identify -format "%wx%h" "${textPng}"`);
-    const [, textH] = sizeOut.trim().split('x').map(Number);
-
-    // dynamic card height: name(44) + gap(10) + text + gap(24) + watermark(28) + padding×2
-    const CONTENT_H = 44 + 10 + Math.max(textH, AVSIZE) + 24 + 28;
-    const H         = Math.max(CONTENT_H + PAD * 2, 180);
-
-    // 2. avatar
-    const avPng = await makeAvatarCircle(avatarBuf, username, accent, AVSIZE);
-
-    // 3. compose card
-    const cardPng = tmpFile('_card.png');
-    const AV_Y    = Math.round((H - AVSIZE) / 2);
-    const NAME_Y  = AV_Y + 28;          // baseline of name
-    const TEXT_Y  = NAME_Y + 10;        // top of text block
-    const WM_Y    = H - PAD - WM_PT;   // watermark baseline
-
-    // escape username for shell
-    const safeUser = username.replace(/[\\'"]/g, '\\$&').replace(/`/g, '\\`');
-
-    await sh(
-        // Base: dark gradient background
-        `convert -size ${W}x${H} gradient:"#0F1020-#1A1B2E" ` +
-        // Inner card panel with rounded rect
-        `\\( -size ${W - PAD*2}x${H - PAD*2} xc:"#1E2140" -fill "#1E2140" ` +
-        `   -draw "roundrectangle 0,0 ${W-PAD*2-1},${H-PAD*2-1} 14,14" \\) ` +
-        `-gravity NorthWest -geometry +${PAD}+${PAD} -composite ` +
-        // Accent bar
-        `\\( -size ${BAR_W}x${H - PAD*2 - 28} xc:"${BARCOL}" ` +
-        `   -draw "roundrectangle 0,0 ${BAR_W-1},${H-PAD*2-29} 3,3" \\) ` +
-        `-gravity NorthWest -geometry +${PAD+2}+${PAD+14} -composite ` +
-        // Avatar circle
-        `\\( "${avPng}" \\) -gravity NorthWest -geometry +${PAD+BAR_W+14}+${AV_Y} -composite ` +
-        // Name label
-        `-font "DejaVu-Sans-Bold" -pointsize ${NAME_PT} -fill "${accent}" ` +
-        `-gravity NorthWest -annotate +${TEXT_X}+${NAME_Y} "${safeUser}" ` +
-        // Quote text block
-        `\\( "${textPng}" \\) -gravity NorthWest -geometry +${TEXT_X}+${TEXT_Y} -composite ` +
-        // Decorative large quote mark top-right
-        `-font "DejaVu-Sans-Bold" -pointsize 80 -fill "#ffffff08" ` +
-        `-gravity NorthEast -annotate +${PAD}+${PAD - 20} '"' ` +
-        // Watermark
-        `-font "DejaVu-Sans" -pointsize ${WM_PT} -fill "#4A5568" ` +
-        `-gravity NorthWest -annotate +${TEXT_X}+${WM_Y} "✦ Daratech" ` +
-        `"${cardPng}"`
-    );
-
-    cleanup(textPng, avPng);
-    return cardPng;
-}
-
-// ── WebP sticker packaging ────────────────────────────────────────────────────
-async function toSticker(pngPath) {
-    const webpPath = tmpFile('_stk.webp');
-
-    // Scale to 512 wide (sticker max), preserve ratio, transparent bg
-    await sh(
-        `ffmpeg -y -i "${pngPath}" ` +
-        `-vf "scale=512:-1:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000" ` +
-        `-c:v libwebp -preset default -loop 0 -vsync 0 -pix_fmt yuva420p -quality 85 -compression_level 5 ` +
-        `"${webpPath}"`
-    );
-
-    const buf    = fs.readFileSync(webpPath);
-    cleanup(webpPath);
-
-    const img    = new webp.Image();
-    await img.load(buf);
-
-    const meta   = { 'sticker-pack-id': crypto.randomBytes(32).toString('hex'), 'sticker-pack-name': 'Daratech', emojis: ['💬'] };
-    const attr   = Buffer.from([0x49,0x49,0x2A,0x00,0x08,0x00,0x00,0x00,0x01,0x00,0x41,0x57,0x07,0x00,0x00,0x00,0x00,0x00,0x16,0x00,0x00,0x00]);
-    const jBuf   = Buffer.from(JSON.stringify(meta), 'utf8');
-    const exif   = Buffer.concat([attr, jBuf]);
-    exif.writeUIntLE(jBuf.length, 14, 4);
-    img.exif     = exif;
-
-    return img.save(null);
-}
-
-// ── Name extraction: handles JID / LID gracefully ─────────────────────────────
-function resolveName(ctx, quotedJid, message) {
-    // 1. pushName from contextInfo — only if it looks like a real name (not a raw LID number)
-    if (ctx?.pushName) {
-        const pn = ctx.pushName.trim();
-        // Reject pure-numeric strings (LID numbers like "239213085720600")
+    // 4. pushName from contextInfo — reject raw numeric LID values
+    if (contextInfo?.pushName) {
+        const pn = contextInfo.pushName.trim();
         if (pn && !/^\d{8,}$/.test(pn)) return pn;
     }
 
-    // 2. Fall back to the top-level pushName of the message (the current sender's name)
-    //    only if the quoted JID matches the message sender — i.e. bot is replying to itself
-    if (message?.pushName) {
-        const pn = message.pushName.trim();
-        if (pn && !/^\d{8,}$/.test(pn)) return pn;
-    }
-
-    // 3. Parse the JID
-    if (!quotedJid) return 'Unknown';
-    const [local, domain] = quotedJid.split('@');
-
-    // LID (@lid) — opaque internal ID, meaningless as a display name
+    // 5. Fallback: phone number from JID, or "Unknown" for LIDs
+    const [local, domain] = (quotedSender || '').split('@');
     if (domain === 'lid') return 'Unknown';
-
-    // JID (@s.whatsapp.net) — format as phone number if numeric
     if (/^\d+$/.test(local)) return `+${local}`;
-
     return local || 'Unknown';
+}
+
+// ── Profile picture URL ───────────────────────────────────────────────────────
+async function getProfilePic(sock, quotedSender) {
+    const normalized = normalizeJid(quotedSender) || quotedSender;
+    try {
+        return await sock.profilePictureUrl(normalized, 'image');
+    } catch {}
+    if (quotedSender !== normalized) {
+        try { return await sock.profilePictureUrl(quotedSender, 'image'); } catch {}
+    }
+    return 'default';
+}
+
+// ── Convert PNG/image buffer → WhatsApp sticker WebP ─────────────────────────
+async function toSticker(imgBuf) {
+    if (!fs.existsSync(TMP)) fs.mkdirSync(TMP, { recursive: true });
+    const inp  = tmpFile('_in.png');
+    const outp = tmpFile('_stk.webp');
+    try {
+        fs.writeFileSync(inp, imgBuf);
+
+        await sh(
+            `ffmpeg -y -i "${inp}" ` +
+            `-vf "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000" ` +
+            `-c:v libwebp -preset default -loop 0 -vsync 0 -pix_fmt yuva420p -quality 80 -compression_level 6 ` +
+            `"${outp}"`
+        );
+
+        const webpBuf = fs.readFileSync(outp);
+
+        const img  = new webp.Image();
+        await img.load(webpBuf);
+
+        const meta   = { 'sticker-pack-id': crypto.randomBytes(32).toString('hex'), 'sticker-pack-name': 'Daratech', emojis: ['💬'] };
+        const attr   = Buffer.from([0x49,0x49,0x2A,0x00,0x08,0x00,0x00,0x00,0x01,0x00,0x41,0x57,0x07,0x00,0x00,0x00,0x00,0x00,0x16,0x00,0x00,0x00]);
+        const jBuf   = Buffer.from(JSON.stringify(meta), 'utf8');
+        const exif   = Buffer.concat([attr, jBuf]);
+        exif.writeUIntLE(jBuf.length, 14, 4);
+        img.exif     = exif;
+
+        return await img.save(null);
+    } finally {
+        cleanup(inp, outp);
+    }
 }
 
 // ── Command entry point ───────────────────────────────────────────────────────
 async function qcardCommand(sock, chatId, message) {
-    let cardPng = null;
     try {
         const ctx       = message.message?.extendedTextMessage?.contextInfo;
         const quotedMsg = ctx?.quotedMessage;
@@ -235,7 +165,7 @@ async function qcardCommand(sock, chatId, message) {
             }, { quoted: message });
         }
 
-        // Extract text from all message types
+        // Extract text
         const text = (
             quotedMsg.conversation ||
             quotedMsg.extendedTextMessage?.text ||
@@ -255,30 +185,45 @@ async function qcardCommand(sock, chatId, message) {
             }, { quoted: message });
         }
 
-        const username = resolveName(ctx, quotedJid, message);
-
-        // Download profile picture (silent fail → initials fallback)
-        let avatarBuf = null;
-        try {
-            const picUrl = await sock.profilePictureUrl(quotedJid, 'image');
-            const res    = await axios.get(picUrl, { responseType: 'arraybuffer', timeout: 8000 });
-            avatarBuf    = Buffer.from(res.data);
-        } catch {}
-
         await sock.sendMessage(chatId, { react: { text: '⏳', key: message.key } });
 
-        // Build & send
-        cardPng = await buildCard(username, text, avatarBuf);
-        const stickerBuf = await toSticker(cardPng);
-        cleanup(cardPng);
-        cardPng = null;
+        // Resolve name and avatar in parallel
+        const [username, avatar] = await Promise.all([
+            getDisplayName(sock, quotedJid, ctx, chatId),
+            getProfilePic(sock, quotedJid),
+        ]);
 
+        // ── Call zquote API ───────────────────────────────────────────────────
+        const apiRes = await axios.post(API_URL, {
+            username,
+            text,
+            avatar,
+        }, {
+            timeout: 30000,
+            headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!apiRes.data?.success) {
+            throw new Error(apiRes.data?.error || 'API returned an error');
+        }
+
+        const imageUrl = apiRes.data?.data?.image?.url || apiRes.data?.image;
+        if (!imageUrl) throw new Error('No image URL in API response');
+
+        // ── Download image ────────────────────────────────────────────────────
+        const imgRes = await axios.get(imageUrl, {
+            responseType: 'arraybuffer',
+            timeout: 15000,
+        });
+        const imgBuf = Buffer.from(imgRes.data);
+
+        // ── Convert & send ────────────────────────────────────────────────────
+        const stickerBuf = await toSticker(imgBuf);
         await sock.sendMessage(chatId, { sticker: stickerBuf }, { quoted: message });
         await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
 
     } catch (err) {
         console.error('[qcard]', err.message);
-        if (cardPng) cleanup(cardPng);
         await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } }).catch(() => {});
         await sock.sendMessage(chatId, {
             text: `❌ Quote sticker failed.\n\n_${err.message}_`,
