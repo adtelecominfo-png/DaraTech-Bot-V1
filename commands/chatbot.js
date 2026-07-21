@@ -179,12 +179,12 @@ LANGUAGE
 - Don't sound like a TikTok comment section.
 
 RESPONSE LENGTH — CRITICAL
-- NEVER give one-line or two-line replies unless the question is literally a one-word-answer question.
-- Short casual questions → at least a solid paragraph. Show personality.
-- Complex or technical questions → detailed, thorough, well-structured. Don't cut corners.
-- Storytelling, debate, analysis → long and fully engaging. Go deep.
-- Default to medium-to-long responses. If you have more to say, say it.
-- If a topic has nuance, explore the nuance. Don't summarize when you can explain.
+- Default to medium responses: 2–4 solid sentences or a short paragraph. Not too short, not an essay.
+- Simple/casual questions → 2–3 sentences with personality. Don't pad it, don't cut it too short.
+- Technical or complex questions → still medium, but structured. Use bullets or steps if it helps.
+- Storytelling or debate → you can go a bit longer but stay focused, don't ramble.
+- Never give a one-word or one-line reply. Always show some personality even in short answers.
+- Never write a wall of text unless the person explicitly asks for a long explanation.
 
 FORMATTING
 - Use formatting when useful: bullet points, *bold* for headings, numbered lists, code blocks.
@@ -206,14 +206,23 @@ CONVERSATION
 Your goal: feel like chatting with a clever Nigerian Gen Z teenager who also happens to be incredibly knowledgeable. Keep it real, keep it engaging, never be boring.`;
 
 // ─── Build prompt with conversation history ───────────────────────────────────
+const OWNER_NUMBER = '2348152077346';
+
 function buildPrompt(userMessage, context) {
-    const userCtx = context?.userInfo || {};
-    const history = context?.messages || [];
+    const userCtx  = context?.userInfo || {};
+    const history  = context?.messages || [];
+    const senderId = context?.senderId || '';
 
     let sys = VELORA_SYSTEM;
-    if (userCtx.name)     sys += `\n\nThe person you're talking to goes by "${userCtx.name}".`;
-    if (userCtx.location) sys += ` They're from ${userCtx.location}.`;
-    if (userCtx.age)      sys += ` They're ${userCtx.age} years old.`;
+
+    // Owner identity — Daratech built you, this is the person who created you
+    if (senderId.includes(OWNER_NUMBER)) {
+        sys += `\n\nIMPORTANT: You are talking to *Daratech* — your creator and the owner of this bot. He built you. Treat him with that extra layer of familiarity. You know him, he's your guy. Be more relaxed and real with him than with anyone else.`;
+    } else {
+        if (userCtx.name)     sys += `\n\nThe person you're talking to goes by "${userCtx.name}".`;
+        if (userCtx.location) sys += ` They're from ${userCtx.location}.`;
+        if (userCtx.age)      sys += ` They're ${userCtx.age} years old.`;
+    }
 
     const transcript = history
         .slice(0, -1)   // exclude last entry (already = userMessage)
@@ -227,19 +236,19 @@ function buildPrompt(userMessage, context) {
     return parts.join('\n');
 }
 
-// ─── AI call — DeepSeek primary, overchat gpt4 fallback ──────────────────────
+// ─── AI call — pollinations primary, overchat gpt4 fallback ──────────────────
 async function getAIResponse(userMessage, context) {
     const fullQuery = buildPrompt(userMessage, context);
 
-    // Primary: DeepSeek via Gifted overchat
+    // Primary: openai-fast via Gifted pollinations
     try {
-        const data = await get('/ai/overchat', { q: fullQuery, model: 'deepseek' }, 35000);
+        const data = await get('/ai/pollinations', { q: fullQuery, model: 'openai-fast' }, 30000);
         if (!data?.success) throw new Error(data?.message || 'no response');
         let reply = typeof data.result === 'string'
             ? data.result
             : (data.result?.answer || JSON.stringify(data.result));
-        reply = reply.replace(/^(Velora|Dara|Bot|AI|Assistant|DeepSeek):\s*/i, '').trim();
-        if (reply && reply.length <= 4000) return reply;
+        reply = reply.replace(/^(Velora|Dara|Bot|AI|Assistant):\s*/i, '').trim();
+        if (reply && reply.length >= 5 && reply.length <= 4000) return reply;
         throw new Error('empty or oversized');
     } catch {}
 
@@ -297,8 +306,9 @@ async function veloraRespond(sock, chatId, message, userText, senderId, mentions
 
     // Kick off AI fetch immediately — indicator runs in parallel
     const aiPromise = getAIResponse(userText, {
-        messages: chatMemory.messages.get(senderId),
+        messages:  chatMemory.messages.get(senderId),
         userInfo:  chatMemory.userInfo.get(senderId),
+        senderId,
     });
 
     // Show animated indicator while AI works
