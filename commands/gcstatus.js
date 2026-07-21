@@ -147,9 +147,40 @@ async function postGroupStatus(sock, groupId, content) {
     return msg;
 }
 
-// ── Validate hex color ────────────────────────────────────────────────────────
-function isValidHex(str) {
-    return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(str);
+// ── Color name → hex map ──────────────────────────────────────────────────────
+const COLOR_MAP = {
+    purple:    '#9C27B0',
+    violet:    '#7B1FA2',
+    pink:      '#E91E63',
+    hotpink:   '#FF4081',
+    red:       '#F44336',
+    orange:    '#FF5722',
+    amber:     '#FF8F00',
+    yellow:    '#FFC107',
+    lime:      '#8BC34A',
+    green:     '#4CAF50',
+    teal:      '#009688',
+    cyan:      '#00BCD4',
+    blue:      '#2196F3',
+    navy:      '#1565C0',
+    indigo:    '#3F51B5',
+    black:     '#212121',
+    dark:      '#263238',
+    grey:      '#607D8B',
+    white:     '#FAFAFA',
+    brown:     '#795548',
+    gold:      '#F9A825',
+    maroon:    '#880E4F',
+};
+
+const COLOR_NAMES = Object.keys(COLOR_MAP).join(', ');
+
+function resolveColor(input) {
+    const lower = input.toLowerCase();
+    if (COLOR_MAP[lower]) return COLOR_MAP[lower];
+    // also accept raw hex as fallback
+    if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(input)) return input;
+    return null;
 }
 
 // ── Main command handler ──────────────────────────────────────────────────────
@@ -166,14 +197,18 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
 
         if (!val) {
             const cur = getColor(chatId);
+            const curName = Object.keys(COLOR_MAP).find(n => COLOR_MAP[n] === cur) || cur;
             return sock.sendMessage(chatId, {
                 text: `╭━━━「 🎨 *GC STATUS COLOR* 」━━━\n` +
                       `┃\n` +
-                      `┃ Current color: *${cur}*\n` +
-                      `┃ (${cur === DEFAULT_COLOR ? 'default purple' : 'custom'})\n` +
+                      `┃ Current: *${curName}*\n` +
+                      `┃ (${cur === DEFAULT_COLOR ? 'default' : 'custom'})\n` +
                       `┃\n` +
-                      `┃ ▸ *$gcstatus color #HEX*  — set color\n` +
-                      `┃ ▸ *$gcstatus color reset* — restore default\n` +
+                      `┃ ▸ *$gcstatus color <name>*  — set color\n` +
+                      `┃ ▸ *$gcstatus color reset*   — restore default\n` +
+                      `┃\n` +
+                      `┃ *Available colors:*\n` +
+                      `┃ ${COLOR_NAMES}\n` +
                       `┃\n` +
                       `╰━━━━━━━━━━━━━━━━━━━━━\n\n_Daratech_ ⚡`
             }, { quoted: message });
@@ -182,20 +217,20 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
         if (val === 'reset') {
             resetColor(chatId);
             return sock.sendMessage(chatId, {
-                text: `🎨 *GC Status color reset* to default purple (*${DEFAULT_COLOR}*).\n\n_Daratech_ ⚡`
+                text: `🎨 *GC Status color reset* to default *purple*.\n\n_Daratech_ ⚡`
             }, { quoted: message });
         }
 
-        const hex = args[1]; // preserve original case for hex
-        if (!isValidHex(hex)) {
+        const resolved = resolveColor(val);
+        if (!resolved) {
             return sock.sendMessage(chatId, {
-                text: `❌ Invalid color. Use a hex code like *#FF5733* or *#9C27B0*.\n\n_Daratech_ ⚡`
+                text: `❌ Unknown color *"${val}"*.\n\nAvailable colors:\n${COLOR_NAMES}\n\n_Daratech_ ⚡`
             }, { quoted: message });
         }
 
-        setColor(chatId, hex);
+        setColor(chatId, resolved);
         return sock.sendMessage(chatId, {
-            text: `✅ *GC Status color set to ${hex}!*\n\nAll future text statuses in this group will use this color.\n\n_Daratech_ ⚡`
+            text: `✅ *GC Status color set to ${val}!*\n\nAll future text statuses in this group will use this color.\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 
@@ -220,7 +255,8 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
                       `┃   with *$gcstatus [optional caption]*\n` +
                       `┃\n` +
                       `┃ *CUSTOM COLOR (text only):*\n` +
-                      `┃ ▸ $gcstatus color #FF5733\n` +
+                      `┃ ▸ $gcstatus color red\n` +
+                      `┃ ▸ $gcstatus color blue\n` +
                       `┃ ▸ $gcstatus color reset\n` +
                       `┃\n` +
                       `┃ Default color: 🟣 Purple\n` +
