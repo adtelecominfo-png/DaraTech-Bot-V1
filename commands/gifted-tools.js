@@ -223,8 +223,17 @@ async function obfuscateCommand(sock, chatId, message) {
         // Try GiftedTech API first
         try {
             const data = await toolsGet('encrypt', { code: q });
-            if (data?.success && data?.encrypted_code) result = data.encrypted_code;
-        } catch (_) { /* fall through to local */ }
+            if (data?.success && data?.encrypted_code) {
+                result = data.encrypted_code;
+            } else if (!data?.success) {
+                // Surface the real API error (e.g. JS syntax error in user's code)
+                const apiErr = data?.error || data?.message || '';
+                if (apiErr) throw new Error(apiErr);
+            }
+        } catch (apiEx) {
+            // If it's a real API error (not a network failure), rethrow directly
+            if (!apiEx.isAxiosError && apiEx.message && !apiEx.code) throw apiEx;
+        }
         // Local fallback (javascript-obfuscator package)
         if (!result) result = localObfuscate(q);
         if (!result) throw new Error('Obfuscation failed — try again shortly');
@@ -532,8 +541,15 @@ async function obfuscate2Command(sock, chatId, message) {
         // Try GiftedTech API first
         try {
             const data = await toolsGet('encryptv2', { code: q });
-            if (data?.success && data?.result?.encrypted_code) result = data.result.encrypted_code;
-        } catch (_) { /* fall through to local */ }
+            if (data?.success && data?.result?.encrypted_code) {
+                result = data.result.encrypted_code;
+            } else if (!data?.success) {
+                const apiErr = data?.error || data?.message || '';
+                if (apiErr) throw new Error(apiErr);
+            }
+        } catch (apiEx) {
+            if (!apiEx.isAxiosError && apiEx.message && !apiEx.code) throw apiEx;
+        }
         // Local fallback (javascript-obfuscator package)
         if (!result) result = localObfuscate(q);
         if (!result) throw new Error('Obfuscation failed — try again shortly');
@@ -562,12 +578,15 @@ const SHORTENERS = {
 async function _shortenDirect(service, url) {
     const axios = require('axios');
     if (service === 'vgd') {
-        const { data } = await axios.get(
+        const resp = await axios.get(
             `https://v.gd/create.php?format=json&url=${encodeURIComponent(url)}`,
-            { timeout: 15000 }
+            { timeout: 15000, responseType: 'text' }
         );
-        if (data?.shorturl) return data.shorturl;
-        throw new Error(data?.errormessage || 'v.gd failed');
+        // v.gd sends Content-Type: text/javascript so axios won't auto-parse;
+        // manually parse the JSON ourselves.
+        const parsed = typeof resp.data === 'string' ? JSON.parse(resp.data) : resp.data;
+        if (parsed?.shorturl) return parsed.shorturl;
+        throw new Error(parsed?.errormessage || 'v.gd failed');
     }
     if (service === 'ssur') {
         // ssur.cc has no free API; fall through to tinyurl as reliable fallback
