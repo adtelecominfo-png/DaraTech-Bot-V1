@@ -100,15 +100,15 @@ async function handleAntiViewOnce(sock, message) {
         const cfg = loadConfig();
         if (!cfg.enabled) return;
 
-        // Skip messages from the bot itself
+        // Skip the bot's own outgoing messages
         if (message.key.fromMe) return;
 
         const msg = message.message;
         if (!msg) return;
 
         // ── Detect view-once — all known Baileys v7 structures ────────────────
-        // 1. Wrapped: viewOnceMessageV2 / viewOnceMessageV2Extension / viewOnceMessage
-        // 2. Flat: imageMessage / videoMessage with viewOnce: true flag
+        // Wrapped: viewOnceMessageV2 / viewOnceMessageV2Extension / viewOnceMessage
+        // Flat:    imageMessage / videoMessage with viewOnce: true (Baileys auto-unwrap)
         let imgMsg   = null;
         let videoMsg = null;
 
@@ -118,25 +118,29 @@ async function handleAntiViewOnce(sock, message) {
             msg.viewOnceMessage?.message;
 
         if (voContainer) {
-            imgMsg   = voContainer.imageMessage || null;
-            videoMsg = voContainer.videoMessage || null;
+            imgMsg   = voContainer.imageMessage  || null;
+            videoMsg = voContainer.videoMessage  || null;
         } else {
-            // Flat delivery (Baileys decrypts and unwraps in some versions)
             if (msg.imageMessage?.viewOnce) imgMsg   = msg.imageMessage;
             if (msg.videoMessage?.viewOnce) videoMsg = msg.videoMessage;
         }
 
         if (!imgMsg && !videoMsg) return;
 
-        // ── Owner JID — derive from bot's own JID (same as antidelete) ────────
-        const ownerJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+        // ── Owner JID — who to send the captured media to ─────────────────────
+        const ownerRaw = (settings.ownerNumber || '').replace(/[^0-9]/g, '');
+        if (!ownerRaw) return;
+        const ownerJid = `${ownerRaw}@s.whatsapp.net`;
+
+        // Bot's own JID — to skip forwarding the owner's own view-once
+        const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
 
         // ── Resolve sender ────────────────────────────────────────────────────
         const chatId  = message.key.remoteJid;
         let senderJid = (message.key.participant || chatId || '').replace(/:\d+@/, '@');
 
-        // Don't forward the owner's own view-once back to themselves
-        if (senderJid === ownerJid) return;
+        // Don't loop — skip if sender is the owner or the bot itself
+        if (senderJid === ownerJid || senderJid === botJid) return;
 
         let senderDisplay;
         if (senderJid.endsWith('@s.whatsapp.net')) {
@@ -159,17 +163,11 @@ async function handleAntiViewOnce(sock, message) {
             } catch { chatLabel = 'Group'; }
         }
 
-        // ── Download & forward ────────────────────────────────────────────────
         const type        = imgMsg ? 'image' : 'video';
         const content     = imgMsg || videoMsg;
         const origCaption = (content.caption || '').trim();
 
-        const stream = await downloadContentFromMessage(content, type);
-        const chunks = [];
-        for await (const chunk of stream) chunks.push(chunk);
-        const buffer = Buffer.concat(chunks);
-
-        const caption =
+        const header =
             `╭━━━「 👁️ *VIEW-ONCE CAPTURED* 」━━━\n` +
             `┃\n` +
             `┃ 📎 *Type:* ${type === 'image' ? '🖼️ Image' : '🎬 Video'}\n` +
@@ -180,16 +178,31 @@ async function handleAntiViewOnce(sock, message) {
             `╰━━━━━━━━━━━━━━━━━━━━━\n\n` +
             `_Daratech_ ⚡`;
 
-        if (type === 'image') {
-            await sock.sendMessage(ownerJid, { image: buffer, caption });
-        } else {
-            await sock.sendMessage(ownerJid, { video: buffer, caption });
+        // ── Download & forward ────────────────────────────────────────────────
+        try {
+            const stream = await downloadContentFromMessage(content, type);
+            const chunks = [];
+            for await (const chunk of stream) chunks.push(chunk);
+            const buffer = Buffer.concat(chunks);
+
+            if (type === 'image') {
+                await sock.sendMessage(ownerJid, { image: buffer, caption: header });
+            } else {
+                await sock.sendMessage(ownerJid, { video: buffer, caption: header });
+            }
+
+            console.log(`[antiviewonce] ✅ forwarded ${type} from ${senderDisplay} in ${chatLabel}`);
+
+        } catch (dlErr) {
+            // Download failed — still notify owner with text so they know it happened
+            console.error('[antiviewonce] download failed:', dlErr.message);
+            await sock.sendMessage(ownerJid, {
+                text: header + `\n\n⚠️ _Media download failed: ${dlErr.message}_`
+            });
         }
 
-        console.log(`[antiviewonce] forwarded ${type} from ${senderDisplay} in ${chatLabel}`);
-
     } catch (err) {
-        console.error('[antiviewonce]', err.message);
+        console.error('[antiviewonce] fatal:', err.message);
     }
 }
 
