@@ -18,14 +18,36 @@ function getText(message) {
     return raw.trim().split(/\s+/).slice(1).join(' ').trim();
 }
 
-/** Fetch TTS audio from StreamElements as buffer */
-async function fetchTTS(text, voice = 'Brian') {
-    const url = `https://api.streamelements.com/kappa/v2/speech?voice=${voice}&text=${encodeURIComponent(text)}`;
-    const res = await axios.get(url, {
-        responseType: 'arraybuffer',
-        timeout: 20000,
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
+/** Fetch TTS audio — tries multiple free endpoints */
+async function fetchTTS(text) {
+    const encoded = encodeURIComponent(text);
+
+    // Method 1 — cyzon.us StreamElements proxy
+    try {
+        const res = await axios.get(
+            `https://tts.cyzon.us/tts?text=${encoded}&voice=Brian`,
+            { responseType: 'arraybuffer', timeout: 20000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+        );
+        if (res.data?.byteLength > 500) return Buffer.from(res.data);
+    } catch { /* fallthrough */ }
+
+    // Method 2 — lazypy.ro StreamElements proxy (POST)
+    try {
+        const qs = require('querystring');
+        const res = await axios.post(
+            'https://lazypy.ro/tts/request_tts.php',
+            qs.stringify({ service: 'StreamElements', voice: 'Brian', text }),
+            { responseType: 'arraybuffer', timeout: 20000,
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' } }
+        );
+        if (res.data?.byteLength > 500) return Buffer.from(res.data);
+    } catch { /* fallthrough */ }
+
+    // Method 3 — Google TTS (fallback, different voice style)
+    const res = await axios.get(
+        `https://translate.google.com/translate_tts?ie=UTF-8&q=${encoded}&tl=en&client=tw-ob`,
+        { responseType: 'arraybuffer', timeout: 20000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
     return Buffer.from(res.data);
 }
 
@@ -80,7 +102,7 @@ async function jarvisCommand(sock, chatId, message) {
     await sock.sendMessage(chatId, { text: '🤖 _Generating JARVIS voice…_' }, { quoted: message });
 
     try {
-        let mp3 = await fetchTTS(text, 'Brian');
+        let mp3 = await fetchTTS(text);
         const effected = await applyJarvisEffect(mp3);
         const ogg = await toOgg(effected);
         const buf  = ogg || effected;

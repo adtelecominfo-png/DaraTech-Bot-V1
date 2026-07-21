@@ -174,18 +174,39 @@ async function visionCommand(sock, chatId, message) {
         if (!buf || buf.length === 0) throw new Error('Failed to download image');
 
         const b64 = buf.toString('base64');
+        const dataUri = `data:image/jpeg;base64,${b64}`;
 
-        // Try GiftedTech vision endpoint
         let result = null;
+
+        // Method 1 — Pollinations OpenAI-compatible vision (POST, handles large images)
         try {
-            const data = await get('/ai/vision', { image: b64, q: question }, 60000);
-            result = data?.result || data?.answer || data?.text || null;
+            const res = await axios.post('https://text.pollinations.ai/openai', {
+                model: 'openai',
+                messages: [{
+                    role: 'user',
+                    content: [
+                        { type: 'image_url', image_url: { url: dataUri } },
+                        { type: 'text', text: question }
+                    ]
+                }]
+            }, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 60000
+            });
+            result = res.data?.choices?.[0]?.message?.content?.trim() || null;
         } catch { /* fallthrough */ }
 
-        // Fallback: GiftedTech imgscan
+        // Method 2 — GiftedTech vision via POST (avoids 414 URI Too Long)
         if (!result) {
-            const data = await get('/tools/imgscan', { image: b64 }, 60000);
-            result = data?.result || data?.text || null;
+            try {
+                const { KEY } = require('../lib/gifted');
+                const res = await axios.post(
+                    `https://api.giftedtech.co.ke/api/ai/vision?apikey=${KEY}`,
+                    { image: b64, q: question },
+                    { headers: { 'Content-Type': 'application/json' }, timeout: 60000 }
+                );
+                result = res.data?.result || res.data?.answer || res.data?.text || null;
+            } catch { /* fallthrough */ }
         }
 
         if (!result) throw new Error('No response from vision AI');

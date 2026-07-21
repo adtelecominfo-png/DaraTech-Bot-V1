@@ -152,9 +152,18 @@ async function handleAntiMediaMessage(sock, message) {
 
         if (!shouldDelete) return;
 
+        // Per-type unique warning messages
+        const warningMessages = {
+            '🖼️ Anti-Image':   `🖼️ *Anti-Image Active*\n\n@${senderId.split('@')[0]} — images are restricted to admins only in this group. Keep the chat clean! 🚫📸`,
+            '🎬 Anti-Video':   `🎬 *Anti-Video Active*\n\n@${senderId.split('@')[0]} — video posts are for admins only here. Don't flood the group! 🚫🎥`,
+            '🎭 Anti-Sticker': `🎭 *Anti-Sticker Active*\n\n@${senderId.split('@')[0]} — sticker spam is disabled in this group. Text only please! 🚫🎭`,
+            '🔊 Anti-Audio':   `🔊 *Anti-Audio Active*\n\n@${senderId.split('@')[0]} — voice notes and audio files are restricted to admins only. 🚫🎙️`,
+            '📢 Anti-Mention': `📢 *Anti-Mention Active*\n\n@${senderId.split('@')[0]} — mass-mentioning members is not allowed here. Avoid spamming the group! 🚫📣`,
+        };
+
         await sock.sendMessage(chatId, { delete: message.key });
         await sock.sendMessage(chatId, {
-            text: `❌ *${reason}*\n\n@${senderId.split('@')[0]} — only admins can send this type of content here.`,
+            text: warningMessages[reason] || `❌ *${reason}*\n\n@${senderId.split('@')[0]} — only admins can send this type of content here.`,
             mentions: [senderId]
         });
 
