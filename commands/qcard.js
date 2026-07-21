@@ -100,16 +100,16 @@ async function buildCard(username, text, avatarBuf) {
     if (!fs.existsSync(TMP)) fs.mkdirSync(TMP, { recursive: true });
 
     const accent  = accentFor(username);
-    const W       = 720;   // card width
-    const PAD     = 24;    // outer padding
-    const AVSIZE  = 92;    // avatar diameter
+    const W       = 900;   // card width (larger → more readable at 512px sticker size)
+    const PAD     = 28;    // outer padding
+    const AVSIZE  = 110;   // avatar diameter
     const BARCOL  = accent;
-    const BAR_W   = 6;
-    const TEXT_X  = PAD + BAR_W + 14 + AVSIZE + 20;  // left of text column
+    const BAR_W   = 8;
+    const TEXT_X  = PAD + BAR_W + 16 + AVSIZE + 22;  // left of text column
     const TEXT_W  = W - TEXT_X - PAD;                  // width of text column
-    const NAME_PT = 30;
-    const TEXT_PT = 24;
-    const WM_PT   = 18;
+    const NAME_PT = 36;
+    const TEXT_PT = 30;
+    const WM_PT   = 22;
 
     // 1. build text block to measure height
     const textPng = await makeTextBlock(text, TEXT_W, TEXT_PT, '#E2E8F0', 'DejaVu-Sans');
@@ -193,22 +193,30 @@ async function toSticker(pngPath) {
 }
 
 // ── Name extraction: handles JID / LID gracefully ─────────────────────────────
-function resolveName(ctx, quotedJid) {
-    // 1. pushName from contextInfo (most reliable — always the display name)
-    if (ctx?.pushName && ctx.pushName.trim()) return ctx.pushName.trim();
+function resolveName(ctx, quotedJid, message) {
+    // 1. pushName from contextInfo — only if it looks like a real name (not a raw LID number)
+    if (ctx?.pushName) {
+        const pn = ctx.pushName.trim();
+        // Reject pure-numeric strings (LID numbers like "239213085720600")
+        if (pn && !/^\d{8,}$/.test(pn)) return pn;
+    }
 
-    // 2. Don't show LID numbers as names — they look like "239213085720600"
+    // 2. Fall back to the top-level pushName of the message (the current sender's name)
+    //    only if the quoted JID matches the message sender — i.e. bot is replying to itself
+    if (message?.pushName) {
+        const pn = message.pushName.trim();
+        if (pn && !/^\d{8,}$/.test(pn)) return pn;
+    }
+
+    // 3. Parse the JID
     if (!quotedJid) return 'Unknown';
     const [local, domain] = quotedJid.split('@');
 
-    // LID (@lid) — opaque internal ID, meaningless as a name
+    // LID (@lid) — opaque internal ID, meaningless as a display name
     if (domain === 'lid') return 'Unknown';
 
     // JID (@s.whatsapp.net) — format as phone number if numeric
-    if (/^\d+$/.test(local)) {
-        // strip country code heuristic: show last 9 digits max with +prefix
-        return `+${local}`;
-    }
+    if (/^\d+$/.test(local)) return `+${local}`;
 
     return local || 'Unknown';
 }
@@ -247,7 +255,7 @@ async function qcardCommand(sock, chatId, message) {
             }, { quoted: message });
         }
 
-        const username = resolveName(ctx, quotedJid);
+        const username = resolveName(ctx, quotedJid, message);
 
         // Download profile picture (silent fail → initials fallback)
         let avatarBuf = null;
