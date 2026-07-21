@@ -148,8 +148,9 @@ async function handleAntiViewOnce(sock, message) {
         if (senderJid === ownerJid || message.key.fromMe) return;
 
         // ── Download & forward ────────────────────────────────────────────────
-        const type    = imgMsg ? 'image' : 'video';
-        const content = imgMsg || videoMsg;
+        const type       = imgMsg ? 'image' : 'video';
+        const content    = imgMsg || videoMsg;
+        const origCaption = (content.caption || '').trim();
 
         const stream = await downloadContentFromMessage(content, type);
         const chunks = [];
@@ -162,6 +163,7 @@ async function handleAntiViewOnce(sock, message) {
             `┃ 📎 *Type:* ${type === 'image' ? '🖼️ Image' : '🎬 Video'}\n` +
             `┃ 👤 *From:* ${senderDisplay}\n` +
             `┃ 💬 *Chat:* ${chatLabel}\n` +
+            (origCaption ? `┃ 💬 *Caption:* ${origCaption}\n` : '') +
             `┃\n` +
             `╰━━━━━━━━━━━━━━━━━━━━━\n\n` +
             `_Daratech_ ⚡`;
