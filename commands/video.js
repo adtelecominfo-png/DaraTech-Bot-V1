@@ -1,7 +1,6 @@
 'use strict';
 const yts              = require('yt-search');
 const { get }          = require('../lib/gifted');
-const { toBuffer }     = require('../lib/media');
 
 // Lazy-load ruhend-scraper (installed on user's server, not in Replit env)
 let _scraper;
@@ -55,10 +54,10 @@ async function ytvideoCommand(sock, chatId, message) {
         await sock.sendMessage(chatId, { text: `🎬 *Downloading:* ${title}…` }, { quoted: message });
 
         const { dl, title: vtitle, quality } = await resolveVideoUrl(url);
-        const buf = await toBuffer(dl);
 
+        // Stream via URL — avoids loading 100-500 MB into memory which times out/crashes
         await sock.sendMessage(chatId, {
-            video:    buf,
+            video:    { url: dl },
             mimetype: 'video/mp4',
             caption:  `🎬 *${vtitle}*\n📊 ${quality}\n\n_Daratech_ ⚡`,
         }, { quoted: message });

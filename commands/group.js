@@ -312,54 +312,41 @@ async function creategcCommand(sock, chatId, senderId, userMessage, message) {
             return sock.sendMessage(chatId, { text: '❌ Only the owner can create groups.' }, { quoted: message });
         }
 
-        // Parse everything after "$creategc"
-        const afterCmd = userMessage.slice(9).trim();
-
-        // Extract phone numbers (pure digit tokens, 7–15 chars)
-        const phoneNumbers = [];
-        const mentioned = getMentioned(message);
-        for (const token of afterCmd.replace(/@\d+/g, '').split(/\s+/)) {
-            const cleaned = token.replace(/[^0-9]/g, '');
-            if (cleaned.length >= 7 && cleaned.length <= 15) {
-                phoneNumbers.push(cleaned + '@s.whatsapp.net');
-            }
-        }
-
-        // Group name = everything that is NOT a pure phone-number token and NOT an @mention token
-        const groupName = afterCmd
-            .replace(/@\d+/g, '')
-            .split(/\s+/)
-            .filter(t => !/^\d{7,15}$/.test(t))
-            .join(' ')
-            .trim();
-
+        const groupName = userMessage.slice(9).trim();
         if (!groupName) {
             return sock.sendMessage(chatId, {
-                text: '❌ Usage:\n*$creategc GroupName @member*  (in groups)\n*$creategc GroupName 2348012345678*  (in DMs, use full number)',
+                text: 'Example:\n$creategc DevAfeez Community'
             }, { quoted: message });
         }
 
-        const allMembers = [...new Set([...mentioned, ...phoneNumbers])];
-        if (allMembers.length === 0) {
-            return sock.sendMessage(chatId, {
-                text: '❌ You must provide at least one member.\n\n📌 Usage:\n*$creategc GroupName @member*  (in groups)\n*$creategc GroupName 2348012345678*  (in DMs, use full number)',
-            }, { quoted: message });
-        }
-        // Do NOT add the bot's own JID — WhatsApp auto-adds the creator
-        const participants = [...new Set([...allMembers])];
+        await sock.sendMessage(chatId, { react: { text: '🛠️', key: message.key } });
 
-        await sock.sendMessage(chatId, { text: '⏳ Creating group……' }, { quoted: message });
-        const gc = await sock.groupCreate(groupName, participants);
-        const gcId = gc?.id || gc?.gid || 'unknown';
+        // WhatsApp auto-adds the creator — no need to pre-fill members
+        const group = await sock.groupCreate(groupName, []);
+
+        let invite = '';
+        try {
+            invite = await sock.groupInviteCode(group.id);
+        } catch {
+            invite = 'Unavailable';
+        }
+
+        await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
         await sock.sendMessage(chatId, {
-            text: `✅ *Group Created!*\n\n📌 Name: *${groupName}*\n👥 Members: ${participants.length}\n🔗 ID: ${gcId}`
+            text: `✅ *Group Created Successfully*\n\n` +
+                  `📛 Name: ${group.subject}\n` +
+                  `🆔 ID: ${group.id}\n` +
+                  (invite !== 'Unavailable'
+                      ? `🔗 https://chat.whatsapp.com/${invite}`
+                      : `⚠️ Invite link unavailable`)
         }, { quoted: message });
-    } catch (e) {
-        console.error('[creategc]', e.message, e.stack);
-        const hint = e.message?.includes('not-authorized') ? '\n\n_Make sure all members have your number saved._'
-                   : e.message?.includes('bad-param')      ? '\n\n_One or more phone numbers may be invalid._'
-                   : '';
-        await sock.sendMessage(chatId, { text: `❌ Failed to create group.${hint}\n\n_${e.message}_` }, { quoted: message });
+
+    } catch (err) {
+        console.error('[creategc]', err);
+        await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
+        await sock.sendMessage(chatId, {
+            text: `❌ Error:\n${err.message}`
+        }, { quoted: message });
     }
 }
 
