@@ -134,6 +134,10 @@ const {
 const { handleAutoRecording, handleAutoRecordingCommand } = require('./commands/autorecording');
 const { handleAutoReactStatus, handleAutoReactStatusCommand } = require('./commands/autoreactstatus');
 const gcstatusCommand = require('./commands/gcstatus');
+const { antigroupmentionCommand, handleAntigroupmentionMessage } = require('./commands/antigroupmention');
+const { autostickerCommand, handleAutostickerMessage } = require('./commands/autosticker');
+const { cleanCommand, storeForClean } = require('./commands/clean');
+const { dbstatsCommand } = require('./commands/dbstats');
 const clearTmpCommand = require('./commands/cleartmp');
 const setProfilePicture = require('./commands/setpp');
 const { setGroupDescription, setGroupName, setGroupPhoto } = require('./commands/groupmanage');
@@ -296,6 +300,12 @@ async function handleMessages(sock, messageUpdate, printLog) {
 
         // Anti-media enforcement (antiimage/antivideo/antisticker/antiaudio/antimention)
         handleAntiMediaMessage(sock, message).catch(() => {});
+        // Anti group-mention enforcement
+        handleAntigroupmentionMessage(sock, message).catch(() => {});
+        // Auto-sticker conversion
+        handleAutostickerMessage(sock, message).catch(() => {});
+        // Store messages for $clean/$purge
+        storeForClean(message);
 
         // Store message for antidelete feature
         if (message.message) {
@@ -491,11 +501,11 @@ if (checkAFK(senderId)) {
         }
 
         // List of admin commands
-        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus'];
+        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus', '$antigroupmention', '$agm', '$autosticker', '$autos', '$asticker', '$clean', '$purge'];
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus'];
+        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$mongostats'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -1351,6 +1361,23 @@ case userMessage.startsWith('$bssensi'):
             case userMessage.startsWith('$gcstatus'):
             case userMessage.startsWith('$groupstatus'):
                 await gcstatusCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$antigroupmention'):
+            case userMessage.startsWith('$agm'):
+                await antigroupmentionCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$autosticker'):
+            case userMessage.startsWith('$autos') && !userMessage.startsWith('$autostatus'):
+            case userMessage.startsWith('$asticker'):
+                await autostickerCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$clean'):
+            case userMessage.startsWith('$purge'):
+                await cleanCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$dbstats'):
+            case userMessage.startsWith('$mongostats'):
+                await dbstatsCommand(sock, chatId, senderId, message);
                 break;
             case userMessage.startsWith('$autorecording'):
                 await handleAutoRecordingCommand(sock, chatId, senderId, message);
