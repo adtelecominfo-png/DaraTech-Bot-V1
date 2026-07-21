@@ -55,9 +55,34 @@ async function cleanCommand(sock, chatId, senderId, message) {
 
     const stored = recentMessages.get(chatId) || [];
 
-    // Reply to a message → purge that sender's messages
-    const ctxInfo   = message.message?.extendedTextMessage?.contextInfo;
+    // No args + no reply → show usage
+    const ctxInfo    = message.message?.extendedTextMessage?.contextInfo;
     const quotedPart = ctxInfo?.participant;
+
+    if (!arg && !quotedPart) {
+        return sock.sendMessage(chatId, {
+            text:
+                `╭━━━「 🗑️ *CLEAN / PURGE* 」━━━\n` +
+                `┃\n` +
+                `┃ *Usage:*\n` +
+                `┃\n` +
+                `┃ ▸ *$clean [1-100]*\n` +
+                `┃   Delete bot's last n messages\n` +
+                `┃   (default 20 if no number given)\n` +
+                `┃\n` +
+                `┃ ▸ *$clean all*\n` +
+                `┃   Delete bot's last 100 messages\n` +
+                `┃\n` +
+                `┃ ▸ Reply to a user + *$clean*\n` +
+                `┃   Delete recent messages from\n` +
+                `┃   that specific user\n` +
+                `┃\n` +
+                `┃ Alias: *$purge*\n` +
+                `╰━━━━━━━━━━━━━━━━━━━━━\n\n_Daratech_ ⚡`
+        }, { quoted: message });
+    }
+
+    // Reply to a message → purge that sender's messages
     if (quotedPart && !arg) {
         const targets = stored.filter(m => m.senderId === quotedPart).slice(-50);
         if (targets.length === 0) {

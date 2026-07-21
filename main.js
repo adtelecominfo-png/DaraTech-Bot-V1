@@ -1027,7 +1027,7 @@ case userMessage.startsWith('$bssensi'):
                 await truthCommand(sock, chatId, message);
                 break;
             case userMessage === '$clear':
-                if (isGroup) await clearCommand(sock, chatId);
+                await cleanCommand(sock, chatId, senderId, message);
                 break;
             case userMessage === '$promoteall':
                 await promoteallCommand(sock, chatId, senderId, message);
