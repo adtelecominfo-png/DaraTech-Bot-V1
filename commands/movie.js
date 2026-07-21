@@ -1243,6 +1243,25 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                 }, { quoted: message });
             }
 
+            // Resolve numeric pick → real ID from last search (same as $movie dl)
+            const subPickNum = parseInt(subjectId);
+            if (!isNaN(subPickNum) && subPickNum >= 1 && subPickNum <= 10 && subjectId === String(subPickNum)) {
+                const saved  = lastSearches.get(chatId) || [];
+                const picked = saved[subPickNum - 1];
+                if (!picked) {
+                    return sock.sendMessage(chatId, {
+                        text: `❌ No result #${subPickNum} in your last search.\nSearch first: *$movie <title>*`
+                    }, { quoted: message });
+                }
+                const resolvedId = picked.subjectId || picked.id || '';
+                if (!resolvedId) {
+                    return sock.sendMessage(chatId, {
+                        text: `❌ Could not read the ID for result #${subPickNum}. Search again: *$movie <title>*`
+                    }, { quoted: message });
+                }
+                subjectId = resolvedId;
+            }
+
             await sock.sendMessage(chatId, { react: { text: '📜', key: message.key } });
             await sock.sendMessage(chatId, { text: '📜 Fetching subtitle list…' }, { quoted: message });
 
