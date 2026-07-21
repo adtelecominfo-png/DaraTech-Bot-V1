@@ -10,6 +10,8 @@
  * Admin-only, group-only.
  */
 
+const fs   = require('fs');
+const path = require('path');
 const isOwnerOrSudo = require('../lib/isOwner');
 
 // Rolling store: last 200 messages per chat — persisted to disk so it survives restarts
