@@ -100,28 +100,48 @@ async function handleAntiViewOnce(sock, message) {
         const cfg = loadConfig();
         if (!cfg.enabled) return;
 
-        // Detect view-once wrapper (v2 and legacy)
-        const voMsg =
-            message.message?.viewOnceMessageV2?.message ||
-            message.message?.viewOnceMessage?.message;
-        if (!voMsg) return;
+        // Skip messages from the bot itself
+        if (message.key.fromMe) return;
 
-        const imgMsg   = voMsg.imageMessage;
-        const videoMsg = voMsg.videoMessage;
+        const msg = message.message;
+        if (!msg) return;
+
+        // ── Detect view-once — all known Baileys v7 structures ────────────────
+        // 1. Wrapped: viewOnceMessageV2 / viewOnceMessageV2Extension / viewOnceMessage
+        // 2. Flat: imageMessage / videoMessage with viewOnce: true flag
+        let imgMsg   = null;
+        let videoMsg = null;
+
+        const voContainer =
+            msg.viewOnceMessageV2?.message ||
+            msg.viewOnceMessageV2Extension?.message ||
+            msg.viewOnceMessage?.message;
+
+        if (voContainer) {
+            imgMsg   = voContainer.imageMessage || null;
+            videoMsg = voContainer.videoMessage || null;
+        } else {
+            // Flat delivery (Baileys decrypts and unwraps in some versions)
+            if (msg.imageMessage?.viewOnce) imgMsg   = msg.imageMessage;
+            if (msg.videoMessage?.viewOnce) videoMsg = msg.videoMessage;
+        }
+
         if (!imgMsg && !videoMsg) return;
 
-        // ── Resolve sender display ────────────────────────────────────────────
-        const chatId   = message.key.remoteJid;
-        let senderJid  = message.key.participant || message.key.remoteJid || '';
+        // ── Owner JID — derive from bot's own JID (same as antidelete) ────────
+        const ownerJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
 
-        // Strip device suffix e.g. 234801234:0@s.whatsapp.net → 2348012345@s.whatsapp.net
-        senderJid = senderJid.replace(/:\d+@/, '@');
+        // ── Resolve sender ────────────────────────────────────────────────────
+        const chatId  = message.key.remoteJid;
+        let senderJid = (message.key.participant || chatId || '').replace(/:\d+@/, '@');
+
+        // Don't forward the owner's own view-once back to themselves
+        if (senderJid === ownerJid) return;
 
         let senderDisplay;
         if (senderJid.endsWith('@s.whatsapp.net')) {
             senderDisplay = `+${senderJid.split('@')[0]}`;
         } else {
-            // LID — try contacts store
             try {
                 const name = await sock.getName(senderJid);
                 senderDisplay = (name && !name.includes('@')) ? name : senderJid.split('@')[0];
@@ -139,17 +159,9 @@ async function handleAntiViewOnce(sock, message) {
             } catch { chatLabel = 'Group'; }
         }
 
-        // ── Owner JID ─────────────────────────────────────────────────────────
-        const ownerRaw = (settings.ownerNumber || '').replace(/[^0-9]/g, '');
-        if (!ownerRaw) return;
-        const ownerJid = `${ownerRaw}@s.whatsapp.net`;
-
-        // Don't forward the owner's own view-once back to themselves
-        if (senderJid === ownerJid || message.key.fromMe) return;
-
         // ── Download & forward ────────────────────────────────────────────────
-        const type       = imgMsg ? 'image' : 'video';
-        const content    = imgMsg || videoMsg;
+        const type        = imgMsg ? 'image' : 'video';
+        const content     = imgMsg || videoMsg;
         const origCaption = (content.caption || '').trim();
 
         const stream = await downloadContentFromMessage(content, type);
@@ -163,7 +175,7 @@ async function handleAntiViewOnce(sock, message) {
             `┃ 📎 *Type:* ${type === 'image' ? '🖼️ Image' : '🎬 Video'}\n` +
             `┃ 👤 *From:* ${senderDisplay}\n` +
             `┃ 💬 *Chat:* ${chatLabel}\n` +
-            (origCaption ? `┃ 💬 *Caption:* ${origCaption}\n` : '') +
+            (origCaption ? `┃ 📝 *Caption:* ${origCaption}\n` : '') +
             `┃\n` +
             `╰━━━━━━━━━━━━━━━━━━━━━\n\n` +
             `_Daratech_ ⚡`;
@@ -173,6 +185,8 @@ async function handleAntiViewOnce(sock, message) {
         } else {
             await sock.sendMessage(ownerJid, { video: buffer, caption });
         }
+
+        console.log(`[antiviewonce] forwarded ${type} from ${senderDisplay} in ${chatLabel}`);
 
     } catch (err) {
         console.error('[antiviewonce]', err.message);
