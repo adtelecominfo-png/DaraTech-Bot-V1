@@ -3,9 +3,9 @@ const fs   = require('fs');
 const path = require('path');
 const { CATEGORIES } = require('../lib/categories');
 
-const ROOT = process.cwd(); // bot root — all paths are confined here
+const ROOT = process.cwd();
 
-// ─── Security: keep paths inside bot root ────────────────────────────────────
+// ─── Security: keep paths inside bot root ─────────────────────────────────────
 function safePath(input) {
     const resolved = path.resolve(ROOT, input);
     if (!resolved.startsWith(ROOT)) return null;
@@ -135,21 +135,17 @@ async function showDir(sock, chatId, message, absPath, relPath) {
 
 // ─── Full recursive directory tree ───────────────────────────────────────────
 const SKIP_ALWAYS = new Set([
-    // Runtime / auth — not real bot files
     'node_modules', 'session', 'sessions', 'auth_info', 'auth_info_baileys',
     'creds', 'store', 'backup',
-    // VCS / tooling
     '.git', '.npm', '.upm', '.config', '.cache', '__pycache__',
     'dist', 'build', 'coverage',
-    // Temp / logs
     'temp', 'tmp', 'logs', 'log',
-    // Secrets
     '.env',
-    // Replit / agent internals
     '.agents', 'attached_assets', '.local',
 ]);
 
-function buildTree(dir, prefix = '') {
+function buildTree(dir, prefix) {
+    prefix = prefix || '';
     let entries;
     try { entries = fs.readdirSync(dir).filter(e => !SKIP_ALWAYS.has(e)).sort(); }
     catch { return []; }
@@ -221,71 +217,118 @@ async function searchDirCommand(sock, chatId, message, query) {
         text: '🔍 *CMD SEARCH*\n\nUsage: *$dir search <command>*\nExample: $dir search tiktok\n\nSearches all commands.\n\n_Daratech_ ⚡',
     }, { quoted: message });
 
-    const q = query.toLowerCase().replace(/^\$/, ''); // allow "$tiktok" or "tiktok"
+    const q       = query.toLowerCase().replace(/^\$/, '');
+    const mainJs  = path.join(ROOT, 'main.js');
+    const cmdsDir = path.join(ROOT, 'commands');
 
-    // cmd → file: command files override main.js so we get the specific file
-    const cmdMap = new Map();
-
-    // ── 1. Scan main.js for routing patterns: startsWith('$X') and === '$X' ──
-    const mainJs = path.join(ROOT, 'main.js');
+    // ── Step 1: Build varName -> file map from main.js require() calls ────────
+    const varToFile = new Map();
     try {
         const src = fs.readFileSync(mainJs, 'utf8');
-        for (const m of src.matchAll(/\.startsWith\(['"`](\$[a-z][a-z0-9_]*)['"`]\)/g)) {
-            if (!cmdMap.has(m[1])) cmdMap.set(m[1], 'main.js');
-        }
-        for (const m of src.matchAll(/=== ['"`](\$[a-z][a-z0-9_]*)['"`]/g)) {
-            if (!cmdMap.has(m[1])) cmdMap.set(m[1], 'main.js');
-        }
-    } catch { /* main.js unreadable — skip */ }
 
-    // ── 2. Scan commands/ files — overrides main.js with the specific file ────
-    const cmdsDir = path.join(ROOT, 'commands');
+        // const X = require('./commands/Y')
+        for (const m of src.matchAll(/const\s+(\w+)\s*=\s*require\(['"`]\.\/commands\/([^'"` /]+?)['"`]\)/g)) {
+            varToFile.set(m[1], 'commands/' + m[2] + '.js');
+        }
+        // const { A, B } = require('./commands/Y')
+        for (const m of src.matchAll(/const\s*\{([^}]+)\}\s*=\s*require\(['"`]\.\/commands\/([^'"` /]+?)['"`]\)/g)) {
+            const file = 'commands/' + m[2] + '.js';
+            for (const part of m[1].split(',')) {
+                const name = part.trim().split(/\s+as\s+/).pop().trim();
+                if (/^\w+$/.test(name)) varToFile.set(name, file);
+            }
+        }
+    } catch {}
+
+    // ── Step 2: Parse main.js routing — trace each $cmd to its source file ────
+    const cmdMap = new Map();
+    try {
+        const src   = fs.readFileSync(mainJs, 'utf8');
+        const lines = src.split('\n');
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+
+            const triggers = [];
+            for (const m of line.matchAll(/startsWith\(['"`](\$[a-zA-Z][a-zA-Z0-9_-]*)['"`]\)/g)) triggers.push(m[1]);
+            for (const m of line.matchAll(/===\s*['"`](\$[a-zA-Z][a-zA-Z0-9_-]*)['"`]/g))        triggers.push(m[1]);
+            if (!triggers.length) continue;
+
+            // Look ahead for the first awaited function call to find the source file
+            const context = lines.slice(i, i + 5).join(' ');
+            const fnCall  = context.match(/await\s+(\w+)\s*\(/);
+            const srcFile = fnCall ? (varToFile.get(fnCall[1]) || null) : null;
+
+            for (const cmd of triggers) {
+                // Normalise e.g. $trending-crypto -> $trendingcrypto
+                const norm  = cmd.replace(/-/g, '').toLowerCase();
+                const entry = srcFile || 'main.js';
+                if (!cmdMap.has(norm))             cmdMap.set(norm, entry);
+                if (!cmdMap.has(cmd.toLowerCase())) cmdMap.set(cmd.toLowerCase(), entry);
+            }
+        }
+    } catch {}
+
+    // ── Step 3: Scan commands/ files — always override main.js entries ─────────
     let files = [];
     try { files = fs.readdirSync(cmdsDir).filter(f => f.endsWith('.js')).sort(); } catch {}
 
     for (const file of files) {
-        const filePath = path.join(cmdsDir, file);
+        const relFile = 'commands/' + file;
         let src = '';
-        try { src = fs.readFileSync(filePath, 'utf8'); } catch { continue; }
+        try { src = fs.readFileSync(path.join(cmdsDir, file), 'utf8'); } catch { continue; }
 
         const found = new Set();
-        // Standalone quoted $cmd: '$tiktok' or "$tiktok"
-        for (const m of src.matchAll(/['"`](\$[a-z][a-z0-9_]*)['"`]/g)) found.add(m[1]);
-        // Usage strings: "Usage: $tiktok" ($ not at quote boundary)
-        for (const m of src.matchAll(/[Uu]sage[^$]*(\$[a-z][a-z0-9_]*)/g))   found.add(m[1]);
 
-        for (const cmd of found) cmdMap.set(cmd, `commands/${file}`);
+        // a) startsWith('$cmd') or === '$cmd' inside the file
+        for (const m of src.matchAll(/startsWith\(['"`](\$[a-zA-Z][a-zA-Z0-9_]*)['"`]\)/g)) found.add(m[1].toLowerCase());
+        for (const m of src.matchAll(/===\s*['"`](\$[a-zA-Z][a-zA-Z0-9_]*)['"`]/g))        found.add(m[1].toLowerCase());
+
+        // b) JSDoc / comment lines: "* $gcstatus" or "// $gcstatus"
+        for (const m of src.matchAll(/(?:^|\n)\s*(?:\/\/+|\*+)\s*(\$[a-zA-Z][a-zA-Z0-9_]*)/g)) found.add(m[1].toLowerCase());
+
+        // c) Usage strings: "Usage: $cmd"
+        for (const m of src.matchAll(/[Uu]sage[:\s]+(\$[a-zA-Z][a-zA-Z0-9_]*)/g)) found.add(m[1].toLowerCase());
+
+        // d) Filename heuristic: gcstatus.js => $gcstatus
+        const SKIP_NAMES = new Set(['main','index','config','settings','helper','utils','lib','handler','router']);
+        const base = path.basename(file, '.js').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (base && !SKIP_NAMES.has(base)) found.add('$' + base);
+
+        for (const cmd of found) cmdMap.set(cmd, relFile);
     }
 
-    // ── 3. Filter by query ────────────────────────────────────────────────────
+    // ── Step 4: Filter and display ────────────────────────────────────────────
+    const seen    = new Set();
     const results = [];
     for (const [cmd, file] of cmdMap) {
-        if (cmd.slice(1).includes(q)) results.push({ cmd, file });
+        const bare = cmd.replace(/^\$/, '');
+        if (bare.includes(q) && !seen.has(cmd)) {
+            seen.add(cmd);
+            results.push({ cmd, file });
+        }
     }
     results.sort((a, b) => a.cmd.localeCompare(b.cmd));
 
     if (results.length === 0) {
         return sock.sendMessage(chatId, {
-            text: `🔍 No commands found matching *"${query}"*.\n\n_Daratech_ ⚡`,
+            text: '🔍 No commands found matching *"' + query + '"*.\n\n_Daratech_ ⚡',
         }, { quoted: message });
     }
 
-    const lines = [
-        `┌─( 🔍 *SEARCH: ${query}* ) — ${results.length} result${results.length !== 1 ? 's' : ''}`,
-        `│`,
+    const outLines = [
+        '┌─( 🔍 *SEARCH: ' + query + '* ) — ' + results.length + ' result' + (results.length !== 1 ? 's' : ''),
+        '│',
     ];
-
     for (let i = 0; i < results.length; i++) {
         const { cmd, file } = results[i];
         const isLast = i === results.length - 1;
-        const branch = isLast ? '└─' : '├─';
-        lines.push(`${branch}◆ *${cmd}*`);
-        lines.push(`│  📂 ${file}`);
-        lines.push(`│`);
+        outLines.push((isLast ? '└─' : '├─') + '◆ *' + cmd + '*');
+        outLines.push('│  📂 ' + file);
+        outLines.push('│');
     }
-
-    lines.push(`_Daratech_ ⚡`);
-    await sock.sendMessage(chatId, { text: lines.join('\n') }, { quoted: message });
+    outLines.push('_Daratech_ ⚡');
+    await sock.sendMessage(chatId, { text: outLines.join('\n') }, { quoted: message });
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -293,6 +336,12 @@ async function dirCommand(sock, chatId, message, userMessage) {
     const arg = userMessage.slice(4).trim(); // strip "$dir"
 
     if (!arg) return showDir(sock, chatId, message, ROOT, '.');
+
+    // "search" sub-command
+    if (arg.toLowerCase().startsWith('search')) {
+        const q = arg.slice(6).trim();
+        return searchDirCommand(sock, chatId, message, q);
+    }
 
     const absPath = safePath(arg);
     if (!absPath) {
@@ -303,7 +352,7 @@ async function dirCommand(sock, chatId, message, userMessage) {
 
     if (!fs.existsSync(absPath)) {
         return sock.sendMessage(chatId, {
-            text: `❌ Path not found: \`${arg}\``,
+            text: '❌ Path not found: `' + arg + '`',
         }, { quoted: message });
     }
 
