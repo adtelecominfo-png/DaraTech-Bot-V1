@@ -681,8 +681,15 @@ async function codeaiCommand(sock, chatId, message, userMessage) {
         // Build a crafted query that instructs the AI to return only code
         const q = `Write clean, working ${lang} code only (no markdown fences, no extra explanation) for: ${prompt}`;
 
-        const data = await giftedGet('/ai/overchat', { q, model: 'gpt4' }, 60000);
-        if (!data?.success) throw new Error(data?.message || 'No response from AI');
+        // Try unlimitedai first; fall back to overchat/gpt4 if it fails
+        let data;
+        try {
+            data = await giftedGet('/ai/unlimitedai', { q }, 60000);
+            if (!data?.success) throw new Error(data?.message || 'unlimitedai failed');
+        } catch {
+            data = await giftedGet('/ai/overchat', { q, model: 'claude' }, 60000);
+            if (!data?.success) throw new Error(data?.message || 'No response from AI');
+        }
 
         const code = (typeof data.result === 'string' ? data.result : data.result?.answer || '').trim();
 
@@ -694,24 +701,22 @@ async function codeaiCommand(sock, chatId, message, userMessage) {
 
         await sock.sendMessage(chatId, { text: header }, { quoted: message });
 
-        const MAX = 3000;
-        if (code.length <= MAX) {
+        // WhatsApp limit is ~65536 chars — stay well under it
+        const WA_MAX = 60000;
+        if (code.length <= WA_MAX) {
+            // Send as plain text; WhatsApp shows "read more" automatically for long messages
             await sock.sendMessage(chatId, {
                 text: `🖥️ *GENERATED CODE :*\n${'─'.repeat(28)}\n\`\`\`\n${code}\n\`\`\`\n\n_Daratech_ ⚡`,
             }, { quoted: message });
         } else {
-            // Too long — send as a .txt document so nothing gets cut
-            const ext = lang === 'PYTHON' ? 'py' : lang === 'JAVASCRIPT' ? 'js' :
-                        lang === 'HTML' ? 'html' : lang === 'CSS' ? 'css' :
-                        lang === 'PHP' ? 'php' : lang === 'SQL' ? 'sql' :
-                        lang === 'JAVA' ? 'java' : lang === 'GO' ? 'go' :
-                        lang === 'RUST' ? 'rs' : lang === 'C++' ? 'cpp' :
-                        lang === 'RUBY' ? 'rb' : 'txt';
-            const fileName = `codeai_${Date.now()}.${ext}`;
+            // Genuinely huge — send as a file so nothing gets cut
+            const ext = { PYTHON:'py', JAVASCRIPT:'js', HTML:'html', CSS:'css',
+                          PHP:'php', SQL:'sql', JAVA:'java', GO:'go',
+                          RUST:'rs', 'C++':'cpp', RUBY:'rb' }[lang] || 'txt';
             await sock.sendMessage(chatId, {
                 document: Buffer.from(code, 'utf8'),
                 mimetype: 'text/plain',
-                fileName,
+                fileName: `codeai_${Date.now()}.${ext}`,
                 caption: `📄 Full generated code — _Daratech_ ⚡`,
             }, { quoted: message });
         }
