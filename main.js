@@ -217,6 +217,7 @@ const clearwarnCommand = require('./commands/clearwarn');
 const gifCommand = require('./commands/gif');
 const reactCommand = require('./commands/react');
 const blockCommand = require('./commands/block');
+const { phoneCommand, lidCommand, jidCommand } = require('./commands/jidtools');
 const unblockCommand = require('./commands/unblock');
 // ── New commands (GiftedTech API + HANS-MD integrations) ─────────────────────
 const apkCommand = require('./commands/apk');
@@ -1661,7 +1662,7 @@ case userMessage.startsWith('$bssensi'):
                 break;
             case userMessage.startsWith('$imagine') || userMessage.startsWith('$flux'): await imagineCommand(sock, chatId, message);
                 break;
-            case userMessage === '$jid': await groupJidCommand(sock, chatId, message);
+            case userMessage === '$jidp': await groupJidCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('$autotyping'):
                 await autotypingCommand(sock, chatId, message);
@@ -2035,6 +2036,21 @@ case userMessage.startsWith('$bssensi'):
 
             case userMessage === '$react' || userMessage.startsWith('$react '):
                 await reactCommand(sock, chatId, message, userMessage);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '$phone' || userMessage.startsWith('$phone '):
+                await phoneCommand(sock, chatId, message, userMessage);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '$lid' || userMessage.startsWith('$lid '):
+                await lidCommand(sock, chatId, message, userMessage);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '$jid' || userMessage.startsWith('$jid '):
+                await jidCommand(sock, chatId, message, userMessage);
                 commandExecuted = true;
                 break;
 
