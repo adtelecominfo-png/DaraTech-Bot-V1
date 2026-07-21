@@ -491,7 +491,7 @@ if (checkAFK(senderId)) {
         }
 
         // List of admin commands
-        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus'];
+        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus'];
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
@@ -1349,6 +1349,7 @@ case userMessage.startsWith('$bssensi'):
                 await gctimeCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('$gcstatus'):
+            case userMessage.startsWith('$groupstatus'):
                 await gcstatusCommand(sock, chatId, senderId, message);
                 break;
             case userMessage.startsWith('$autorecording'):
