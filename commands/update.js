@@ -57,14 +57,32 @@ async function detectBranch() {
 // and session/. We snapshot them in memory before git operations and write them
 // back afterwards so they survive even a hard container reset.
 
+// Data files to snapshot/restore — add any new ones here
+const DATA_FILES = [
+    'economy.json',
+    'userGroupData.json',
+    'antimedia.json',
+    'banned.json',
+    'premium.json',
+    'gcstatus.json',
+    'warnings.json',
+];
+
 function snapshotEnvAndSession() {
-    const snap = { env: null, creds: null, economy: null };
+    const snap = { env: null, creds: null, data: {} };
+    const dataDir   = path.join(process.cwd(), 'data');
     const envPath   = path.join(process.cwd(), '.env');
     const credsPath = path.join(process.cwd(), 'session', 'creds.json');
-    const econPath  = path.join(process.cwd(), 'data', 'economy.json');
-    try { if (fs.existsSync(envPath))   snap.env     = fs.readFileSync(envPath,   'utf8'); } catch {}
-    try { if (fs.existsSync(credsPath)) snap.creds   = fs.readFileSync(credsPath, 'utf8'); } catch {}
-    try { if (fs.existsSync(econPath))  snap.economy = fs.readFileSync(econPath,  'utf8'); } catch {}
+
+    try { if (fs.existsSync(envPath))   snap.env   = fs.readFileSync(envPath,   'utf8'); } catch {}
+    try { if (fs.existsSync(credsPath)) snap.creds = fs.readFileSync(credsPath, 'utf8'); } catch {}
+
+    for (const file of DATA_FILES) {
+        try {
+            const p = path.join(dataDir, file);
+            if (fs.existsSync(p)) snap.data[file] = fs.readFileSync(p, 'utf8');
+        } catch {}
+    }
     return snap;
 }
 
@@ -73,7 +91,6 @@ function restoreEnvAndSession(snap) {
     const sessionDir = path.join(process.cwd(), 'session');
     const credsPath  = path.join(sessionDir, 'creds.json');
     const dataDir    = path.join(process.cwd(), 'data');
-    const econPath   = path.join(dataDir, 'economy.json');
 
     try {
         if (snap.env !== null) {
@@ -94,14 +111,16 @@ function restoreEnvAndSession(snap) {
         console.error('[update] Failed to restore session/creds.json:', e.message);
     }
 
-    try {
-        if (snap.economy !== null) {
-            if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-            fs.writeFileSync(econPath, snap.economy, 'utf8');
-            console.log('[update] data/economy.json restored ✅');
+    if (!fs.existsSync(dataDir)) {
+        try { fs.mkdirSync(dataDir, { recursive: true }); } catch {}
+    }
+    for (const [file, content] of Object.entries(snap.data || {})) {
+        try {
+            fs.writeFileSync(path.join(dataDir, file), content, 'utf8');
+            console.log(`[update] data/${file} restored ✅`);
+        } catch (e) {
+            console.error(`[update] Failed to restore data/${file}:`, e.message);
         }
-    } catch (e) {
-        console.error('[update] Failed to restore economy.json:', e.message);
     }
 }
 
