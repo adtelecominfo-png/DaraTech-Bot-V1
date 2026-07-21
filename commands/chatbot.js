@@ -65,10 +65,11 @@ function saveUserGroupData(data) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const delay = ms => new Promise(r => setTimeout(r, ms));
 
-// ─── Box formatter ────────────────────────────────────────────────────────────
+// ─── Header + plain response formatter ───────────────────────────────────────
+const VELORA_HEADER = `╭─〔 Velora 〕\n│ Online • Thinking naturally\n╰────────────`;
+
 function veloraBox(text) {
-    const lines = text.split('\n').map(l => `│ ${l}`).join('\n');
-    return `╭── ✦ Velora\n│\n${lines}\n│\n╰────────────────`;
+    return `${VELORA_HEADER}\n\n${text}`;
 }
 
 // ─── Split response into streamable sentence chunks ───────────────────────────
