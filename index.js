@@ -218,23 +218,6 @@ async function startXeonBotInc() {
             const mek = chatUpdate.messages[0]
             if (!mek.message) return
 
-            // Track user for broadcast — only real incoming DMs, never bot-outgoing or LID/group/broadcast JIDs
-            try {
-                const userId = mek.key?.remoteJid;
-                const isIncoming = !mek.key?.fromMe && chatUpdate.type === 'notify';
-                if (
-                    isIncoming &&
-                    userId &&
-                    !userId.includes('@g.us') &&
-                    !userId.includes('@lid') &&
-                    !userId.includes('@broadcast')
-                ) {
-                    const bcCommand = require('./commands/bc');
-                    bcCommand.addConnectedUser(userId);
-                }
-            } catch (error) {
-                console.error('Error tracking user in index.js:', error);
-            }
 
             mek.message = (Object.keys(mek.message)[0] === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message
             if (mek.key && mek.key.remoteJid === 'status@broadcast') {

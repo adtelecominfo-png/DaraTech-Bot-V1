@@ -216,7 +216,6 @@ const membercountCommand = require('./commands/membercount');
 const clearwarnCommand = require('./commands/clearwarn');
 const gifCommand = require('./commands/gif');
 const reactCommand = require('./commands/react');
-const bcCommand = require('./commands/bc');
 const blockCommand = require('./commands/block');
 const unblockCommand = require('./commands/unblock');
 // ── New commands (GiftedTech API + HANS-MD integrations) ─────────────────────
@@ -375,7 +374,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
             console.log(`📝 Command used in ${isGroup ? 'group' : 'private'}: ${userMessage}`);
         }
         // Read bot mode once; don't early-return so moderation can still run in private mode
-        let isPublic = false;   // default private — only owner/sudo can run commands
+        let isPublic = true;
         let disabledGroups = [];
         try {
             const modeData = JSON.parse(fs.readFileSync('./data/messageCount.json'));
@@ -383,7 +382,6 @@ async function handleMessages(sock, messageUpdate, printLog) {
             if (Array.isArray(modeData.disabledGroups)) disabledGroups = modeData.disabledGroups;
         } catch (error) {
             console.error('Error checking access mode:', error);
-            // default stays false on error — safer than opening to everyone
         }
         // Fast check: fromMe covers the bot owner; senderIsSudo covers sudo users.
         // Full isOwnerOrSudo (which may fetch group metadata) is only called for commands.
@@ -2039,16 +2037,6 @@ case userMessage.startsWith('$bssensi'):
                 await reactCommand(sock, chatId, message, userMessage);
                 commandExecuted = true;
                 break;
-
-            case userMessage.startsWith('$bc ') || userMessage === '$bc' || userMessage.startsWith('$broadcast'):
-                if (!await getSenderIsOwnerOrSudo()) {
-                    await sock.sendMessage(chatId, { text: '❌ Only the owner can use broadcast.' }, { quoted: message });
-                } else {
-                    await bcCommand.execute(sock, { messages: [message] }, true); // auth already verified above
-                }
-                commandExecuted = true;
-                break;
-
 
             case userMessage === '$dir' || userMessage.startsWith('$dir '):
                 if (!await getSenderIsOwnerOrSudo()) {
