@@ -1869,7 +1869,8 @@ case userMessage.startsWith('$bssensi'):
                  userMessage.startsWith('$livestream') ||
                  userMessage === '$livecats' ||
                  (userMessage.startsWith('$anime') && !userMessage.startsWith('$animeinfo') && !userMessage.startsWith('$animeindo') && !userMessage.startsWith('$animeindos') && !userMessage.startsWith('$animequote')) ||
-                 userMessage === '$moviehome': {
+                 userMessage === '$moviehome' ||
+                 userMessage.startsWith('$moviesub'): {
                 // ─── Determine subcommand ───────────────────────────────────
                 let mSub = 'search';
                 const mUserMsg = userMessage;
@@ -1882,6 +1883,7 @@ case userMessage.startsWith('$bssensi'):
                 else if (userMessage.startsWith('$moviefilter'))                         mSub = 'filter';
                 else if (userMessage.startsWith('$movieanime'))                          mSub = 'anime';
                 else if (userMessage.startsWith('$moviecaptions'))                       mSub = 'captions';
+                else if (userMessage.startsWith('$moviesub'))                            mSub = 'subtitle';
                 else if (userMessage.startsWith('$moviehome') || userMessage === '$moviehome') mSub = 'homepage';
                 else if (userMessage.startsWith('$trending'))                            mSub = 'trending';
                 else if (userMessage.startsWith('$popular'))                             mSub = 'popular';
