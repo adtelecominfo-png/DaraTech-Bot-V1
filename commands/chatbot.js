@@ -303,33 +303,75 @@ function extractUserInfo(msg) {
 }
 
 // ─── Memory helpers ───────────────────────────────────────────────────────────
-function ensureMemory(senderId) {
-    if (!chatMemory.messages.has(senderId)) {
-        chatMemory.messages.set(senderId, []);
-        chatMemory.userInfo.set(senderId, {});
+
+// Per-chat memory key: groups get a per-user-per-group key; DMs use senderId only
+function getMemKey(senderId, chatId) {
+    return chatId.endsWith('@g.us') ? `${senderId}::${chatId}` : senderId;
+}
+
+function ensureMemory(memKey) {
+    if (!chatMemory.messages.has(memKey)) {
+        chatMemory.messages.set(memKey, []);
+        chatMemory.userInfo.set(memKey, {});
     }
 }
 
-function pushHistory(senderId, role, content) {
-    const msgs = chatMemory.messages.get(senderId);
+function pushHistory(memKey, role, content) {
+    const msgs = chatMemory.messages.get(memKey);
     msgs.push({ role, content });
     if (msgs.length > 100) msgs.splice(0, msgs.length - 100);
     scheduleSave();
 }
 
+// ─── Extract quoted/replied-to message text ───────────────────────────────────
+function extractQuotedContext(message) {
+    const ctx = message.message?.extendedTextMessage?.contextInfo
+              || message.message?.imageMessage?.contextInfo
+              || message.message?.videoMessage?.contextInfo
+              || message.message?.audioMessage?.contextInfo
+              || message.message?.documentMessage?.contextInfo;
+    if (!ctx?.quotedMessage) return null;
+    const q = ctx.quotedMessage;
+    const text = q.conversation
+               || q.extendedTextMessage?.text
+               || q.imageMessage?.caption
+               || q.videoMessage?.caption
+               || q.documentMessage?.caption
+               || '';
+    const type = !text ? (
+        q.imageMessage    ? 'image'    :
+        q.videoMessage    ? 'video'    :
+        q.stickerMessage  ? 'sticker'  :
+        q.audioMessage    ? 'audio'    :
+        q.documentMessage ? 'document' : 'message'
+    ) : '';
+    return { text, type };
+}
+
+// Merge user query + quoted context into one prompt string
+function buildQueryWithQuoted(query, quoted) {
+    if (!quoted) return query || null;
+    const { text: qText, type: qType } = quoted;
+    if (query && qText)  return `${query}\n\n(replying to: "${qText}")`;
+    if (query)           return `${query}\n\n(replying to a ${qType || 'message'})`;
+    if (qText)           return qText;
+    return `What can you tell me about this ${qType || 'message'}?`;
+}
+
 // ─── Core: fetch AI + stream ──────────────────────────────────────────────────
 async function veloraRespond(sock, chatId, message, userText, senderId, mentions = []) {
-    ensureMemory(senderId);
+    const memKey = getMemKey(senderId, chatId);
+    ensureMemory(memKey);
     const info = extractUserInfo(userText);
     if (Object.keys(info).length)
-        chatMemory.userInfo.set(senderId, { ...chatMemory.userInfo.get(senderId), ...info });
+        chatMemory.userInfo.set(memKey, { ...chatMemory.userInfo.get(memKey), ...info });
 
-    pushHistory(senderId, 'user', userText);
+    pushHistory(memKey, 'user', userText);
 
     // Kick off AI fetch immediately — indicator runs in parallel
     const aiPromise = getAIResponse(userText, {
-        messages:  chatMemory.messages.get(senderId),
-        userInfo:  chatMemory.userInfo.get(senderId),
+        messages:  chatMemory.messages.get(memKey),
+        userInfo:  chatMemory.userInfo.get(memKey),
         senderId,
     });
 
@@ -364,7 +406,7 @@ async function veloraRespond(sock, chatId, message, userText, senderId, mentions
     // Wait for AI result
     const response = await aiPromise;
     const fullReply = response || "omo... something went wrong on my end 😭 try again?";
-    pushHistory(senderId, 'assistant', fullReply);
+    pushHistory(memKey, 'assistant', fullReply);
 
     try { await sock.sendPresenceUpdate('paused', chatId); } catch {}
 
@@ -426,7 +468,9 @@ async function handleChatbotCommand(sock, chatId, message, match) {
 
 // ─── Velora name trigger ──────────────────────────────────────────────────────
 async function handleVeloraNameTrigger(sock, chatId, message, userMessage, senderId) {
-    await veloraRespond(sock, chatId, message, userMessage, senderId);
+    const quoted    = extractQuotedContext(message);
+    const finalQuery = buildQueryWithQuoted(userMessage, quoted);
+    await veloraRespond(sock, chatId, message, finalQuery || userMessage, senderId);
 }
 
 // ─── $velora / $botchat direct command ───────────────────────────────────────
@@ -443,32 +487,8 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
         }
     }
 
-    // Handle quoted message context
-    const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    let quotedText = '';
-    let quotedType = '';
-    if (quoted) {
-        quotedText = quoted.conversation || quoted.extendedTextMessage?.text
-                  || quoted.imageMessage?.caption || quoted.videoMessage?.caption
-                  || quoted.documentMessage?.caption || '';
-        if (!quotedText) {
-            if (quoted.imageMessage)      quotedType = 'image';
-            else if (quoted.videoMessage)    quotedType = 'video';
-            else if (quoted.stickerMessage)  quotedType = 'sticker';
-            else if (quoted.audioMessage)    quotedType = 'audio';
-            else if (quoted.documentMessage) quotedType = 'document';
-        }
-    }
-
-    let finalQuery = query;
-    if (quoted) {
-        if (query && quotedText)   finalQuery = `${query}\n\n(replying to: "${quotedText}")`;
-        else if (query)            finalQuery = `${query}\n\n(replying to a ${quotedType || 'message'})`;
-        else if (quotedText)       finalQuery = quotedText;
-        else                       finalQuery = `What can you tell me about a ${quotedType || 'message'} someone shared?`;
-    }
-
-    if (!finalQuery) finalQuery = 'Hey! Say hi and introduce yourself briefly.';
+    const quotedCtx  = extractQuotedContext(message);
+    const finalQuery = buildQueryWithQuoted(query, quotedCtx) || query || 'Hey! Say hi and introduce yourself briefly.';
 
     await veloraRespond(sock, chatId, message, finalQuery, senderId);
 }
@@ -499,10 +519,14 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
             .replace(new RegExp(`@${botId}`, 'g'), '')
             .replace(/^\$/, '')
             .trim();
-        if (!cleanedMessage) return;
+        if (!cleanedMessage && !extractQuotedContext(message)) return;
+
+        const quoted     = extractQuotedContext(message);
+        const finalQuery = buildQueryWithQuoted(cleanedMessage, quoted) || cleanedMessage;
+        if (!finalQuery) return;
 
         const mentions = isMentioned ? [senderId] : [];
-        await veloraRespond(sock, chatId, message, cleanedMessage, senderId, mentions);
+        await veloraRespond(sock, chatId, message, finalQuery, senderId, mentions);
 
     } catch (err) {
         console.error('[Velora:chatbotResponse]', err.message);
