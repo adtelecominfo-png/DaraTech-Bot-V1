@@ -3,8 +3,8 @@
 /**
  * $save [name]
  * Reply to any message → sends that person's number as a vCard contact card.
- * Name defaults to their WhatsApp display name if you don't type one.
- * Works in groups (resolves LID → real phone via group metadata) and DMs.
+ * Name defaults to their WhatsApp display name if not typed.
+ * Works in groups (LID → real phone via groupMetadata) and DMs.
  */
 async function saveCommand(sock, chatId, message) {
     const text = (
@@ -14,56 +14,65 @@ async function saveCommand(sock, chatId, message) {
 
     const nameInput = text.replace(/^\$save\s*/i, '').trim();
 
-    // Must be a reply
+    // ctx must exist (i.e. this must be a reply)
     const ctx = message.message?.extendedTextMessage?.contextInfo;
-    if (!ctx?.participant && !ctx?.remoteJid) {
+    if (!ctx?.stanzaId) {
         return sock.sendMessage(chatId, {
             text: '❌ Reply to someone\'s message with *$save* (or *$save <name>*)'
         }, { quoted: message });
     }
 
-    const targetJid = ctx.participant || ctx.remoteJid;
-    const isLid     = targetJid.endsWith('@lid');
-    const isGroup   = chatId.endsWith('@g.us');
+    const isGroup = chatId.endsWith('@g.us');
 
-    // WhatsApp push name of the quoted sender (may be present in contextInfo)
-    let autoName = ctx.pushName || '';
-    let phone    = '';
+    // In groups:  ctx.participant = quoted sender JID (may be @lid)
+    // In DMs:     ctx.participant is empty — the other person IS chatId
+    const targetJid = ctx.participant || (!isGroup ? chatId : null);
 
-    if (isLid && isGroup) {
-        // LID format — must resolve to real phone via group metadata
-        try {
-            const metadata   = await sock.groupMetadata(chatId);
-            const lidNumeric = targetJid.split(':')[0].split('@')[0];
-
-            const participant = metadata.participants.find(p => {
-                // p.id can be LID or regular JID; p.lid is the LID when id is regular
-                const byId  = (p.id  || '').split(':')[0].split('@')[0];
-                const byLid = (p.lid || '').split(':')[0].split('@')[0];
-                return byId === lidNumeric || byLid === lidNumeric;
-            });
-
-            if (participant) {
-                // phoneNumber field: "2347055442073@s.whatsapp.net"
-                const phoneJid = participant.phoneNumber || participant.id || '';
-                phone = phoneJid.split(':')[0].split('@')[0];
-            }
-        } catch (e) {
-            console.error('[save] groupMetadata error:', e.message);
-        }
-    } else {
-        // Regular @s.whatsapp.net JID — phone number is right in the JID
-        phone = targetJid.split(':')[0].split('@')[0];
-    }
-
-    // Validate we got a real phone number (all digits)
-    if (!phone || !/^\d+$/.test(phone)) {
+    if (!targetJid) {
         return sock.sendMessage(chatId, {
-            text: '❌ Could not resolve a valid phone number from that message.\nThis can happen in groups where WhatsApp uses LID identifiers — try again or contact the person in DM first.'
+            text: '❌ Could not identify the message sender.'
         }, { quoted: message });
     }
 
-    // Name priority: what user typed → WhatsApp push name → phone number fallback
+    const isLid  = targetJid.endsWith('@lid');
+    // WhatsApp push name embedded in contextInfo (groups usually have this)
+    let autoName = ctx.pushName || '';
+    let phone    = '';
+
+    if (isLid) {
+        // LID → resolve to real phone via group metadata (groups) or store (DMs)
+        const lidNumeric = targetJid.split(':')[0].split('@')[0];
+
+        if (isGroup) {
+            try {
+                const metadata = await sock.groupMetadata(chatId);
+                const p = metadata.participants.find(p => {
+                    const byId  = (p.id  || '').split(':')[0].split('@')[0];
+                    const byLid = (p.lid || '').split(':')[0].split('@')[0];
+                    return byId === lidNumeric || byLid === lidNumeric;
+                });
+                if (p) {
+                    const phoneJid = p.phoneNumber || (!p.id.endsWith('@lid') ? p.id : '');
+                    phone = phoneJid.split(':')[0].split('@')[0];
+                    if (!autoName) autoName = p.notify || p.name || '';
+                }
+            } catch (e) {
+                console.error('[save] groupMetadata error:', e.message);
+            }
+        }
+        // DM with LID chatId — nothing more we can do without a phone lookup
+    } else {
+        // Regular @s.whatsapp.net — phone is in the JID directly
+        phone = targetJid.split(':')[0].split('@')[0];
+    }
+
+    if (!phone || !/^\d+$/.test(phone)) {
+        return sock.sendMessage(chatId, {
+            text: '❌ Could not resolve a real phone number for that contact.\n_WhatsApp may be using an internal identifier for this person._'
+        }, { quoted: message });
+    }
+
+    // Name: user typed → WhatsApp push name → number fallback
     const name = nameInput || autoName || `+${phone}`;
 
     const vcard =
