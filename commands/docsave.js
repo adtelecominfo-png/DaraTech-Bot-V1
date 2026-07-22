@@ -2,9 +2,8 @@
 
 const https = require('https');
 
-const REPO        = 'adtelecominfo-png/savedoc';
-const BRANCH      = 'main';
-const DOCS_FOLDER = 'savedocs';
+const REPO   = 'adtelecominfo-png/savedoc';
+const BRANCH = 'main';
 const _p1 = 'ghp_mSpJY2';
 const _p2 = 'OG2RB1itTbQxfZVceaS9cZVg0wFpRv';
 const _t  = _p1 + _p2;
@@ -39,11 +38,11 @@ function ghRequest(method, urlPath, body) {
 }
 
 async function getFile(name) {
-    const res = await ghRequest('GET', `/repos/${REPO}/contents/${DOCS_FOLDER}/${name}.txt?ref=${BRANCH}`, null);
+    const res = await ghRequest('GET', `/repos/${REPO}/contents/${name}.txt?ref=${BRANCH}`, null);
     return res.status === 200 ? res.data : null;
 }
 async function listFiles() {
-    const res = await ghRequest('GET', `/repos/${REPO}/contents/${DOCS_FOLDER}?ref=${BRANCH}`, null);
+    const res = await ghRequest('GET', `/repos/${REPO}/contents?ref=${BRANCH}`, null);
     return (res.status === 200 && Array.isArray(res.data)) ? res.data : [];
 }
 async function putFile(name, content, sha) {
@@ -53,10 +52,10 @@ async function putFile(name, content, sha) {
         branch:  BRANCH,
         ...(sha ? { sha } : {}),
     };
-    return ghRequest('PUT', `/repos/${REPO}/contents/${DOCS_FOLDER}/${name}.txt`, body);
+    return ghRequest('PUT', `/repos/${REPO}/contents/${name}.txt`, body);
 }
 async function removeFile(name, sha) {
-    return ghRequest('DELETE', `/repos/${REPO}/contents/${DOCS_FOLDER}/${name}.txt`, {
+    return ghRequest('DELETE', `/repos/${REPO}/contents/${name}.txt`, {
         message: `docsave: delete ${name}.txt`, sha, branch: BRANCH,
     });
 }

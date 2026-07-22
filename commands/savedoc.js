@@ -4,8 +4,6 @@ const fs   = require('fs');
 const path = require('path');
 
 const DOCS_DIR = path.join(__dirname, '../data/savedocs');
-
-// ensure folder exists
 if (!fs.existsSync(DOCS_DIR)) fs.mkdirSync(DOCS_DIR, { recursive: true });
 
 function docPath(name) { return path.join(DOCS_DIR, `${name}.txt`); }
