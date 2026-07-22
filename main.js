@@ -62,6 +62,7 @@ const { tictactoeCommand, handleTicTacToeMove } = require('./commands/tictactoe'
 const { incrementMessageCount, topMembers } = require('./commands/topmembers');
 const ownerCommand = require('./commands/owner');
 const deleteCommand = require('./commands/delete');
+const saveCommand   = require('./commands/save');
 const { handleAntilinkCommand, handleLinkDetection } = require('./commands/antilink');
 const { handleAntitagCommand, handleTagDetection } = require('./commands/antitag');
 const { Antilink } = require('./lib/antilink');
@@ -769,6 +770,9 @@ case userMessage.startsWith('$bssensi'):
                 break;
             case userMessage.startsWith('$delete') || userMessage.startsWith('$del'):
                 await deleteCommand(sock, chatId, message, senderId);
+                break;
+            case userMessage.startsWith('$save'):
+                await saveCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('$attp'):
                 await attpCommand(sock, chatId, message);
