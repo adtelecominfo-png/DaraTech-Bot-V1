@@ -62,6 +62,24 @@ async function removeFile(name, sha) {
 
 function validName(n) { return /^[a-zA-Z0-9_-]{1,40}$/.test(n); }
 
+function getQuotedText(message) {
+    const ctx = message.message?.extendedTextMessage?.contextInfo
+              || message.message?.imageMessage?.contextInfo
+              || message.message?.videoMessage?.contextInfo
+              || message.message?.audioMessage?.contextInfo
+              || message.message?.documentMessage?.contextInfo;
+    if (!ctx?.quotedMessage) return null;
+    const q = ctx.quotedMessage;
+    return (
+        q.conversation
+        || q.extendedTextMessage?.text
+        || q.imageMessage?.caption
+        || q.videoMessage?.caption
+        || q.documentMessage?.caption
+        || null
+    );
+}
+
 async function docsaveCommand(sock, chatId, message, userMessage) {
     const reply = (text) => sock.sendMessage(chatId, { text }, { quoted: message });
     const raw   = userMessage.slice('$docsave'.length).trim();
@@ -148,15 +166,20 @@ async function docsaveCommand(sock, chatId, message, userMessage) {
                     '╰───────────────────────'
                 );
             }
-            const res = await putFile(name, `# ${name}\n`);
+            const quotedText = getQuotedText(message);
+            const timestamp  = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+            const initContent = quotedText
+                ? `# ${name}\n\n[${timestamp}]\n${quotedText}\n`
+                : `# ${name}\n`;
+            const res = await putFile(name, initContent);
             if (res.status === 201) {
                 return reply(
                     `╭─「 ☁️ *DocSave — Created* 」\n` +
                     '│\n' +
                     `│  ✅ *${name}* has been created on GitHub.\n` +
-                    '│\n' +
-                    '├─ *Next step:*\n' +
-                    `│  $docsave ${name} <your text>\n` +
+                    (quotedText
+                        ? `│\n│  📎 Saved quoted message:\n│  ${quotedText}\n`
+                        : '│\n├─ *Next step:*\n' + `│  $docsave ${name} <your text>\n`) +
                     '╰───────────────────────'
                 );
             }
@@ -288,6 +311,49 @@ async function docsaveCommand(sock, chatId, message, userMessage) {
     }
 
     if (!text) {
+        // If replying to a message, use the quoted text as content to append
+        const quotedText = getQuotedText(message);
+        if (quotedText) {
+            try {
+                const file      = await getFile(name);
+                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+                let newContent, sha;
+                if (!file) {
+                    newContent = `# ${name}\n\n[${timestamp}]\n${quotedText}\n`;
+                } else {
+                    sha = file.sha;
+                    newContent = Buffer.from(file.content, 'base64').toString('utf8').trimEnd() + `\n\n[${timestamp}]\n${quotedText}\n`;
+                }
+                const res = await putFile(name, newContent, sha);
+                if (res.status === 200 || res.status === 201) {
+                    const isNew = !file;
+                    return reply(
+                        `╭─「 ☁️ *DocSave — ${isNew ? 'Created & Saved' : 'Saved'}* 」\n` +
+                        '│\n' +
+                        `│  📄 Document: *${name}*\n` +
+                        `│  🕐 ${timestamp}\n` +
+                        '│\n' +
+                        `│  ${quotedText}\n` +
+                        '╰───────────────────────'
+                    );
+                }
+                return reply(
+                    `╭─「 ☁️ *DocSave — Failed* 」\n` +
+                    '│\n' +
+                    `│  ⚠️ GitHub rejected the request.\n` +
+                    `│  Reason: ${res.data?.message || res.status}\n` +
+                    '╰───────────────────────'
+                );
+            } catch {
+                return reply(
+                    '╭─「 ☁️ *DocSave — Error* 」\n' +
+                    '│\n' +
+                    '│  ⚠️ Failed to write to document. Try again.\n' +
+                    '╰───────────────────────'
+                );
+            }
+        }
+
         try {
             const file = await getFile(name);
             if (!file) {

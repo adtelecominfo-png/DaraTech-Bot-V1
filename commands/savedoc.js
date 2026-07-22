@@ -29,6 +29,24 @@ function deleteDoc(name) {
     if (fs.existsSync(p)) fs.unlinkSync(p);
 }
 
+function getQuotedText(message) {
+    const ctx = message.message?.extendedTextMessage?.contextInfo
+              || message.message?.imageMessage?.contextInfo
+              || message.message?.videoMessage?.contextInfo
+              || message.message?.audioMessage?.contextInfo
+              || message.message?.documentMessage?.contextInfo;
+    if (!ctx?.quotedMessage) return null;
+    const q = ctx.quotedMessage;
+    return (
+        q.conversation
+        || q.extendedTextMessage?.text
+        || q.imageMessage?.caption
+        || q.videoMessage?.caption
+        || q.documentMessage?.caption
+        || null
+    );
+}
+
 // ─── Main command ─────────────────────────────────────────────────────────────
 async function savedocCommand(sock, chatId, message, userMessage) {
     const reply = (text) => sock.sendMessage(chatId, { text }, { quoted: message });
@@ -104,14 +122,19 @@ async function savedocCommand(sock, chatId, message, userMessage) {
             );
         }
         try {
-            writeDoc(name, `# ${name}\n`);
+            const quotedText = getQuotedText(message);
+            const timestamp  = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+            const initContent = quotedText
+                ? `# ${name}\n\n[${timestamp}]\n${quotedText}\n`
+                : `# ${name}\n`;
+            writeDoc(name, initContent);
             return reply(
                 `╭─「 📂 *SaveDoc — Created* 」\n` +
                 '│\n' +
                 `│  ✅ *${name}* has been created successfully.\n` +
-                '│\n' +
-                '├─ *Next step:*\n' +
-                `│  $savedoc ${name} <your text>\n` +
+                (quotedText
+                    ? `│\n│  📎 Saved quoted message:\n│  ${quotedText}\n`
+                    : '│\n├─ *Next step:*\n' + `│  $savedoc ${name} <your text>\n`) +
                 '╰───────────────────────'
             );
         } catch {
@@ -214,6 +237,40 @@ async function savedocCommand(sock, chatId, message, userMessage) {
     }
 
     if (!text) {
+        // If replying to a message, use the quoted text as content to append
+        const quotedText = getQuotedText(message);
+        if (quotedText) {
+            try {
+                const existing  = readDoc(name);
+                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+                let newContent;
+                if (existing === null) {
+                    newContent = `# ${name}\n\n[${timestamp}]\n${quotedText}\n`;
+                } else {
+                    newContent = existing.trimEnd() + `\n\n[${timestamp}]\n${quotedText}\n`;
+                }
+                writeDoc(name, newContent);
+                const isNew = existing === null;
+                return reply(
+                    `╭─「 📂 *SaveDoc — ${isNew ? 'Created & Saved' : 'Saved'}* 」\n` +
+                    '│\n' +
+                    `│  📄 Document: *${name}*\n` +
+                    `│  🕐 ${timestamp}\n` +
+                    '│\n' +
+                    `│  ${quotedText}\n` +
+                    '╰───────────────────────'
+                );
+            } catch {
+                return reply(
+                    '╭─「 📂 *SaveDoc — Error* 」\n' +
+                    '│\n' +
+                    '│  ⚠️ Failed to write to the document.\n' +
+                    '│  Please try again.\n' +
+                    '╰───────────────────────'
+                );
+            }
+        }
+
         const content = readDoc(name);
         if (content === null) {
             return reply(
