@@ -1,7 +1,8 @@
 'use strict';
 const fs   = require('fs');
 const path = require('path');
-const { get } = require('../lib/gifted');
+const { get }                  = require('../lib/gifted');
+const { callPollinationsChat } = require('../lib/pollinations');
 
 const USER_GROUP_DATA    = path.join(__dirname, '../data/userGroupData.json');
 const VELORA_MEMORY_FILE = path.join(__dirname, '../data/velora_memory.json');
@@ -251,31 +252,49 @@ function buildPrompt(userMessage, context) {
     return prompt;
 }
 
-// ─── AI call — pollinations primary, overchat gpt4 fallback ──────────────────
-async function getAIResponse(userMessage, context) {
-    const fullQuery = buildPrompt(userMessage, context);
+// ─── Clean reply helper ───────────────────────────────────────────────────────
+function cleanReply(raw) {
+    if (!raw) return null;
+    const s = (typeof raw === 'string' ? raw : (raw.answer || JSON.stringify(raw)))
+        .replace(/^(Velora|Dara|Bot|AI|Assistant):\s*/i, '')
+        .trim();
+    return (s.length >= 5 && s.length <= 4000) ? s : null;
+}
 
-    // Primary: openai-fast via Gifted pollinations
+// ─── AI call — Gifted primary (no quota), direct Pollinations fallback ────────
+async function getAIResponse(userMessage, context) {
+    const history  = context?.messages || [];
+    const senderId = context?.senderId || '';
+
+    // ── Primary: Gifted /ai/pollinations with compact prompt ─────────────────
+    const fullQuery = buildPrompt(userMessage, context);
     try {
         const data = await get('/ai/pollinations', { q: fullQuery, model: 'openai-fast' }, 30000);
         if (!data?.success) throw new Error(data?.message || 'no response');
-        let reply = typeof data.result === 'string'
-            ? data.result
-            : (data.result?.answer || JSON.stringify(data.result));
-        reply = reply.replace(/^(Velora|Dara|Bot|AI|Assistant):\s*/i, '').trim();
-        if (reply && reply.length >= 5 && reply.length <= 4000) return reply;
+        const reply = cleanReply(data.result);
+        if (reply) return reply;
         throw new Error('empty or oversized');
     } catch {}
 
-    // Fallback: gpt4 via overchat
+    // ── Fallback: direct Pollinations (truly free, no quota at all) ──────────
+    // Build a proper messages array — system prompt + last 6 turns + current msg
     try {
-        const data = await get('/ai/overchat', { q: fullQuery, model: 'gpt4' }, 30000);
-        if (!data?.success) throw new Error(data?.message || 'no response');
-        let reply = typeof data.result === 'string'
-            ? data.result
-            : (data.result?.answer || JSON.stringify(data.result));
-        reply = reply.replace(/^(Velora|Dara|Bot|AI|Assistant):\s*/i, '').trim();
-        if (reply && reply.length <= 4000) return reply;
+        const recent = history
+            .slice(-7, -1)   // last 6 turns before this user message
+            .map(m => ({
+                role:    m.role === 'user' ? 'user' : 'assistant',
+                content: m.content.slice(0, 300),
+            }));
+
+        const messages = [
+            { role: 'system', content: VELORA_SYSTEM },
+            ...recent,
+            { role: 'user', content: userMessage },
+        ];
+
+        const raw   = await callPollinationsChat(messages, 'openai-fast', 800, 0.9);
+        const reply = cleanReply(raw);
+        if (reply) return reply;
     } catch {}
 
     return null;
