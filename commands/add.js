@@ -75,23 +75,28 @@ async function addCommand(sock, chatId, message, userMessage) {
             const num = jid.split('@')[0];
             try {
                 const res = await sock.groupParticipantsUpdate(chatId, [jid], 'add');
+                console.log(`[add] groupParticipantsUpdate result for ${jid}:`, JSON.stringify(res));
+
                 // res is an array; check the first (and only) entry
                 const entry = Array.isArray(res) ? res[0] : null;
                 if (entry) {
+                    // Normalise status — Baileys may return it as string or number
+                    const status = entry.status != null ? Number(entry.status) : null;
+
                     // Some builds surface error as entry.error (string code)
                     if (entry.error) {
                         const reason = failReason(entry.error);
                         return `❌ +${num} — ${reason}`;
                     }
-                    // Otherwise check numeric status
-                    const status = entry.status ?? 200;
-                    if (status !== 200) {
+                    // Check numeric status (200 = success)
+                    if (status !== null && status !== 200) {
                         const reason = failReason(status);
                         return `❌ +${num} — ${reason}`;
                     }
                 }
                 return `✅ +${num}`;
             } catch (err) {
+                console.log(`[add] caught error for ${jid}:`, err?.message || err);
                 return `❌ +${num} — ${failReason(err)}`;
             }
         }
