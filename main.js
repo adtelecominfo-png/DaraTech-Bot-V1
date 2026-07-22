@@ -192,6 +192,7 @@ const uptimeCommand = require('./commands/uptime');
 const { afkCommand, checkAFK, removeAFK } = require('./commands/afk');
 const vcfCommand = require('./commands/vcf');
 const addCommand = require('./commands/add');
+const { pendingCommand, acceptCommand } = require('./commands/pending');
 const { muteUserCommand } = require('./commands/mute-user');
 const { isUserMuted }    = require('./lib/muteState');
 const unmuteUserCommand = require('./commands/unmute-user');
@@ -506,7 +507,7 @@ if (checkAFK(senderId)) {
         }
 
         // List of admin commands
-        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus', '$antigroupmention', '$agm', '$autosticker', '$autos', '$asticker', '$clean', '$purge'];
+        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus', '$antigroupmention', '$agm', '$autosticker', '$autos', '$asticker', '$clean', '$purge', '$pending', '$accept'];
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
@@ -596,6 +597,16 @@ case userMessage.startsWith('$vcf'):
 
 case userMessage.startsWith('$add'):
     await addCommand(sock, chatId, message, userMessage);
+    commandExecuted = true;
+    break;
+
+case userMessage.startsWith('$pending'):
+    await pendingCommand(sock, chatId, message);
+    commandExecuted = true;
+    break;
+
+case userMessage.startsWith('$accept'):
+    await acceptCommand(sock, chatId, message, userMessage);
     commandExecuted = true;
     break;
 
