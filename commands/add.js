@@ -43,7 +43,7 @@ async function addCommand(sock, chatId, message, userMessage) {
             if (typeof statusOrErr === 'string') {
                 const s = statusOrErr.toLowerCase();
                 if (s.includes('account_reachout_restricted') || s.includes('reachout'))
-                    return 'they\'ve turned off "Add me to groups" in their privacy settings';
+                    return 'bot is restricted from reaching this account — they may have blocked the bot, or WhatsApp has temporarily limited the bot\'s ability to add people';
                 if (s.includes('not-authorized') || s.includes('403'))
                     return 'not authorized — they may have restricted who can add them';
                 if (s.includes('409') || s.includes('already'))
@@ -58,7 +58,7 @@ async function addCommand(sock, chatId, message, userMessage) {
             // Called with a thrown Error object
             const msg = (statusOrErr?.message || statusOrErr?.toString() || '').toLowerCase();
             if (msg.includes('account_reachout_restricted') || msg.includes('reachout'))
-                return 'they\'ve turned off "Add me to groups" in their privacy settings';
+                return 'bot is restricted from reaching this account — they may have blocked the bot, or WhatsApp has temporarily limited the bot\'s ability to add people';
             if (msg.includes('not-authorized') || msg.includes('403'))
                 return 'not authorized — they may have restricted who can add them';
             if (msg.includes('409') || msg.includes('already'))
