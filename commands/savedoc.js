@@ -1,16 +1,34 @@
 'use strict';
 
 const https    = require('https');
+const fs       = require('fs');
+const path     = require('path');
 const settings = require('../settings');
 
 const REPO        = 'adtelecominfo-png/DaraTech-Bot-V1';
 const BRANCH      = 'main';
 const DOCS_FOLDER = 'savedocs';
+const CFG_PATH    = path.join(__dirname, '../data/savedoc_config.json');
+
+// ─── Token storage (local file — never committed) ─────────────────────────────
+function loadCfg() {
+    try { return JSON.parse(fs.readFileSync(CFG_PATH, 'utf8')); } catch { return {}; }
+}
+function saveCfg(obj) {
+    fs.writeFileSync(CFG_PATH, JSON.stringify(obj, null, 2));
+}
+function getToken() {
+    return loadCfg().githubToken
+        || settings.githubToken
+        || process.env.GITHUB_TOKEN
+        || process.env.GITHUB_PERSONAL_ACCESS_TOKEN
+        || '';
+}
 
 // ─── GitHub API helper ────────────────────────────────────────────────────────
 function ghRequest(method, urlPath, body) {
     return new Promise((resolve, reject) => {
-        const token = settings.githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+        const token = getToken();
         const data  = body ? JSON.stringify(body) : null;
         const opts  = {
             hostname: 'api.github.com',
@@ -103,6 +121,20 @@ async function savedocCommand(sock, chatId, message, userMessage) {
 
     const parts = raw.split(' ');
     const sub   = parts[0].toLowerCase();
+
+    // ── $savedoc setup <token> ─────────────────────────────────────────────
+    if (sub === 'setup') {
+        const token = parts[1];
+        if (!token || !token.startsWith('ghp_')) return reply('❌ Usage: *$savedoc setup ghp_xxxx*\nGet a token at github.com/settings/tokens (needs repo scope)');
+        try {
+            const cfg = loadCfg();
+            cfg.githubToken = token;
+            saveCfg(cfg);
+            return reply('✅ GitHub token saved! $savedoc is ready to use.\n\nTry: $savedoc list');
+        } catch {
+            return reply('❌ Failed to save token. Check bot data folder permissions.');
+        }
+    }
 
     // ── $savedoc new <name> ────────────────────────────────────────────────
     if (sub === 'new') {

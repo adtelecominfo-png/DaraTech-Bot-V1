@@ -1,5 +1,6 @@
 # ── Runtime / secrets ───────────────────────────────────────────────
 .env
+data/savedoc_config.json
 session/
 tmp/
 temp/
