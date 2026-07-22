@@ -57,18 +57,8 @@ async function detectBranch() {
 // and session/. We snapshot them in memory before git operations and write them
 // back afterwards so they survive even a hard container reset.
 
-// Data files to snapshot/restore — add any new ones here
-const DATA_FILES = [
-    'economy.json',
-    'userGroupData.json',
-    'antimedia.json',
-    'banned.json',
-    'premium.json',
-    'gcstatus.json',
-    'warnings.json',
-    'clean_store.json',
-    'savedoc_config.json',
-];
+// Snapshot ALL files in data/ dynamically — no hardcoded list needed.
+// This ensures every anti command, toggle, and config file survives git reset.
 
 function snapshotEnvAndSession() {
     const snap = { env: null, creds: null, data: {}, savedocs: {} };
@@ -79,12 +69,17 @@ function snapshotEnvAndSession() {
     try { if (fs.existsSync(envPath))   snap.env   = fs.readFileSync(envPath,   'utf8'); } catch {}
     try { if (fs.existsSync(credsPath)) snap.creds = fs.readFileSync(credsPath, 'utf8'); } catch {}
 
-    for (const file of DATA_FILES) {
-        try {
-            const p = path.join(dataDir, file);
-            if (fs.existsSync(p)) snap.data[file] = fs.readFileSync(p, 'utf8');
-        } catch {}
-    }
+    // Snapshot every file directly inside data/ (not subdirs — those handled below)
+    try {
+        if (fs.existsSync(dataDir)) {
+            for (const entry of fs.readdirSync(dataDir, { withFileTypes: true })) {
+                if (!entry.isFile()) continue;
+                try {
+                    snap.data[entry.name] = fs.readFileSync(path.join(dataDir, entry.name), 'utf8');
+                } catch {}
+            }
+        }
+    } catch {}
 
     // Snapshot all savedoc files
     const savedocsDir = path.join(dataDir, 'savedocs');
