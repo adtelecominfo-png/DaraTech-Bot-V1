@@ -150,6 +150,7 @@ function restoreEnvAndSession(snap) {
             }
         }
     }
+
 }
 
 // ── Update via git ─────────────────────────────────────────────────────────────
