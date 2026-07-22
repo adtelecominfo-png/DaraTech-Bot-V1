@@ -1,11 +1,15 @@
 'use strict';
 /**
- * antigroupmention.js — Block @group / @everyone group-wide mentions
+ * antigroupmention.js — Block status mentions of the group
+ *
+ * When someone tags this group in their WhatsApp Status, WhatsApp delivers a
+ * statusMentionMessage into the group chat.  This feature detects that and
+ * either deletes the notification and/or kicks the person.
  *
  * $antigroupmention on           — enable protection (default action: delete)
  * $antigroupmention off          — disable protection
- * $antigroupmention set delete   — set action to delete
- * $antigroupmention set kick     — set action to kick
+ * $antigroupmention set delete   — delete the status-mention notification
+ * $antigroupmention set kick     — kick the person who mentioned the group
  * $antigroupmention get          — show current config
  * Aliases: $agm
  *
@@ -67,7 +71,7 @@ async function antigroupmentionCommand(sock, chatId, senderId, message) {
 
     if (!sub || sub === 'get' || sub === 'status') {
         return sock.sendMessage(chatId, {
-            text: `╭━━━「 🔇 *ANTI GROUP MENTION* 」━━━\n` +
+            text: `╭━━━「 🔇 *ANTI STATUS MENTION* 」━━━\n` +
                   `┃\n` +
                   `┃ Status: ${isOn ? '✅ Enabled' : '❌ Disabled'}\n` +
                   `┃ Action: *${action}*\n` +
@@ -78,25 +82,25 @@ async function antigroupmentionCommand(sock, chatId, senderId, message) {
                   `┃ ▸ *$antigroupmention set kick*\n` +
                   `┃ ▸ *$antigroupmention get*\n` +
                   `┃\n` +
-                  `┃ Protects against @group / @everyone\n` +
-                  `┃ mass-mention used by non-admins.\n` +
+                  `┃ Protects against members tagging\n` +
+                  `┃ this group in their WhatsApp Status.\n` +
                   `╰━━━━━━━━━━━━━━━━━━━━━\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 
     if (sub === 'on') {
-        if (isOn) return sock.sendMessage(chatId, { text: '⚠️ Anti-group mention is already *enabled*.' }, { quoted: message });
+        if (isOn) return sock.sendMessage(chatId, { text: '⚠️ Anti-status mention is already *enabled*.' }, { quoted: message });
         setGroupFlag(chatId, 'antigroupmention', true);
         if (!cfg.antigroupmentionAction) setGroupFlag(chatId, 'antigroupmentionAction', 'delete');
         return sock.sendMessage(chatId, {
-            text: `✅ *Anti Group Mention enabled!*\n\nNon-admins who use @group or @everyone will have their message *${action}d*.\n\n_Daratech_ ⚡`
+            text: `✅ *Anti Status Mention enabled!*\n\nIf anyone tags this group in their WhatsApp Status, the notification will be *${action}d*.\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 
     if (sub === 'off') {
-        if (!isOn) return sock.sendMessage(chatId, { text: '⚠️ Anti-group mention is already *disabled*.' }, { quoted: message });
+        if (!isOn) return sock.sendMessage(chatId, { text: '⚠️ Anti-status mention is already *disabled*.' }, { quoted: message });
         setGroupFlag(chatId, 'antigroupmention', false);
-        return sock.sendMessage(chatId, { text: `✅ *Anti Group Mention disabled.*\n\n_Daratech_ ⚡` }, { quoted: message });
+        return sock.sendMessage(chatId, { text: `✅ *Anti Status Mention disabled.*\n\n_Daratech_ ⚡` }, { quoted: message });
     }
 
     if (sub === 'set') {
@@ -108,14 +112,14 @@ async function antigroupmentionCommand(sock, chatId, senderId, message) {
         }
         setGroupFlag(chatId, 'antigroupmentionAction', newAction);
         return sock.sendMessage(chatId, {
-            text: `✅ *Anti Group Mention action set to ${newAction}!*\n\n_Daratech_ ⚡`
+            text: `✅ *Anti Status Mention action set to ${newAction}!*\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 
     return sock.sendMessage(chatId, { text: `❓ Unknown option. Use *$antigroupmention* to see usage.\n\n_Daratech_ ⚡` }, { quoted: message });
 }
 
-// ── Detection hook (called for every incoming group message) ──────────────────
+// ── Detection hook (called for every incoming message) ────────────────────────
 async function handleAntigroupmentionMessage(sock, message) {
     try {
         const chatId = message.key.remoteJid;
@@ -125,9 +129,23 @@ async function handleAntigroupmentionMessage(sock, message) {
         const cfg = getGroupConfig(chatId);
         if (!cfg.antigroupmention) return;
 
+        // Detect a WhatsApp Status mention of this group.
+        //
+        // When someone tags a group in their status, Baileys delivers a
+        // statusMentionMessage into the group chat.  Some builds also surface it
+        // under extendedTextMessage with groupMentions carrying the group JID.
+        const isStatusMention = !!(
+            message.message?.statusMentionMessage ||
+            message.message?.extendedTextMessage?.contextInfo?.groupMentions?.some(
+                gm => (gm.groupJid || gm) === chatId
+            )
+        );
+
+        if (!isStatusMention) return;
+
         const senderId = message.key.participant || message.key.remoteJid;
 
-        // Check if sender is admin — skip enforcement for admins
+        // Skip admins and owner
         try {
             const meta = await sock.groupMetadata(chatId);
             const sender = meta.participants.find(p => p.id === senderId);
@@ -135,20 +153,9 @@ async function handleAntigroupmentionMessage(sock, message) {
             if (await isOwnerOrSudo(senderId, sock, chatId)) return;
         } catch { return; }
 
-        // Detect @group / @everyone mention
-        // In Baileys, group-wide mentions appear as groupMentions or the group JID in mentionedJid
-        const ctxInfo      = message.message?.extendedTextMessage?.contextInfo
-                          || message.message?.imageMessage?.contextInfo
-                          || message.message?.videoMessage?.contextInfo;
-        const groupMentions  = ctxInfo?.groupMentions || [];
-        const mentionedJids  = ctxInfo?.mentionedJid  || [];
-
-        const isGroupMention = groupMentions.length > 0 || mentionedJids.includes(chatId);
-        if (!isGroupMention) return;
-
         const action = cfg.antigroupmentionAction || 'delete';
 
-        // Delete the message first
+        // Always delete the status-mention notification from the group
         try {
             await sock.sendMessage(chatId, {
                 delete: {
@@ -160,19 +167,19 @@ async function handleAntigroupmentionMessage(sock, message) {
             });
         } catch {}
 
+        const tag = `@${senderId.split('@')[0]}`;
+
         if (action === 'kick') {
             try {
                 await sock.groupParticipantsUpdate(chatId, [senderId], 'remove');
-                const tag = `@${senderId.split('@')[0]}`;
                 await sock.sendMessage(chatId, {
-                    text: `🚫 *Anti Group Mention*\n\n${tag} was kicked for using @group mention.\n\n_Daratech_ ⚡`,
+                    text: `🚫 *Anti Status Mention*\n\n${tag} was kicked for tagging this group in their WhatsApp Status.\n\n_Daratech_ ⚡`,
                     mentions: [senderId],
                 });
             } catch {}
         } else {
-            const tag = `@${senderId.split('@')[0]}`;
             await sock.sendMessage(chatId, {
-                text: `⚠️ *Anti Group Mention*\n\n${tag}, @group/@everyone mentions are not allowed here.\n\n_Daratech_ ⚡`,
+                text: `⚠️ *Anti Status Mention*\n\n${tag}, tagging this group in your WhatsApp Status is not allowed here.\n\n_Daratech_ ⚡`,
                 mentions: [senderId],
             });
         }
