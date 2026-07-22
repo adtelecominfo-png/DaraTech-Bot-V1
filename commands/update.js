@@ -67,6 +67,7 @@ const DATA_FILES = [
     'gcstatus.json',
     'warnings.json',
     'clean_store.json',
+    'savedoc_config.json',
 ];
 
 function snapshotEnvAndSession() {
