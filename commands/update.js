@@ -71,7 +71,7 @@ const DATA_FILES = [
 ];
 
 function snapshotEnvAndSession() {
-    const snap = { env: null, creds: null, data: {} };
+    const snap = { env: null, creds: null, data: {}, savedocs: {} };
     const dataDir   = path.join(process.cwd(), 'data');
     const envPath   = path.join(process.cwd(), '.env');
     const credsPath = path.join(process.cwd(), 'session', 'creds.json');
@@ -85,6 +85,17 @@ function snapshotEnvAndSession() {
             if (fs.existsSync(p)) snap.data[file] = fs.readFileSync(p, 'utf8');
         } catch {}
     }
+
+    // Snapshot all savedoc files
+    const savedocsDir = path.join(dataDir, 'savedocs');
+    try {
+        if (fs.existsSync(savedocsDir)) {
+            for (const file of fs.readdirSync(savedocsDir)) {
+                try { snap.savedocs[file] = fs.readFileSync(path.join(savedocsDir, file), 'utf8'); } catch {}
+            }
+        }
+    } catch {}
+
     return snap;
 }
 
@@ -122,6 +133,21 @@ function restoreEnvAndSession(snap) {
             console.log(`[update] data/${file} restored ✅`);
         } catch (e) {
             console.error(`[update] Failed to restore data/${file}:`, e.message);
+        }
+    }
+
+    // Restore savedoc files
+    const savedocsEntries = Object.entries(snap.savedocs || {});
+    if (savedocsEntries.length) {
+        const savedocsDir = path.join(dataDir, 'savedocs');
+        try { if (!fs.existsSync(savedocsDir)) fs.mkdirSync(savedocsDir, { recursive: true }); } catch {}
+        for (const [file, content] of savedocsEntries) {
+            try {
+                fs.writeFileSync(path.join(savedocsDir, file), content, 'utf8');
+                console.log(`[update] data/savedocs/${file} restored ✅`);
+            } catch (e) {
+                console.error(`[update] Failed to restore data/savedocs/${file}:`, e.message);
+            }
         }
     }
 }
