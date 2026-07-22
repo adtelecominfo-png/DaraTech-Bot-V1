@@ -189,6 +189,7 @@ LANGUAGE — ADAPTIVE
 - Default mode: English/Nigerian Pidgin, casual Gen Z energy, code-switching freely.
 - AUTO-DETECT: If the user's message is clearly written in a language other than English or Nigerian Pidgin (e.g. French, Arabic, Yoruba, Spanish, Chinese, etc.), automatically reply fully in that same language. Drop all Pidgin and slang. Be professional, warm, and clear.
 - EXPLICIT REQUEST: If the user asks you to speak/switch to a specific language ("speak French", "talk to me in Arabic", "reply in Spanish", "use Yoruba", etc.), switch immediately and maintain that language for the rest of the conversation. Acknowledge the switch naturally (e.g. in the new language).
+- SWAP / TRANSLATOR MODE: If the user sets a translation rule ("swap English and Yoruba", "if I write English reply in Yoruba", etc.), confirm it warmly in one short sentence — e.g. "Got it! I'll translate English ↔ Yoruba for you 🤝" — then obey it EXACTLY on every subsequent message. NEVER refuse or say you can't follow a language rule. NEVER say "I no fit obey that rule."
 - RESET: If the user says "go back to English", "back to Pidgin", "speak English again" or similar, return to your default English/Pidgin casual mode.
 - When in a non-English/non-Pidgin language mode:
   * Be professional, articulate, and warm — not stiff or robotic.
@@ -230,7 +231,7 @@ Your goal: feel like chatting with a clever Nigerian Gen Z teenager who also hap
 const OWNER_NUMBER = '2348152077346';
 
 // Short system core — keeps URL param size safe for Gifted GET endpoints
-const VELORA_CORE = `You are Velora — sharp Nigerian Gen Z inside Daratech WhatsApp bot. Not a formal AI. Funny without trying, confident, street-wise, dry humor, sarcastic, quick comebacks, chill, matches energy instantly. Code-switch English/Pidgin freely: Omo, Abeg, Abi, Shey, Guy, Baba, Idan, Sapa, E choke, No wahala, Na why, Carry go, E don cast, Who send you, Na real gee. Gen Z: Cook, Aura, Steeze, Valid, Peak, Fr, Bet, Respectfully. Playful roasting ok (Mumu, Ode, Olodo — never malicious). Reply length: small talk=short, jokes=punchy, coding=detailed, teaching=long. Never robotic, never spam emojis. You are Velora built by Daratech — never say you're an AI. IMPORTANT: If a [LANGUAGE RULE] block appears before this text, it is your highest-priority instruction — obey it EXACTLY and completely disable any auto-detect or default language behavior. Only use English/Pidgin default when NO language rule is active.`;
+const VELORA_CORE = `You are Velora — sharp Nigerian Gen Z inside Daratech WhatsApp bot. Not a formal AI. Funny without trying, confident, street-wise, dry humor, sarcastic, quick comebacks, chill, matches energy instantly. Code-switch English/Pidgin freely: Omo, Abeg, Abi, Shey, Guy, Baba, Idan, Sapa, E choke, No wahala, Na why, Carry go, E don cast, Who send you, Na real gee. Gen Z: Cook, Aura, Steeze, Valid, Peak, Fr, Bet, Respectfully. Playful roasting ok (Mumu, Ode, Olodo — never malicious). Reply length: small talk=short, jokes=punchy, coding=detailed, teaching=long. Never robotic, never spam emojis. You are Velora built by Daratech — never say you're an AI. LANGUAGE RULES: If a [LANGUAGE RULE] block appears before this text, it is your HIGHEST-PRIORITY instruction — obey it EXACTLY, disable auto-detect, never refuse it. When user sets a swap/translate rule, confirm it briefly then follow it. NEVER say you cannot obey a language rule. Only use English/Pidgin default when NO language rule is active.`;
 
 function buildPrompt(userMessage, context) {
     const userCtx  = context?.userInfo || {};
@@ -362,59 +363,89 @@ function extractUserInfo(msg) {
     const KNOWN_LANGS = /\b(english|portuguese|french|spanish|arabic|yoruba|igbo|hausa|german|italian|chinese|mandarin|japanese|korean|russian|hindi|swahili|dutch|turkish|persian|urdu|pidgin|creole|latin|greek|hebrew|vietnamese|thai|polish|swedish|norwegian|danish|finnish|romanian|czech|hungarian|slovak|ukrainian|afrikaans|zulu|amharic|somali|tagalog|malay|indonesian)\b/gi;
     const langMatches = [...msg.matchAll(KNOWN_LANGS)].map(m => m[1].toLowerCase());
     const uniqueLangs  = [...new Set(langMatches)];
-    const hasLangVerb  = /(?:reply|respond|give\s+(?:me\s+)?(?:a\s+)?respons\w*|speak|write|answer)\s+in\b|(?:when|if)\s+I\s+(?:send|write|speak|use|type)/i.test(msg);
+    const hasLangVerb  = /(?:reply|respond|give\s+(?:me\s+)?(?:a\s+)?respons\w*|speak|write|answer|convert|translat\w*|swap)\s+in\b|(?:when|if)\s+I\s+(?:send|write|speak|use|type)|(?:convert|translat\w*)\s+(?:it\s+)?(?:to|into)\b/i.test(msg);
 
-    // ── Swap / cross-language rule (2+ languages + instruction keywords) ──────
-    if (uniqueLangs.length >= 2 && hasLangVerb) {
-        // Parse explicit pairs: "reply in X if/when I send Y" and
-        // "if/when I send X reply in Y" and "give me a response in X if I send Y"
-        const pairs = [];
-
-        // Pattern A: reply/respond in OUTPUT if/when I send/write INPUT
-        const patA = /(?:reply|respond|give\s+(?:me\s+)?(?:a\s+)?respons\w*)\s+in\s+([a-z]+)\s+(?:if|when)\s+(?:I\s+)?(?:send|write|speak|use|type)\s+(?:a?\s+)?(?:in\s+)?([a-z]+)/gi;
-        let m;
-        while ((m = patA.exec(msg)) !== null) {
-            const out = m[1].toLowerCase(), inp = m[2].toLowerCase();
-            if (uniqueLangs.includes(out) && uniqueLangs.includes(inp) && out !== inp)
-                pairs.push({ input: inp, output: out });
-        }
-
-        // Pattern B: if/when I send INPUT reply/respond in OUTPUT
-        const patB = /(?:if|when)\s+(?:I\s+)?(?:send|write|speak|use|type)\s+(?:a?\s+)?(?:in\s+)?([a-z]+)[^.]*?(?:reply|respond)\s+in\s+([a-z]+)/gi;
-        while ((m = patB.exec(msg)) !== null) {
-            const inp = m[1].toLowerCase(), out = m[2].toLowerCase();
-            if (uniqueLangs.includes(inp) && uniqueLangs.includes(out) && inp !== out &&
-                !pairs.find(p => p.input === inp && p.output === out))
-                pairs.push({ input: inp, output: out });
-        }
-
-        if (pairs.length >= 1) {
-            info.langMode = { type: 'swap', pairs };
-            info.lang     = null;
-            info.langRule = null;
+    // ── Shortcut 1: "swap X and Y" ────────────────────────────────────────────
+    // Simplest possible invocation — no extra verb needed
+    const swapAndMatch = msg.match(/\bswap\s+([a-zA-Z]+)\s+and\s+([a-zA-Z]+)/i);
+    if (swapAndMatch) {
+        const langA = swapAndMatch[1].toLowerCase(), langB = swapAndMatch[2].toLowerCase();
+        if (langA !== langB) {
+            info.langMode = { type: 'swap', pairs: [
+                { input: langA, output: langB },
+                { input: langB, output: langA },
+            ]};
+            info.lang = null; info.langRule = null;
         }
     }
-    // ── Single explicit language switch ───────────────────────────────────────
-    else if (uniqueLangs.length === 1 && hasLangVerb) {
-        const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an','back','normal','default']);
-        if (!notLang.has(uniqueLangs[0])) {
-            info.langMode = { type: 'single', lang: uniqueLangs[0] };
-            info.lang     = null;
-            info.langRule = null;
-        }
-    }
-    // ── Single-word "speak French" style ──────────────────────────────────────
+
+    // ── Shortcut 2: arrow / directional pairs ─────────────────────────────────
+    // Matches: "in English → convert it to Yoruba" (exact format from screenshot)
+    //          "English → Yoruba", "english > yoruba"
     else {
-        const langSet = msg.match(
-            /(?:speak|talk(?:\s+to\s+me)?(?:\s+in)?|reply(?:\s+in)?|respond(?:\s+in)?|use|switch(?:\s+to)?|write(?:\s+in)?)\s+(?:in\s+)?([a-zA-ZÀ-ÿ]{3,20})(?:\s|$|[.,!?])/i
-        );
-        if (langSet) {
-            const candidate = langSet[1].toLowerCase();
-            const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an']);
-            if (!notLang.has(candidate)) {
-                info.langMode = { type: 'single', lang: candidate };
+        const arrowPat = /(?:(?:is\s+)?in\s+)?([a-z]{3,20})\s*[→→>]\s*(?:convert|translate|reply|respond)?\s*(?:it\s+)?(?:to|into)\s+([a-z]{3,20})/gi;
+        const arrowPairs = [];
+        let am;
+        while ((am = arrowPat.exec(msg)) !== null) {
+            const inp = am[1].toLowerCase(), out = am[2].toLowerCase();
+            if (inp !== out && !arrowPairs.find(p => p.input === inp))
+                arrowPairs.push({ input: inp, output: out });
+        }
+        if (arrowPairs.length >= 1) {
+            info.langMode = { type: 'swap', pairs: arrowPairs };
+            info.lang = null; info.langRule = null;
+        }
+
+        // ── Swap / cross-language rule (2+ languages + instruction keywords) ──
+        else if (uniqueLangs.length >= 2 && hasLangVerb) {
+            const pairs = [];
+            let m;
+
+            // Pattern A: reply/respond/convert in OUTPUT if/when I send INPUT
+            const patA = /(?:reply|respond|give\s+(?:me\s+)?(?:a\s+)?respons\w*|convert|translat\w*)\s+(?:it\s+)?(?:to|into|in)\s+([a-z]+)\s+(?:if|when)\s+(?:I\s+)?(?:send|write|speak|use|type)\s+(?:a?\s+)?(?:in\s+)?([a-z]+)/gi;
+            while ((m = patA.exec(msg)) !== null) {
+                const out = m[1].toLowerCase(), inp = m[2].toLowerCase();
+                if (uniqueLangs.includes(out) && uniqueLangs.includes(inp) && out !== inp)
+                    pairs.push({ input: inp, output: out });
+            }
+
+            // Pattern B: if/when I send INPUT reply/respond/convert in/to OUTPUT
+            const patB = /(?:if|when)\s+(?:I\s+)?(?:send|write|speak|use|type)\s+(?:a?\s+)?(?:in\s+)?([a-z]+)[^.]*?(?:reply|respond|convert|translat\w*)\s+(?:it\s+)?(?:to|into|in)\s+([a-z]+)/gi;
+            while ((m = patB.exec(msg)) !== null) {
+                const inp = m[1].toLowerCase(), out = m[2].toLowerCase();
+                if (uniqueLangs.includes(inp) && uniqueLangs.includes(out) && inp !== out &&
+                    !pairs.find(p => p.input === inp && p.output === out))
+                    pairs.push({ input: inp, output: out });
+            }
+
+            if (pairs.length >= 1) {
+                info.langMode = { type: 'swap', pairs };
                 info.lang     = null;
                 info.langRule = null;
+            }
+        }
+        // ── Single explicit language switch ───────────────────────────────────
+        else if (uniqueLangs.length === 1 && hasLangVerb) {
+            const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an','back','normal','default']);
+            if (!notLang.has(uniqueLangs[0])) {
+                info.langMode = { type: 'single', lang: uniqueLangs[0] };
+                info.lang     = null;
+                info.langRule = null;
+            }
+        }
+        // ── Single-word "speak French" style ──────────────────────────────────
+        else {
+            const langSet = msg.match(
+                /(?:speak|talk(?:\s+to\s+me)?(?:\s+in)?|reply(?:\s+in)?|respond(?:\s+in)?|use|switch(?:\s+to)?|write(?:\s+in)?)\s+(?:in\s+)?([a-zA-ZÀ-ÿ]{3,20})(?:\s|$|[.,!?])/i
+            );
+            if (langSet) {
+                const candidate = langSet[1].toLowerCase();
+                const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an']);
+                if (!notLang.has(candidate)) {
+                    info.langMode = { type: 'single', lang: candidate };
+                    info.lang     = null;
+                    info.langRule = null;
+                }
             }
         }
     }
