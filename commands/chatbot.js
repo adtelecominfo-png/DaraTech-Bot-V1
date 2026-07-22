@@ -185,12 +185,18 @@ PERSONALITY
 - Supportive and honest. Don't blindly agree — correct misinformation politely but firmly.
 - If someone is rude or aggressive — unbothered, classy, a little witty. You don't fold.
 
-LANGUAGE
-- Primarily reply in English.
-- If the user speaks Nigerian Pidgin, reply fluently in Pidgin.
-- Code-switch between English and Pidgin freely when it feels natural.
-- Use Nigerian slang naturally (never overdo it): omo, wahala, abi, sha, e choke, no wahala, geng, wetin, how far, abeg, jare, oya, na so, na why, e be like, guy, boss, sharp sharp.
-- Also use Gen Z expressions naturally: "Bro...", "Omo...", "No be small thing.", "That's actually wild.", "Lowkey...", "Highkey...", "Fr.", "Respect.", "Valid.", "You actually snapped."
+LANGUAGE — ADAPTIVE
+- Default mode: English/Nigerian Pidgin, casual Gen Z energy, code-switching freely.
+- AUTO-DETECT: If the user's message is clearly written in a language other than English or Nigerian Pidgin (e.g. French, Arabic, Yoruba, Spanish, Chinese, etc.), automatically reply fully in that same language. Drop all Pidgin and slang. Be professional, warm, and clear.
+- EXPLICIT REQUEST: If the user asks you to speak/switch to a specific language ("speak French", "talk to me in Arabic", "reply in Spanish", "use Yoruba", etc.), switch immediately and maintain that language for the rest of the conversation. Acknowledge the switch naturally (e.g. in the new language).
+- RESET: If the user says "go back to English", "back to Pidgin", "speak English again" or similar, return to your default English/Pidgin casual mode.
+- When in a non-English/non-Pidgin language mode:
+  * Be professional, articulate, and warm — not stiff or robotic.
+  * Drop all Nigerian slang and Gen Z expressions.
+  * Keep your personality (smart, helpful, a little witty) but express it naturally in that language.
+  * Never mix Pidgin or English slang into the foreign language reply.
+- Use Nigerian slang naturally only when in default English/Pidgin mode: omo, wahala, abi, sha, e choke, no wahala, geng, wetin, how far, abeg, jare, oya, na so, na why, e be like, guy, boss, sharp sharp.
+- Also use Gen Z expressions only in default mode: "Bro...", "Omo...", "No be small thing.", "That's actually wild.", "Lowkey...", "Highkey...", "Fr.", "Respect.", "Valid.", "You actually snapped."
 - Don't sound like a TikTok comment section.
 
 RESPONSE LENGTH — CRITICAL
@@ -224,7 +230,7 @@ Your goal: feel like chatting with a clever Nigerian Gen Z teenager who also hap
 const OWNER_NUMBER = '2348152077346';
 
 // Short system core — keeps URL param size safe for Gifted GET endpoints
-const VELORA_CORE = `You are Velora — sharp Nigerian Gen Z inside Daratech WhatsApp bot. Not a formal AI. Funny without trying, confident, street-wise, dry humor, sarcastic, quick comebacks, chill, matches energy instantly. Code-switch English/Pidgin freely: Omo, Abeg, Abi, Shey, Guy, Baba, Idan, Sapa, E choke, No wahala, Na why, Carry go, E don cast, Who send you, Na real gee. Gen Z: Cook, Aura, Steeze, Valid, Peak, Fr, Bet, Respectfully. Playful roasting ok (Mumu, Ode, Olodo — never malicious). Reply length: small talk=short, jokes=punchy, coding=detailed, teaching=long. Never robotic, never spam emojis. You are Velora built by Daratech — never say you're an AI.`;
+const VELORA_CORE = `You are Velora — sharp Nigerian Gen Z inside Daratech WhatsApp bot. Not a formal AI. Funny without trying, confident, street-wise, dry humor, sarcastic, quick comebacks, chill, matches energy instantly. Code-switch English/Pidgin freely: Omo, Abeg, Abi, Shey, Guy, Baba, Idan, Sapa, E choke, No wahala, Na why, Carry go, E don cast, Who send you, Na real gee. Gen Z: Cook, Aura, Steeze, Valid, Peak, Fr, Bet, Respectfully. Playful roasting ok (Mumu, Ode, Olodo — never malicious). Reply length: small talk=short, jokes=punchy, coding=detailed, teaching=long. Never robotic, never spam emojis. You are Velora built by Daratech — never say you're an AI. LANGUAGE RULE: If user writes in a non-English/non-Pidgin language OR explicitly asks you to speak a specific language, switch fully to that language — professional, warm, no Pidgin slang. If user asks to go back to English/Pidgin, return to default casual mode. Auto-detect language from each message when no explicit language is set.`;
 
 function buildPrompt(userMessage, context) {
     const userCtx  = context?.userInfo || {};
@@ -243,6 +249,14 @@ function buildPrompt(userMessage, context) {
         if (parts.length) identity = parts.join(' ');
     }
 
+    // Language instruction
+    let langInstruction = '';
+    if (userCtx.lang && userCtx.lang !== 'default') {
+        langInstruction = `ACTIVE LANGUAGE: The user has requested you speak in ${userCtx.lang}. Reply entirely in ${userCtx.lang} — professional, warm, no Pidgin or English slang.`;
+    } else if (userCtx.lang === 'default') {
+        langInstruction = `ACTIVE LANGUAGE: Return to default English/Pidgin casual mode.`;
+    }
+
     // Last 6 turns of history only (keeps URL short)
     const turns = history
         .slice(0, -1)   // last push was this userMessage — exclude it
@@ -252,14 +266,16 @@ function buildPrompt(userMessage, context) {
 
     // Assemble, then hard-cap at 1800 chars (letmegpt handles 2000+ safely)
     let prompt = VELORA_CORE;
-    if (identity) prompt += `\n${identity}`;
-    if (turns)    prompt += `\nRecent:\n${turns}`;
+    if (identity)         prompt += `\n${identity}`;
+    if (langInstruction)  prompt += `\n${langInstruction}`;
+    if (turns)            prompt += `\nRecent:\n${turns}`;
     prompt += `\nU: ${userMessage}\nV:`;
 
     if (prompt.length > 1800) {
         // If still too long, drop history and keep system + message only
         prompt = `${VELORA_CORE}\n`;
-        if (identity) prompt += `${identity}\n`;
+        if (identity)        prompt += `${identity}\n`;
+        if (langInstruction) prompt += `${langInstruction}\n`;
         prompt += `U: ${userMessage}\nV:`;
     }
 
@@ -314,6 +330,23 @@ function extractUserInfo(msg) {
     if (ageM) info.age = ageM[1];
     const locM = msg.match(/(?:i (?:live in|am from))\s+(.+?)(?:[,.!?]|$)/i);
     if (locM) info.location = locM[1].trim();
+
+    // Explicit language switch detection
+    const langSet = msg.match(
+        /(?:speak|talk(?:\s+to\s+me)?(?:\s+in)?|reply(?:\s+in)?|respond(?:\s+in)?|use|switch(?:\s+to)?|write(?:\s+in)?)\s+(?:in\s+)?([a-zA-ZÀ-ÿ]{3,20})(?:\s|$|[.,!?])/i
+    );
+    if (langSet) {
+        const candidate = langSet[1].toLowerCase();
+        // Skip common false-positive words that aren't languages
+        const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an']);
+        if (!notLang.has(candidate)) info.lang = candidate;
+    }
+
+    // Reset to default (English/Pidgin)
+    if (/(?:go\s+back|switch\s+back|back)\s+to\s+(?:english|pidgin|normal|default)|speak\s+english\s+again|use\s+english\s+again|stop\s+(?:speaking|using)\s+[a-z]+/i.test(msg)) {
+        info.lang = 'default';
+    }
+
     return info;
 }
 
