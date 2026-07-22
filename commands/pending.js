@@ -156,4 +156,92 @@ async function acceptCommand(sock, chatId, message, userMessage) {
     }
 }
 
-module.exports = { pendingCommand, acceptCommand };
+// ── $reject ───────────────────────────────────────────────────────────────────
+async function rejectCommand(sock, chatId, message, userMessage) {
+    if (!chatId.endsWith('@g.us')) {
+        return sock.sendMessage(chatId, { text: '❌ Group-only command.' }, { quoted: message });
+    }
+
+    const senderId    = message.key.participant || message.key.remoteJid;
+    const adminStatus = await isAdmin(sock, chatId, senderId);
+
+    if (!adminStatus.isSenderAdmin && !message.key.fromMe) {
+        return sock.sendMessage(chatId, { text: '❌ Only group admins can use this command.' }, { quoted: message });
+    }
+    if (!adminStatus.isBotAdmin) {
+        return sock.sendMessage(chatId, { text: '❌ Please make the bot an admin first.' }, { quoted: message });
+    }
+
+    const arg = userMessage.replace(/^\$reject\s*/i, '').trim().toLowerCase();
+
+    if (!arg) {
+        return sock.sendMessage(chatId, {
+            text: `❌ Usage:\n• *$reject all* — decline all pending requests\n• *$reject 1* — decline request #1\n\n_Run *$pending* first to see the numbered list._`,
+        }, { quoted: message });
+    }
+
+    // Always fetch a fresh list
+    let requests = [];
+    try {
+        requests = await sock.groupRequestParticipantsList(chatId) || [];
+    } catch (err) {
+        console.error('[reject]', err.message);
+        return sock.sendMessage(chatId, { text: '❌ Failed to fetch pending requests.' }, { quoted: message });
+    }
+
+    if (requests.length === 0) {
+        pendingCache.delete(chatId);
+        return sock.sendMessage(chatId, { text: '✅ No pending requests to reject.' }, { quoted: message });
+    }
+
+    const jids = requests.map(r => (typeof r === 'string' ? r : r.jid || r.id || r));
+    pendingCache.set(chatId, jids);
+
+    // ── Reject all ────────────────────────────────────────────────────────────
+    if (arg === 'all') {
+        try {
+            await sock.groupRequestParticipantsUpdate(chatId, jids, 'reject');
+            return sock.sendMessage(chatId, {
+                text: [
+                    `🚫 *Rejected all ${jids.length} pending request(s).*`,
+                    ``,
+                    jids.map(j => `• @${j.split('@')[0]}`).join('\n'),
+                    ``,
+                    `_Daratech_ ⚡`,
+                ].join('\n'),
+                mentions: jids,
+            }, { quoted: message });
+        } catch (err) {
+            console.error('[reject:all]', err.message);
+            return sock.sendMessage(chatId, { text: `❌ Failed to reject all: ${err.message}` }, { quoted: message });
+        }
+    }
+
+    // ── Reject by number ──────────────────────────────────────────────────────
+    const n = parseInt(arg, 10);
+    if (isNaN(n) || n < 1 || n > jids.length) {
+        return sock.sendMessage(chatId, {
+            text: `❌ *${arg}* is not a valid number.\n\nThere are *${jids.length}* pending request(s) — pick a number between *1* and *${jids.length}*.\n\nRun *$pending* to see the list.`,
+        }, { quoted: message });
+    }
+
+    const targetJid = jids[n - 1];
+    try {
+        await sock.groupRequestParticipantsUpdate(chatId, [targetJid], 'reject');
+        return sock.sendMessage(chatId, {
+            text: [
+                `🚫 *Request #${n} rejected.*`,
+                ``,
+                `@${targetJid.split('@')[0]}'s join request has been declined.`,
+                ``,
+                `_Daratech_ ⚡`,
+            ].join('\n'),
+            mentions: [targetJid],
+        }, { quoted: message });
+    } catch (err) {
+        console.error('[reject:n]', err.message);
+        return sock.sendMessage(chatId, { text: `❌ Failed to reject request #${n}: ${err.message}` }, { quoted: message });
+    }
+}
+
+module.exports = { pendingCommand, acceptCommand, rejectCommand };
