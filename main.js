@@ -491,7 +491,9 @@ if (checkAFK(senderId)) {
             }
 
             // Velora name trigger — DMs and groups, no $ needed
-            if (/velora/i.test(userMessage)) {
+            // Matches "Velora" in Latin + phonetic transliterations in common scripts
+            const VELORA_TRIGGER = /velora|велора|فيلورا|ڤيلورا|维洛拉|薇洛拉|威洛拉|維洛拉|ヴェロラ|ベロラ|벨로라|वेलोरा|เวโลรา|ולורה|βελορα|ველორა|ቬሎራ/i;
+            if (VELORA_TRIGGER.test(userMessage)) {
                 await handleVeloraNameTrigger(sock, chatId, message, userMessage, senderId);
             }
             return;
