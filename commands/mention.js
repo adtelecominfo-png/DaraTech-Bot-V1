@@ -164,19 +164,44 @@ async function mentionToggleCommand(sock, chatId, message, args, isOwner) {
 
 async function setMentionCommand(sock, chatId, message, isOwner) {
 	if (!isOwner) return sock.sendMessage(chatId, { text: 'Only Owner or Sudo can use this command.' }, { quoted: message });
-	const ctx = message.message?.extendedTextMessage?.contextInfo;
-	const qMsg = ctx?.quotedMessage;
-	if (!qMsg) return sock.sendMessage(chatId, { text: 'Reply to a message or media (sticker/image/video/audio/document).' }, { quoted: message });
 
-	// Determine type and media key
-	let type = 'sticker', buf, dataType;
-	if (qMsg.stickerMessage) { dataType = 'stickerMessage'; type = 'sticker'; }
-	else if (qMsg.imageMessage) { dataType = 'imageMessage'; type = 'image'; }
-	else if (qMsg.videoMessage) { dataType = 'videoMessage'; type = 'video'; }
-	else if (qMsg.audioMessage) { dataType = 'audioMessage'; type = 'audio'; }
-	else if (qMsg.documentMessage) { dataType = 'documentMessage'; type = 'file'; }
-	else if (qMsg.conversation || qMsg.extendedTextMessage?.text) { type = 'text'; }
-	else return sock.sendMessage(chatId, { text: 'Unsupported. Reply to text/sticker/image/video/audio/document.' }, { quoted: message });
+	// Support media attached directly to the command (image/video/audio as caption) OR a quoted reply
+	const msgContent = message.message || {};
+	const ctx = msgContent.extendedTextMessage?.contextInfo || msgContent.imageMessage?.contextInfo || msgContent.videoMessage?.contextInfo;
+	const qMsg = ctx?.quotedMessage;
+
+	// Check if the message itself carries media (sent as caption)
+	const selfHasImage    = !!msgContent.imageMessage;
+	const selfHasVideo    = !!msgContent.videoMessage;
+	const selfHasAudio    = !!msgContent.audioMessage;
+	const selfHasSticker  = !!msgContent.stickerMessage;
+	const selfHasDocument = !!msgContent.documentMessage;
+	const selfHasMedia    = selfHasImage || selfHasVideo || selfHasAudio || selfHasSticker || selfHasDocument;
+
+	if (!selfHasMedia && !qMsg) {
+		return sock.sendMessage(chatId, { text: 'Reply to a message or media (sticker/image/video/audio/document), or send media with $setmention as caption.' }, { quoted: message });
+	}
+
+	// Determine source: prefer the message's own media, then quoted
+	let type = 'sticker', buf, dataType, sourceMsg;
+
+	if (selfHasMedia) {
+		sourceMsg = msgContent;
+		if (selfHasSticker)  { dataType = 'stickerMessage';  type = 'sticker'; }
+		else if (selfHasImage)    { dataType = 'imageMessage';    type = 'image'; }
+		else if (selfHasVideo)    { dataType = 'videoMessage';    type = 'video'; }
+		else if (selfHasAudio)    { dataType = 'audioMessage';    type = 'audio'; }
+		else if (selfHasDocument) { dataType = 'documentMessage'; type = 'file'; }
+	} else {
+		sourceMsg = qMsg;
+		if (qMsg.stickerMessage)       { dataType = 'stickerMessage';  type = 'sticker'; }
+		else if (qMsg.imageMessage)    { dataType = 'imageMessage';    type = 'image'; }
+		else if (qMsg.videoMessage)    { dataType = 'videoMessage';    type = 'video'; }
+		else if (qMsg.audioMessage)    { dataType = 'audioMessage';    type = 'audio'; }
+		else if (qMsg.documentMessage) { dataType = 'documentMessage'; type = 'file'; }
+		else if (qMsg.conversation || qMsg.extendedTextMessage?.text) { type = 'text'; }
+		else return sock.sendMessage(chatId, { text: 'Unsupported. Reply to text/sticker/image/video/audio/document.' }, { quoted: message });
+	}
 
 	// Download or capture text
 	if (type === 'text') {
@@ -184,7 +209,7 @@ async function setMentionCommand(sock, chatId, message, isOwner) {
 		if (!buf.length) return sock.sendMessage(chatId, { text: 'Empty text.' }, { quoted: message });
 	} else {
 		try {
-			const media = qMsg[dataType];
+			const media = sourceMsg[dataType];
 			if (!media) throw new Error('No media');
 			const kind = type === 'sticker' ? 'sticker' : type;
 			const stream = await downloadContentFromMessage(media, kind);
@@ -203,9 +228,9 @@ async function setMentionCommand(sock, chatId, message, isOwner) {
 	}
 
 	// Decide extension and flags by mimetype
-	let mimetype = qMsg[dataType]?.mimetype || '';
-	let ptt = !!qMsg.audioMessage?.ptt;
-	let gifPlayback = !!qMsg.videoMessage?.gifPlayback;
+	let mimetype = (type !== 'text' ? sourceMsg[dataType]?.mimetype : '') || '';
+	let ptt = !!sourceMsg.audioMessage?.ptt;
+	let gifPlayback = !!sourceMsg.videoMessage?.gifPlayback;
 	let ext = 'bin';
 	if (type === 'sticker') ext = 'webp';
 	else if (type === 'image') ext = mimetype.includes('png') ? 'png' : 'jpg';
