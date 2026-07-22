@@ -249,12 +249,22 @@ function buildPrompt(userMessage, context) {
         if (parts.length) identity = parts.join(' ');
     }
 
-    // Language instruction
-    let langInstruction = '';
-    if (userCtx.lang && userCtx.lang !== 'default') {
-        langInstruction = `ACTIVE LANGUAGE: The user has requested you speak in ${userCtx.lang}. Reply entirely in ${userCtx.lang} — professional, warm, no Pidgin or English slang.`;
+    // Language override — built first, injected at the TOP of the prompt so the model can't miss it
+    let langOverride = '';
+    if (userCtx.langRule) {
+        // Swap / cross-language rule: inject verbatim + make it crystal clear
+        langOverride =
+            `[LANGUAGE RULE — CRITICAL, FOLLOW EXACTLY, OVERRIDES EVERYTHING ELSE]\n` +
+            `The user has set this rule: "${userCtx.langRule}"\n` +
+            `You MUST follow this rule on every single reply, no exceptions. ` +
+            `Do NOT revert to English/Pidgin unless the user explicitly cancels the rule.`;
+    } else if (userCtx.lang && userCtx.lang !== 'default') {
+        langOverride =
+            `[LANGUAGE RULE — CRITICAL]\n` +
+            `Reply entirely in ${userCtx.lang} for every message. ` +
+            `Professional and warm tone. No Pidgin or English slang.`;
     } else if (userCtx.lang === 'default') {
-        langInstruction = `ACTIVE LANGUAGE: Return to default English/Pidgin casual mode.`;
+        langOverride = `[LANGUAGE RULE] Return to default English/Pidgin casual mode now.`;
     }
 
     // Last 6 turns of history only (keeps URL short)
@@ -264,18 +274,20 @@ function buildPrompt(userMessage, context) {
         .map(m => `${m.role === 'user' ? 'U' : 'V'}: ${m.content.slice(0, 120)}`)
         .join('\n');
 
-    // Assemble, then hard-cap at 1800 chars (letmegpt handles 2000+ safely)
-    let prompt = VELORA_CORE;
-    if (identity)         prompt += `\n${identity}`;
-    if (langInstruction)  prompt += `\n${langInstruction}`;
-    if (turns)            prompt += `\nRecent:\n${turns}`;
+    // Assemble: lang override goes FIRST so it's the model's primary instruction
+    let prompt = '';
+    if (langOverride) prompt += `${langOverride}\n\n`;
+    prompt += VELORA_CORE;
+    if (identity) prompt += `\n${identity}`;
+    if (turns)    prompt += `\nRecent:\n${turns}`;
     prompt += `\nU: ${userMessage}\nV:`;
 
     if (prompt.length > 1800) {
-        // If still too long, drop history and keep system + message only
-        prompt = `${VELORA_CORE}\n`;
-        if (identity)        prompt += `${identity}\n`;
-        if (langInstruction) prompt += `${langInstruction}\n`;
+        // If still too long, drop history but always keep the lang override
+        prompt = '';
+        if (langOverride) prompt += `${langOverride}\n\n`;
+        prompt += `${VELORA_CORE}\n`;
+        if (identity) prompt += `${identity}\n`;
         prompt += `U: ${userMessage}\nV:`;
     }
 
@@ -331,20 +343,49 @@ function extractUserInfo(msg) {
     const locM = msg.match(/(?:i (?:live in|am from))\s+(.+?)(?:[,.!?]|$)/i);
     if (locM) info.location = locM[1].trim();
 
-    // Explicit language switch detection
-    const langSet = msg.match(
-        /(?:speak|talk(?:\s+to\s+me)?(?:\s+in)?|reply(?:\s+in)?|respond(?:\s+in)?|use|switch(?:\s+to)?|write(?:\s+in)?)\s+(?:in\s+)?([a-zA-ZÀ-ÿ]{3,20})(?:\s|$|[.,!?])/i
-    );
-    if (langSet) {
-        const candidate = langSet[1].toLowerCase();
-        // Skip common false-positive words that aren't languages
-        const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an']);
-        if (!notLang.has(candidate)) info.lang = candidate;
+    // Known language names (expand as needed)
+    const KNOWN_LANGS = /\b(english|portuguese|french|spanish|arabic|yoruba|igbo|hausa|german|italian|chinese|mandarin|japanese|korean|russian|hindi|swahili|dutch|turkish|persian|urdu|pidgin|creole|latin|greek|hebrew|vietnamese|thai|polish|swedish|norwegian|danish|finnish|romanian|czech|hungarian|slovak|ukrainian|afrikaans|zulu|amharic|somali|tagalog|malay|indonesian)\b/gi;
+
+    const langMatches = [...msg.matchAll(KNOWN_LANGS)].map(m => m[1].toLowerCase());
+    const uniqueLangs = [...new Set(langMatches)];
+
+    // ── Swap / cross-language rule (2+ languages + instruction keywords) ──────
+    const hasLangInstruction = /(?:reply|respond|give\s+(?:me\s+)?(?:a\s+)?respons\w*|speak|write|answer)\s+in\b|(?:when|if)\s+I\s+(?:send|write|speak|use|type)/i.test(msg);
+    if (uniqueLangs.length >= 2 && hasLangInstruction) {
+        // Build an explicit, unambiguous rule for the model
+        // e.g. "reply in English when I send Portuguese and reply in Portuguese when I send English"
+        // We store the raw user sentence so the model gets the exact intent
+        info.langRule = msg.trim().replace(/\s+/g, ' ');
+        // Clear any old single-lang preference when a rule is set
+        info.lang = null;
+    }
+    // ── Single explicit language switch ───────────────────────────────────────
+    else if (uniqueLangs.length === 1 && hasLangInstruction) {
+        const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an','back','normal','default']);
+        if (!notLang.has(uniqueLangs[0])) {
+            info.lang = uniqueLangs[0];
+            info.langRule = null; // clear any swap rule
+        }
+    }
+    // ── Single word "speak French" style (no explicit "when I…") ─────────────
+    else {
+        const langSet = msg.match(
+            /(?:speak|talk(?:\s+to\s+me)?(?:\s+in)?|reply(?:\s+in)?|respond(?:\s+in)?|use|switch(?:\s+to)?|write(?:\s+in)?)\s+(?:in\s+)?([a-zA-ZÀ-ÿ]{3,20})(?:\s|$|[.,!?])/i
+        );
+        if (langSet) {
+            const candidate = langSet[1].toLowerCase();
+            const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an']);
+            if (!notLang.has(candidate)) {
+                info.lang = candidate;
+                info.langRule = null;
+            }
+        }
     }
 
-    // Reset to default (English/Pidgin)
-    if (/(?:go\s+back|switch\s+back|back)\s+to\s+(?:english|pidgin|normal|default)|speak\s+english\s+again|use\s+english\s+again|stop\s+(?:speaking|using)\s+[a-z]+/i.test(msg)) {
+    // ── Reset to default (English/Pidgin) ─────────────────────────────────────
+    if (/(?:go\s+back|switch\s+back|back)\s+to\s+(?:english|pidgin|normal|default)|speak\s+english\s+again|use\s+english\s+again|stop\s+(?:speaking|using)\s+\w+/i.test(msg)) {
         info.lang = 'default';
+        info.langRule = null;
     }
 
     return info;
