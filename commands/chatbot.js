@@ -473,9 +473,19 @@ function extractQuotedContext(message) {
 }
 
 // Merge user query + quoted context into one prompt string
-function buildQueryWithQuoted(query, quoted) {
+// langMode — pass userInfo.langMode so quoted messages get translated when swap mode is active
+function buildQueryWithQuoted(query, quoted, langMode) {
     if (!quoted) return query || null;
     const { text: qText, type: qType } = quoted;
+
+    // ── Translator relay: swap mode + quoted text → translate that message for the user ──
+    if (langMode?.type === 'swap' && qText) {
+        return `[Translator mode] The following is a message from the person I am translating with. ` +
+               `Using our active swap rules, translate it into MY language (the one I normally write you in). ` +
+               `Reply with ONLY the translated text — no labels, no explanations, nothing else.\n` +
+               `Message to translate: "${qText}"`;
+    }
+
     if (query && qText)  return `${query}\n\n(replying to: "${qText}")`;
     if (query)           return `${query}\n\n(replying to a ${qType || 'message'})`;
     if (qText)           return qText;
@@ -593,8 +603,10 @@ async function handleChatbotCommand(sock, chatId, message, match) {
 
 // ─── Velora name trigger ──────────────────────────────────────────────────────
 async function handleVeloraNameTrigger(sock, chatId, message, userMessage, senderId) {
-    const quoted    = extractQuotedContext(message);
-    const finalQuery = buildQueryWithQuoted(userMessage, quoted);
+    const memKey   = getMemKey(senderId, chatId);
+    const langMode = chatMemory.get(memKey)?.userInfo?.langMode;
+    const quoted   = extractQuotedContext(message);
+    const finalQuery = buildQueryWithQuoted(userMessage, quoted, langMode);
     await veloraRespond(sock, chatId, message, finalQuery || userMessage, senderId);
 }
 
@@ -612,8 +624,10 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
         }
     }
 
+    const memKey2    = getMemKey(senderId, chatId);
+    const langMode2  = chatMemory.get(memKey2)?.userInfo?.langMode;
     const quotedCtx  = extractQuotedContext(message);
-    const finalQuery = buildQueryWithQuoted(query, quotedCtx) || query || 'Hey! Say hi and introduce yourself briefly.';
+    const finalQuery = buildQueryWithQuoted(query, quotedCtx, langMode2) || query || 'Hey! Say hi and introduce yourself briefly.';
 
     await veloraRespond(sock, chatId, message, finalQuery, senderId);
 }
@@ -647,7 +661,9 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
         if (!cleanedMessage && !extractQuotedContext(message)) return;
 
         const quoted     = extractQuotedContext(message);
-        const finalQuery = buildQueryWithQuoted(cleanedMessage, quoted) || cleanedMessage;
+        const memKey3   = getMemKey(senderId, chatId);
+        const langMode3 = chatMemory.get(memKey3)?.userInfo?.langMode;
+        const finalQuery = buildQueryWithQuoted(cleanedMessage, quoted, langMode3) || cleanedMessage;
         if (!finalQuery) return;
 
         const mentions = isMentioned ? [senderId] : [];
