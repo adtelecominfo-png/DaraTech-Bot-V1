@@ -273,6 +273,7 @@ const { tempphoneCommand, smsinboxCommand } = require('./commands/gifted-tempgen
 const { loremCommand, fakenameCommand, genemailCommand, randomnumCommand, coinflipCommand, dicerollCommand } = require('./commands/generators');
 const economyCommand = require('./commands/economy');
 const savedocCommand = require('./commands/savedoc');
+const docsaveCommand = require('./commands/docsave');
 // Global settings
 global.packname = settings.packname;
 global.ytch = "Daratech";
@@ -560,6 +561,11 @@ if (checkAFK(senderId)) {
             // === NEW COMMANDS ===
             case userMessage.startsWith('$savedoc'):
                 await savedocCommand(sock, chatId, message, userMessage);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('$docsave'):
+                await docsaveCommand(sock, chatId, message, userMessage);
                 commandExecuted = true;
                 break;
 
