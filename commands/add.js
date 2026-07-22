@@ -22,9 +22,43 @@ async function addCommand(sock, chatId, message, userMessage) {
             }, { quoted: message });
         }
 
-        // ── Helper: human-readable reason from error ──────────────────────────
-        function failReason(err) {
-            const msg = (err?.message || err?.toString() || '').toLowerCase();
+        // ── Helper: human-readable reason from Baileys result or thrown error ──
+        // groupParticipantsUpdate returns [{ status, jid, error? }] — it does NOT
+        // throw for individual participant failures (403, 408, 409, etc.).
+        // We check the returned status first, then fall back to caught exceptions.
+        function failReason(statusOrErr) {
+            // Called with a numeric status from the result array
+            if (typeof statusOrErr === 'number') {
+                switch (statusOrErr) {
+                    case 200: return null;                           // success
+                    case 403: return 'not authorized — they may have restricted who can add them';
+                    case 408: return 'number not on WhatsApp';
+                    case 409: return 'already in the group';
+                    case 429: return 'rate limited — try again later';
+                    default:  return `failed (status ${statusOrErr})`;
+                }
+            }
+
+            // Called with a string error code from result[i].error
+            if (typeof statusOrErr === 'string') {
+                const s = statusOrErr.toLowerCase();
+                if (s.includes('account_reachout_restricted') || s.includes('reachout'))
+                    return 'they\'ve turned off "Add me to groups" in their privacy settings';
+                if (s.includes('not-authorized') || s.includes('403'))
+                    return 'not authorized — they may have restricted who can add them';
+                if (s.includes('409') || s.includes('already'))
+                    return 'already in the group';
+                if (s.includes('408') || s.includes('gone'))
+                    return 'number not on WhatsApp';
+                if (s.includes('rate') || s.includes('429'))
+                    return 'rate limited — try again later';
+                return statusOrErr;
+            }
+
+            // Called with a thrown Error object
+            const msg = (statusOrErr?.message || statusOrErr?.toString() || '').toLowerCase();
+            if (msg.includes('account_reachout_restricted') || msg.includes('reachout'))
+                return 'they\'ve turned off "Add me to groups" in their privacy settings';
             if (msg.includes('not-authorized') || msg.includes('403'))
                 return 'not authorized — they may have restricted who can add them';
             if (msg.includes('409') || msg.includes('already'))
@@ -33,7 +67,33 @@ async function addCommand(sock, chatId, message, userMessage) {
                 return 'number not on WhatsApp';
             if (msg.includes('rate') || msg.includes('429'))
                 return 'rate limited — try again later';
-            return err?.message || 'failed';
+            return statusOrErr?.message || 'failed';
+        }
+
+        // ── Try to add a single JID; returns "✅ +num" or "❌ +num — reason" ──
+        async function tryAdd(jid) {
+            const num = jid.split('@')[0];
+            try {
+                const res = await sock.groupParticipantsUpdate(chatId, [jid], 'add');
+                // res is an array; check the first (and only) entry
+                const entry = Array.isArray(res) ? res[0] : null;
+                if (entry) {
+                    // Some builds surface error as entry.error (string code)
+                    if (entry.error) {
+                        const reason = failReason(entry.error);
+                        return `❌ +${num} — ${reason}`;
+                    }
+                    // Otherwise check numeric status
+                    const status = entry.status ?? 200;
+                    if (status !== 200) {
+                        const reason = failReason(status);
+                        return `❌ +${num} — ${reason}`;
+                    }
+                }
+                return `✅ +${num}`;
+            } catch (err) {
+                return `❌ +${num} — ${failReason(err)}`;
+            }
         }
 
         // ── Mentioned users ───────────────────────────────────────────────────
@@ -42,13 +102,7 @@ async function addCommand(sock, chatId, message, userMessage) {
         if (mentioned.length > 0) {
             const results = [];
             for (const jid of mentioned) {
-                const num = jid.split('@')[0];
-                try {
-                    await sock.groupParticipantsUpdate(chatId, [jid], 'add');
-                    results.push(`✅ +${num}`);
-                } catch (err) {
-                    results.push(`❌ +${num} — ${failReason(err)}`);
-                }
+                results.push(await tryAdd(jid));
                 await new Promise(r => setTimeout(r, 500));
             }
             return await sock.sendMessage(chatId, {
@@ -71,13 +125,7 @@ async function addCommand(sock, chatId, message, userMessage) {
 
         const results = [];
         for (const number of numbers) {
-            const jid = number + '@s.whatsapp.net';
-            try {
-                await sock.groupParticipantsUpdate(chatId, [jid], 'add');
-                results.push(`✅ +${number}`);
-            } catch (err) {
-                results.push(`❌ +${number} — ${failReason(err)}`);
-            }
+            results.push(await tryAdd(number + '@s.whatsapp.net'));
             await new Promise(r => setTimeout(r, 500));
         }
 
