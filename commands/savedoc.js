@@ -34,63 +34,163 @@ async function savedocCommand(sock, chatId, message, userMessage) {
     const reply = (text) => sock.sendMessage(chatId, { text }, { quoted: message });
     const raw   = userMessage.slice('$savedoc'.length).trim();
 
-    // ── $savedoc  /  $savedoc list ─────────────────────────────────────────
+    // ── $savedoc  /  $savedoc list ────────────────────────────────────────
     if (!raw || raw === 'list') {
         const docs = listDocs();
         if (!docs.length) {
             return reply(
-                '📂 *Saved Docs*\n\n' +
-                'No documents yet.\n\n' +
-                '_Create one:_  $savedoc new <name>\n' +
-                '_Write to it:_ $savedoc <name> <text>'
+                '╭─「 📂 *SaveDoc* 」\n' +
+                '│\n' +
+                '│  Your document vault is empty.\n' +
+                '│\n' +
+                '├─ *Get started:*\n' +
+                '│  $savedoc new <name>        → create a doc\n' +
+                '│  $savedoc <name> <text>     → write to a doc\n' +
+                '╰───────────────────────'
             );
         }
-        const list = docs.map((d, i) => `${i + 1}. 📄 ${d}`).join('\n');
+        const list = docs.map((d, i) => `│  ${i + 1}. 📄 ${d}`).join('\n');
         return reply(
-            `📂 *Saved Docs* (${docs.length})\n\n${list}\n\n` +
-            '_$savedoc <name> <text>_ → write\n' +
-            '_$savedoc view <name>_   → read\n' +
-            '_$savedoc delete <name>_ → delete'
+            `╭─「 📂 *SaveDoc* — ${docs.length} doc${docs.length > 1 ? 's' : ''} 」\n` +
+            '│\n' +
+            `${list}\n` +
+            '│\n' +
+            '├─ *Commands:*\n' +
+            '│  $savedoc <name> <text>     → append to a doc\n' +
+            '│  $savedoc view <name>       → read a doc\n' +
+            '│  $savedoc delete <name>     → delete a doc\n' +
+            '╰───────────────────────'
         );
     }
 
     const parts = raw.split(' ');
     const sub   = parts[0].toLowerCase();
 
-    // ── $savedoc new <name> ────────────────────────────────────────────────
+    // ── $savedoc new <name> ───────────────────────────────────────────────
     if (sub === 'new') {
         const name = parts[1];
-        if (!name) return reply('❌ Usage: *$savedoc new <name>*\nName must be letters, numbers, _ or -');
-        if (!validName(name)) return reply('❌ Name can only use letters, numbers, _ and - (max 40 chars)');
-        if (readDoc(name) !== null) return reply(`❌ *${name}* already exists.\n\nWrite to it: $savedoc ${name} <text>\nRead it: $savedoc view ${name}`);
+        if (!name) {
+            return reply(
+                '╭─「 📂 *SaveDoc — New Doc* 」\n' +
+                '│\n' +
+                '│  Please provide a name for the document.\n' +
+                '│\n' +
+                '│  *Usage:* $savedoc new <name>\n' +
+                '│  *Rules:* letters, numbers, _ or - (max 40)\n' +
+                '╰───────────────────────'
+            );
+        }
+        if (!validName(name)) {
+            return reply(
+                '╭─「 📂 *SaveDoc — Invalid Name* 」\n' +
+                '│\n' +
+                `│  "${name}" is not a valid document name.\n` +
+                '│\n' +
+                '│  Only letters, numbers, underscores (_)\n' +
+                '│  and hyphens (-) are allowed. Max 40 chars.\n' +
+                '╰───────────────────────'
+            );
+        }
+        if (readDoc(name) !== null) {
+            return reply(
+                `╭─「 📂 *SaveDoc — Already Exists* 」\n` +
+                '│\n' +
+                `│  A document named *${name}* already exists.\n` +
+                '│\n' +
+                '├─ *What to do:*\n' +
+                `│  $savedoc ${name} <text>   → write to it\n` +
+                `│  $savedoc view ${name}     → read it\n` +
+                '╰───────────────────────'
+            );
+        }
         try {
             writeDoc(name, `# ${name}\n`);
-            return reply(`✅ *${name}* created!\n\nWrite to it:\n$savedoc ${name} <your text here>`);
+            return reply(
+                `╭─「 📂 *SaveDoc — Created* 」\n` +
+                '│\n' +
+                `│  ✅ *${name}* has been created successfully.\n` +
+                '│\n' +
+                '├─ *Next step:*\n' +
+                `│  $savedoc ${name} <your text>\n` +
+                '╰───────────────────────'
+            );
         } catch {
-            return reply('❌ Error creating doc. Check bot data folder permissions.');
+            return reply(
+                '╭─「 📂 *SaveDoc — Error* 」\n' +
+                '│\n' +
+                '│  ⚠️ Failed to create document.\n' +
+                '│  Check bot data folder permissions.\n' +
+                '╰───────────────────────'
+            );
         }
     }
 
-    // ── $savedoc delete <name> ─────────────────────────────────────────────
+    // ── $savedoc delete <name> ────────────────────────────────────────────
     if (sub === 'delete') {
         const name = parts[1];
-        if (!name) return reply('❌ Usage: *$savedoc delete <name>*');
-        if (readDoc(name) === null) return reply(`❌ *${name}* doesn't exist.`);
+        if (!name) {
+            return reply(
+                '╭─「 📂 *SaveDoc — Delete* 」\n' +
+                '│\n' +
+                '│  *Usage:* $savedoc delete <name>\n' +
+                '╰───────────────────────'
+            );
+        }
+        if (readDoc(name) === null) {
+            return reply(
+                `╭─「 📂 *SaveDoc — Not Found* 」\n` +
+                '│\n' +
+                `│  No document named *${name}* exists.\n` +
+                '│  Use $savedoc list to see all docs.\n' +
+                '╰───────────────────────'
+            );
+        }
         try {
             deleteDoc(name);
-            return reply(`🗑️ *${name}* deleted.`);
+            return reply(
+                `╭─「 📂 *SaveDoc — Deleted* 」\n` +
+                '│\n' +
+                `│  🗑️ *${name}* has been permanently deleted.\n` +
+                '╰───────────────────────'
+            );
         } catch {
-            return reply('❌ Error deleting doc.');
+            return reply(
+                '╭─「 📂 *SaveDoc — Error* 」\n' +
+                '│\n' +
+                '│  ⚠️ Failed to delete the document.\n' +
+                '│  Please try again.\n' +
+                '╰───────────────────────'
+            );
         }
     }
 
-    // ── $savedoc view <name>  /  $savedoc read <name> ─────────────────────
+    // ── $savedoc view <name>  /  $savedoc read <name> ────────────────────
     if (sub === 'view' || sub === 'read') {
         const name = parts[1];
-        if (!name) return reply('❌ Usage: *$savedoc view <name>*');
+        if (!name) {
+            return reply(
+                '╭─「 📂 *SaveDoc — View* 」\n' +
+                '│\n' +
+                '│  *Usage:* $savedoc view <name>\n' +
+                '╰───────────────────────'
+            );
+        }
         const content = readDoc(name);
-        if (content === null) return reply(`❌ *${name}* doesn't exist.\nCreate it: $savedoc new ${name}`);
-        return reply(`📄 *${name}*\n\n${content.trim() || '_(empty)_'}`);
+        if (content === null) {
+            return reply(
+                `╭─「 📂 *SaveDoc — Not Found* 」\n` +
+                '│\n' +
+                `│  No document named *${name}* exists.\n` +
+                `│  Create it: $savedoc new ${name}\n` +
+                '╰───────────────────────'
+            );
+        }
+        return reply(
+            `╭─「 📄 *${name}* 」\n` +
+            '│\n' +
+            `${content.trim() ? content.trim().split('\n').map(l => `│  ${l}`).join('\n') : '│  _(empty document)_'}\n` +
+            '╰───────────────────────'
+        );
     }
 
     // ── $savedoc <name> <text>  — append text ─────────────────────────────
@@ -99,24 +199,40 @@ async function savedocCommand(sock, chatId, message, userMessage) {
 
     if (!validName(name)) {
         return reply(
-            '❌ Unknown subcommand or invalid name.\n\n' +
-            '*Usage:*\n' +
-            '$savedoc list\n' +
-            '$savedoc new <name>\n' +
-            '$savedoc <name> <text>\n' +
-            '$savedoc view <name>\n' +
-            '$savedoc delete <name>'
+            '╭─「 📂 *SaveDoc — Help* 」\n' +
+            '│\n' +
+            '│  Unknown subcommand or invalid name.\n' +
+            '│\n' +
+            '├─ *Available Commands:*\n' +
+            '│  $savedoc list\n' +
+            '│  $savedoc new <name>\n' +
+            '│  $savedoc <name> <text>\n' +
+            '│  $savedoc view <name>\n' +
+            '│  $savedoc delete <name>\n' +
+            '╰───────────────────────'
         );
     }
 
-    // No text supplied → show the doc
     if (!text) {
         const content = readDoc(name);
-        if (content === null) return reply(`❌ *${name}* doesn't exist.\nCreate it: $savedoc new ${name}`);
-        return reply(`📄 *${name}*\n\n${content.trim() || '_(empty)_'}`);
+        if (content === null) {
+            return reply(
+                `╭─「 📂 *SaveDoc — Not Found* 」\n` +
+                '│\n' +
+                `│  No document named *${name}* exists.\n` +
+                `│  Create it: $savedoc new ${name}\n` +
+                '╰───────────────────────'
+            );
+        }
+        return reply(
+            `╭─「 📄 *${name}* 」\n` +
+            '│\n' +
+            `${content.trim() ? content.trim().split('\n').map(l => `│  ${l}`).join('\n') : '│  _(empty document)_'}\n` +
+            '╰───────────────────────'
+        );
     }
 
-    // Append text — auto-create doc if it doesn't exist yet
+    // Append text
     try {
         const existing  = readDoc(name);
         const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
@@ -129,10 +245,24 @@ async function savedocCommand(sock, chatId, message, userMessage) {
         }
 
         writeDoc(name, newContent);
-        const action = existing === null ? 'Created & saved to' : 'Saved to';
-        return reply(`✅ ${action} *${name}*:\n\n${text}`);
+        const isNew = existing === null;
+        return reply(
+            `╭─「 📂 *SaveDoc — ${isNew ? 'Created & Saved' : 'Saved'}* 」\n` +
+            '│\n' +
+            `│  📄 Document: *${name}*\n` +
+            `│  🕐 ${timestamp}\n` +
+            '│\n' +
+            `│  ${text}\n` +
+            '╰───────────────────────'
+        );
     } catch {
-        return reply('❌ Error writing to doc. Try again.');
+        return reply(
+            '╭─「 📂 *SaveDoc — Error* 」\n' +
+            '│\n' +
+            '│  ⚠️ Failed to write to the document.\n' +
+            '│  Please try again.\n' +
+            '╰───────────────────────'
+        );
     }
 }
 

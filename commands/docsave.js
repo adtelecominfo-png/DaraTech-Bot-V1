@@ -66,82 +66,297 @@ async function docsaveCommand(sock, chatId, message, userMessage) {
     const reply = (text) => sock.sendMessage(chatId, { text }, { quoted: message });
     const raw   = userMessage.slice('$docsave'.length).trim();
 
+    // ── $docsave  /  $docsave list ────────────────────────────────────────
     if (!raw || raw === 'list') {
         try {
             const files = await listFiles();
             const docs  = files.filter(f => f.name.endsWith('.txt'));
-            if (!docs.length) return reply('📂 *Docsave (GitHub)*\n\nNo documents yet.\n\n_Create one:_  $docsave new <name>\n_Write to it:_ $docsave <name> <text>');
-            const list = docs.map((f, i) => `${i + 1}. 📄 ${f.name.replace('.txt', '')}`).join('\n');
-            return reply(`📂 *Docsave (GitHub)* (${docs.length})\n\n${list}\n\n_$docsave <name> <text>_ → write\n_$docsave view <name>_ → read\n_$docsave delete <name>_ → delete`);
-        } catch { return reply('❌ Failed to list docs.'); }
+            if (!docs.length) {
+                return reply(
+                    '╭─「 ☁️ *DocSave* 」\n' +
+                    '│\n' +
+                    '│  Your GitHub vault is empty.\n' +
+                    '│\n' +
+                    '├─ *Get started:*\n' +
+                    '│  $docsave new <name>        → create a doc\n' +
+                    '│  $docsave <name> <text>     → write to a doc\n' +
+                    '╰───────────────────────'
+                );
+            }
+            const list = docs.map((f, i) => `│  ${i + 1}. 📄 ${f.name.replace('.txt', '')}`).join('\n');
+            return reply(
+                `╭─「 ☁️ *DocSave* — ${docs.length} doc${docs.length > 1 ? 's' : ''} 」\n` +
+                '│\n' +
+                `${list}\n` +
+                '│\n' +
+                '├─ *Commands:*\n' +
+                '│  $docsave <name> <text>     → append to a doc\n' +
+                '│  $docsave view <name>       → read a doc\n' +
+                '│  $docsave delete <name>     → delete a doc\n' +
+                '╰───────────────────────'
+            );
+        } catch {
+            return reply(
+                '╭─「 ☁️ *DocSave — Error* 」\n' +
+                '│\n' +
+                '│  ⚠️ Could not reach GitHub. Check your\n' +
+                '│  connection and try again.\n' +
+                '╰───────────────────────'
+            );
+        }
     }
 
     const parts = raw.split(' ');
     const sub   = parts[0].toLowerCase();
 
+    // ── $docsave new <name> ───────────────────────────────────────────────
     if (sub === 'new') {
         const name = parts[1];
-        if (!name) return reply('❌ Usage: *$docsave new <name>*');
-        if (!validName(name)) return reply('❌ Name: letters, numbers, _ or - only (max 40)');
+        if (!name) {
+            return reply(
+                '╭─「 ☁️ *DocSave — New Doc* 」\n' +
+                '│\n' +
+                '│  Please provide a name for the document.\n' +
+                '│\n' +
+                '│  *Usage:* $docsave new <name>\n' +
+                '│  *Rules:* letters, numbers, _ or - (max 40)\n' +
+                '╰───────────────────────'
+            );
+        }
+        if (!validName(name)) {
+            return reply(
+                '╭─「 ☁️ *DocSave — Invalid Name* 」\n' +
+                '│\n' +
+                `│  "${name}" is not a valid document name.\n` +
+                '│\n' +
+                '│  Only letters, numbers, underscores (_)\n' +
+                '│  and hyphens (-) are allowed. Max 40 chars.\n' +
+                '╰───────────────────────'
+            );
+        }
         try {
-            if (await getFile(name)) return reply(`❌ *${name}* already exists.`);
+            if (await getFile(name)) {
+                return reply(
+                    `╭─「 ☁️ *DocSave — Already Exists* 」\n` +
+                    '│\n' +
+                    `│  A document named *${name}* already exists\n` +
+                    '│  on GitHub.\n' +
+                    '│\n' +
+                    '├─ *What to do:*\n' +
+                    `│  $docsave ${name} <text>   → write to it\n` +
+                    `│  $docsave view ${name}     → read it\n` +
+                    '╰───────────────────────'
+                );
+            }
             const res = await putFile(name, `# ${name}\n`);
-            if (res.status === 201) return reply(`✅ *${name}* created! Write: $docsave ${name} <text>`);
-            return reply(`❌ GitHub said: ${res.data?.message || res.status}`);
-        } catch { return reply('❌ Error creating doc.'); }
+            if (res.status === 201) {
+                return reply(
+                    `╭─「 ☁️ *DocSave — Created* 」\n` +
+                    '│\n' +
+                    `│  ✅ *${name}* has been created on GitHub.\n` +
+                    '│\n' +
+                    '├─ *Next step:*\n' +
+                    `│  $docsave ${name} <your text>\n` +
+                    '╰───────────────────────'
+                );
+            }
+            return reply(
+                `╭─「 ☁️ *DocSave — Failed* 」\n` +
+                '│\n' +
+                `│  ⚠️ GitHub rejected the request.\n` +
+                `│  Reason: ${res.data?.message || res.status}\n` +
+                '╰───────────────────────'
+            );
+        } catch {
+            return reply(
+                '╭─「 ☁️ *DocSave — Error* 」\n' +
+                '│\n' +
+                '│  ⚠️ Failed to create document on GitHub.\n' +
+                '│  Please try again.\n' +
+                '╰───────────────────────'
+            );
+        }
     }
 
+    // ── $docsave delete <name> ────────────────────────────────────────────
     if (sub === 'delete') {
         const name = parts[1];
-        if (!name) return reply('❌ Usage: *$docsave delete <name>*');
+        if (!name) {
+            return reply(
+                '╭─「 ☁️ *DocSave — Delete* 」\n' +
+                '│\n' +
+                '│  *Usage:* $docsave delete <name>\n' +
+                '╰───────────────────────'
+            );
+        }
         try {
             const file = await getFile(name);
-            if (!file) return reply(`❌ *${name}* doesn't exist.`);
+            if (!file) {
+                return reply(
+                    `╭─「 ☁️ *DocSave — Not Found* 」\n` +
+                    '│\n' +
+                    `│  No document named *${name}* exists on GitHub.\n` +
+                    '│  Use $docsave list to see all docs.\n' +
+                    '╰───────────────────────'
+                );
+            }
             const res = await removeFile(name, file.sha);
-            if (res.status === 200) return reply(`🗑️ *${name}* deleted.`);
-            return reply(`❌ GitHub said: ${res.data?.message || res.status}`);
-        } catch { return reply('❌ Error deleting doc.'); }
+            if (res.status === 200) {
+                return reply(
+                    `╭─「 ☁️ *DocSave — Deleted* 」\n` +
+                    '│\n' +
+                    `│  🗑️ *${name}* has been permanently removed\n` +
+                    '│  from GitHub.\n' +
+                    '╰───────────────────────'
+                );
+            }
+            return reply(
+                `╭─「 ☁️ *DocSave — Failed* 」\n` +
+                '│\n' +
+                `│  ⚠️ GitHub rejected the request.\n` +
+                `│  Reason: ${res.data?.message || res.status}\n` +
+                '╰───────────────────────'
+            );
+        } catch {
+            return reply(
+                '╭─「 ☁️ *DocSave — Error* 」\n' +
+                '│\n' +
+                '│  ⚠️ Failed to delete document. Try again.\n' +
+                '╰───────────────────────'
+            );
+        }
     }
 
+    // ── $docsave view <name>  /  $docsave read <name> ─────────────────────
     if (sub === 'view' || sub === 'read') {
         const name = parts[1];
-        if (!name) return reply('❌ Usage: *$docsave view <name>*');
+        if (!name) {
+            return reply(
+                '╭─「 ☁️ *DocSave — View* 」\n' +
+                '│\n' +
+                '│  *Usage:* $docsave view <name>\n' +
+                '╰───────────────────────'
+            );
+        }
         try {
             const file = await getFile(name);
-            if (!file) return reply(`❌ *${name}* doesn't exist.`);
-            return reply(`📄 *${name}*\n\n${Buffer.from(file.content, 'base64').toString('utf8').trim() || '_(empty)_'}`);
-        } catch { return reply('❌ Error reading doc.'); }
+            if (!file) {
+                return reply(
+                    `╭─「 ☁️ *DocSave — Not Found* 」\n` +
+                    '│\n' +
+                    `│  No document named *${name}* exists on GitHub.\n` +
+                    `│  Create it: $docsave new ${name}\n` +
+                    '╰───────────────────────'
+                );
+            }
+            const content = Buffer.from(file.content, 'base64').toString('utf8').trim();
+            return reply(
+                `╭─「 📄 *${name}* 」\n` +
+                '│\n' +
+                `${content ? content.split('\n').map(l => `│  ${l}`).join('\n') : '│  _(empty document)_'}\n` +
+                '╰───────────────────────'
+            );
+        } catch {
+            return reply(
+                '╭─「 ☁️ *DocSave — Error* 」\n' +
+                '│\n' +
+                '│  ⚠️ Failed to read document from GitHub.\n' +
+                '│  Please try again.\n' +
+                '╰───────────────────────'
+            );
+        }
     }
 
+    // ── $docsave <name> <text>  — append text ─────────────────────────────
     const name = parts[0];
     const text = parts.slice(1).join(' ').trim();
 
     if (!validName(name)) {
-        return reply('❌ Unknown subcommand.\n\n*Usage:*\n$docsave list\n$docsave new <name>\n$docsave <name> <text>\n$docsave view <name>\n$docsave delete <name>');
+        return reply(
+            '╭─「 ☁️ *DocSave — Help* 」\n' +
+            '│\n' +
+            '│  Unknown subcommand or invalid name.\n' +
+            '│\n' +
+            '├─ *Available Commands:*\n' +
+            '│  $docsave list\n' +
+            '│  $docsave new <name>\n' +
+            '│  $docsave <name> <text>\n' +
+            '│  $docsave view <name>\n' +
+            '│  $docsave delete <name>\n' +
+            '╰───────────────────────'
+        );
     }
 
     if (!text) {
         try {
             const file = await getFile(name);
-            if (!file) return reply(`❌ *${name}* doesn't exist. Create: $docsave new ${name}`);
-            return reply(`📄 *${name}*\n\n${Buffer.from(file.content, 'base64').toString('utf8').trim() || '_(empty)_'}`);
-        } catch { return reply('❌ Error reading doc.'); }
+            if (!file) {
+                return reply(
+                    `╭─「 ☁️ *DocSave — Not Found* 」\n` +
+                    '│\n' +
+                    `│  No document named *${name}* exists on GitHub.\n` +
+                    `│  Create it: $docsave new ${name}\n` +
+                    '╰───────────────────────'
+                );
+            }
+            const content = Buffer.from(file.content, 'base64').toString('utf8').trim();
+            return reply(
+                `╭─「 📄 *${name}* 」\n` +
+                '│\n' +
+                `${content ? content.split('\n').map(l => `│  ${l}`).join('\n') : '│  _(empty document)_'}\n` +
+                '╰───────────────────────'
+            );
+        } catch {
+            return reply(
+                '╭─「 ☁️ *DocSave — Error* 」\n' +
+                '│\n' +
+                '│  ⚠️ Failed to read document. Try again.\n' +
+                '╰───────────────────────'
+            );
+        }
     }
 
+    // Append text
     try {
         const file      = await getFile(name);
         const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
         let newContent, sha;
+
         if (!file) {
             newContent = `# ${name}\n\n[${timestamp}]\n${text}\n`;
         } else {
             sha = file.sha;
             newContent = Buffer.from(file.content, 'base64').toString('utf8').trimEnd() + `\n\n[${timestamp}]\n${text}\n`;
         }
+
         const res = await putFile(name, newContent, sha);
-        if (res.status === 200 || res.status === 201) return reply(`✅ ${file ? 'Saved to' : 'Created & saved to'} *${name}* (GitHub):\n\n${text}`);
-        return reply(`❌ GitHub said: ${res.data?.message || res.status}`);
-    } catch { return reply('❌ Error writing to doc. Try again.'); }
+        if (res.status === 200 || res.status === 201) {
+            const isNew = !file;
+            return reply(
+                `╭─「 ☁️ *DocSave — ${isNew ? 'Created & Saved' : 'Saved'}* 」\n` +
+                '│\n' +
+                `│  📄 Document: *${name}*\n` +
+                `│  🕐 ${timestamp}\n` +
+                '│\n' +
+                `│  ${text}\n` +
+                '╰───────────────────────'
+            );
+        }
+        return reply(
+            `╭─「 ☁️ *DocSave — Failed* 」\n` +
+            '│\n' +
+            `│  ⚠️ GitHub rejected the request.\n` +
+            `│  Reason: ${res.data?.message || res.status}\n` +
+            '╰───────────────────────'
+        );
+    } catch {
+        return reply(
+            '╭─「 ☁️ *DocSave — Error* 」\n' +
+            '│\n' +
+            '│  ⚠️ Failed to write to document. Try again.\n' +
+            '╰───────────────────────'
+        );
+    }
 }
 
 module.exports = docsaveCommand;
