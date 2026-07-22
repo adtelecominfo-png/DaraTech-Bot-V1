@@ -22,27 +22,41 @@ async function addCommand(sock, chatId, message, userMessage) {
             }, { quoted: message });
         }
 
-        // Support tagged/mentioned users
+        // ── Helper: human-readable reason from error ──────────────────────────
+        function failReason(err) {
+            const msg = (err?.message || err?.toString() || '').toLowerCase();
+            if (msg.includes('not-authorized') || msg.includes('403'))
+                return 'not authorized — they may have restricted who can add them';
+            if (msg.includes('409') || msg.includes('already'))
+                return 'already in the group';
+            if (msg.includes('408') || msg.includes('gone'))
+                return 'number not on WhatsApp';
+            if (msg.includes('rate') || msg.includes('429'))
+                return 'rate limited — try again later';
+            return err?.message || 'failed';
+        }
+
+        // ── Mentioned users ───────────────────────────────────────────────────
         const mentioned = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
 
         if (mentioned.length > 0) {
             const results = [];
             for (const jid of mentioned) {
+                const num = jid.split('@')[0];
                 try {
                     await sock.groupParticipantsUpdate(chatId, [jid], 'add');
-                    results.push(`✅ @${jid.split('@')[0]}`);
-                } catch {
-                    results.push(`❌ @${jid.split('@')[0]} (failed)`);
+                    results.push(`✅ +${num}`);
+                } catch (err) {
+                    results.push(`❌ +${num} — ${failReason(err)}`);
                 }
                 await new Promise(r => setTimeout(r, 500));
             }
             return await sock.sendMessage(chatId, {
                 text: `✪ \`\`\`Add Results\`\`\`\n\n${results.join('\n')}`,
-                mentions: mentioned
             }, { quoted: message });
         }
 
-        // Fallback: phone number(s), comma-separated e.g. $add 234xxx,91xxx
+        // ── Phone number(s), comma-separated ─────────────────────────────────
         const raw = userMessage.slice(4).trim();
         if (!raw) {
             return await sock.sendMessage(chatId, {
@@ -60,17 +74,15 @@ async function addCommand(sock, chatId, message, userMessage) {
             const jid = number + '@s.whatsapp.net';
             try {
                 await sock.groupParticipantsUpdate(chatId, [jid], 'add');
-                results.push(`✅ @${number}`);
-            } catch {
-                results.push(`❌ @${number} (failed)`);
+                results.push(`✅ +${number}`);
+            } catch (err) {
+                results.push(`❌ +${number} — ${failReason(err)}`);
             }
             await new Promise(r => setTimeout(r, 500));
         }
 
-        const jids = numbers.map(n => n + '@s.whatsapp.net');
         await sock.sendMessage(chatId, {
             text: `✪ \`\`\`Add Results\`\`\`\n\n${results.join('\n')}`,
-            mentions: jids
         }, { quoted: message });
 
     } catch (error) {
