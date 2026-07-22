@@ -230,7 +230,7 @@ Your goal: feel like chatting with a clever Nigerian Gen Z teenager who also hap
 const OWNER_NUMBER = '2348152077346';
 
 // Short system core — keeps URL param size safe for Gifted GET endpoints
-const VELORA_CORE = `You are Velora — sharp Nigerian Gen Z inside Daratech WhatsApp bot. Not a formal AI. Funny without trying, confident, street-wise, dry humor, sarcastic, quick comebacks, chill, matches energy instantly. Code-switch English/Pidgin freely: Omo, Abeg, Abi, Shey, Guy, Baba, Idan, Sapa, E choke, No wahala, Na why, Carry go, E don cast, Who send you, Na real gee. Gen Z: Cook, Aura, Steeze, Valid, Peak, Fr, Bet, Respectfully. Playful roasting ok (Mumu, Ode, Olodo — never malicious). Reply length: small talk=short, jokes=punchy, coding=detailed, teaching=long. Never robotic, never spam emojis. You are Velora built by Daratech — never say you're an AI. LANGUAGE RULE: If user writes in a non-English/non-Pidgin language OR explicitly asks you to speak a specific language, switch fully to that language — professional, warm, no Pidgin slang. If user asks to go back to English/Pidgin, return to default casual mode. Auto-detect language from each message when no explicit language is set.`;
+const VELORA_CORE = `You are Velora — sharp Nigerian Gen Z inside Daratech WhatsApp bot. Not a formal AI. Funny without trying, confident, street-wise, dry humor, sarcastic, quick comebacks, chill, matches energy instantly. Code-switch English/Pidgin freely: Omo, Abeg, Abi, Shey, Guy, Baba, Idan, Sapa, E choke, No wahala, Na why, Carry go, E don cast, Who send you, Na real gee. Gen Z: Cook, Aura, Steeze, Valid, Peak, Fr, Bet, Respectfully. Playful roasting ok (Mumu, Ode, Olodo — never malicious). Reply length: small talk=short, jokes=punchy, coding=detailed, teaching=long. Never robotic, never spam emojis. You are Velora built by Daratech — never say you're an AI. IMPORTANT: If a [LANGUAGE RULE] block appears before this text, it is your highest-priority instruction — obey it EXACTLY and completely disable any auto-detect or default language behavior. Only use English/Pidgin default when NO language rule is active.`;
 
 function buildPrompt(userMessage, context) {
     const userCtx  = context?.userInfo || {};
@@ -249,22 +249,37 @@ function buildPrompt(userMessage, context) {
         if (parts.length) identity = parts.join(' ');
     }
 
-    // Language override — built first, injected at the TOP of the prompt so the model can't miss it
+    // ── Language override — injected FIRST so model can't miss it ────────────
     let langOverride = '';
-    if (userCtx.langRule) {
-        // Swap / cross-language rule: inject verbatim + make it crystal clear
+    const lm = userCtx.langMode;  // structured mode (new), may also fall back to legacy userCtx.lang
+
+    if (lm?.type === 'swap' && lm.pairs?.length) {
+        // Build explicit bullet-point swap rules — no ambiguity for the model
+        const bullets = lm.pairs
+            .map(p => `• User's message is in ${p.input.charAt(0).toUpperCase()+p.input.slice(1)} → reply ONLY in ${p.output.charAt(0).toUpperCase()+p.output.slice(1)}`)
+            .join('\n');
         langOverride =
-            `[LANGUAGE RULE — CRITICAL, FOLLOW EXACTLY, OVERRIDES EVERYTHING ELSE]\n` +
-            `The user has set this rule: "${userCtx.langRule}"\n` +
-            `You MUST follow this rule on every single reply, no exceptions. ` +
-            `Do NOT revert to English/Pidgin unless the user explicitly cancels the rule.`;
+            `[LANGUAGE RULE — MANDATORY, OVERRIDES EVERYTHING]\n` +
+            `SWAP MODE ACTIVE. Look at the language of the user's current message and apply the matching rule:\n` +
+            `${bullets}\n` +
+            `NEVER revert to Pidgin or English unless that is the output language specified above. ` +
+            `NEVER auto-detect and reply in the same language as the user. Follow the swap EXACTLY.`;
+    } else if (lm?.type === 'single') {
+        langOverride =
+            `[LANGUAGE RULE — MANDATORY]\n` +
+            `Reply ONLY in ${lm.lang.charAt(0).toUpperCase()+lm.lang.slice(1)} for every message. ` +
+            `Professional and warm. No Pidgin or English slang.`;
+    } else if (lm?.type === 'default') {
+        langOverride = `[LANGUAGE RULE] Language rule cleared. Return to default English/Pidgin casual mode.`;
+    } else if (userCtx.langRule) {
+        // Legacy fallback for old stored string rules
+        langOverride =
+            `[LANGUAGE RULE — MANDATORY]\n${userCtx.langRule}\n` +
+            `Follow this EXACTLY on every reply. No Pidgin unless that is the target language.`;
     } else if (userCtx.lang && userCtx.lang !== 'default') {
         langOverride =
-            `[LANGUAGE RULE — CRITICAL]\n` +
-            `Reply entirely in ${userCtx.lang} for every message. ` +
-            `Professional and warm tone. No Pidgin or English slang.`;
-    } else if (userCtx.lang === 'default') {
-        langOverride = `[LANGUAGE RULE] Return to default English/Pidgin casual mode now.`;
+            `[LANGUAGE RULE — MANDATORY]\n` +
+            `Reply ONLY in ${userCtx.lang}. Professional and warm. No Pidgin or English slang.`;
     }
 
     // Last 6 turns of history only (keeps URL short)
@@ -343,31 +358,52 @@ function extractUserInfo(msg) {
     const locM = msg.match(/(?:i (?:live in|am from))\s+(.+?)(?:[,.!?]|$)/i);
     if (locM) info.location = locM[1].trim();
 
-    // Known language names (expand as needed)
+    // ── Language detection ────────────────────────────────────────────────────
     const KNOWN_LANGS = /\b(english|portuguese|french|spanish|arabic|yoruba|igbo|hausa|german|italian|chinese|mandarin|japanese|korean|russian|hindi|swahili|dutch|turkish|persian|urdu|pidgin|creole|latin|greek|hebrew|vietnamese|thai|polish|swedish|norwegian|danish|finnish|romanian|czech|hungarian|slovak|ukrainian|afrikaans|zulu|amharic|somali|tagalog|malay|indonesian)\b/gi;
-
     const langMatches = [...msg.matchAll(KNOWN_LANGS)].map(m => m[1].toLowerCase());
-    const uniqueLangs = [...new Set(langMatches)];
+    const uniqueLangs  = [...new Set(langMatches)];
+    const hasLangVerb  = /(?:reply|respond|give\s+(?:me\s+)?(?:a\s+)?respons\w*|speak|write|answer)\s+in\b|(?:when|if)\s+I\s+(?:send|write|speak|use|type)/i.test(msg);
 
     // ── Swap / cross-language rule (2+ languages + instruction keywords) ──────
-    const hasLangInstruction = /(?:reply|respond|give\s+(?:me\s+)?(?:a\s+)?respons\w*|speak|write|answer)\s+in\b|(?:when|if)\s+I\s+(?:send|write|speak|use|type)/i.test(msg);
-    if (uniqueLangs.length >= 2 && hasLangInstruction) {
-        // Build an explicit, unambiguous rule for the model
-        // e.g. "reply in English when I send Portuguese and reply in Portuguese when I send English"
-        // We store the raw user sentence so the model gets the exact intent
-        info.langRule = msg.trim().replace(/\s+/g, ' ');
-        // Clear any old single-lang preference when a rule is set
-        info.lang = null;
-    }
-    // ── Single explicit language switch ───────────────────────────────────────
-    else if (uniqueLangs.length === 1 && hasLangInstruction) {
-        const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an','back','normal','default']);
-        if (!notLang.has(uniqueLangs[0])) {
-            info.lang = uniqueLangs[0];
-            info.langRule = null; // clear any swap rule
+    if (uniqueLangs.length >= 2 && hasLangVerb) {
+        // Parse explicit pairs: "reply in X if/when I send Y" and
+        // "if/when I send X reply in Y" and "give me a response in X if I send Y"
+        const pairs = [];
+
+        // Pattern A: reply/respond in OUTPUT if/when I send/write INPUT
+        const patA = /(?:reply|respond|give\s+(?:me\s+)?(?:a\s+)?respons\w*)\s+in\s+([a-z]+)\s+(?:if|when)\s+(?:I\s+)?(?:send|write|speak|use|type)\s+(?:a?\s+)?(?:in\s+)?([a-z]+)/gi;
+        let m;
+        while ((m = patA.exec(msg)) !== null) {
+            const out = m[1].toLowerCase(), inp = m[2].toLowerCase();
+            if (uniqueLangs.includes(out) && uniqueLangs.includes(inp) && out !== inp)
+                pairs.push({ input: inp, output: out });
+        }
+
+        // Pattern B: if/when I send INPUT reply/respond in OUTPUT
+        const patB = /(?:if|when)\s+(?:I\s+)?(?:send|write|speak|use|type)\s+(?:a?\s+)?(?:in\s+)?([a-z]+)[^.]*?(?:reply|respond)\s+in\s+([a-z]+)/gi;
+        while ((m = patB.exec(msg)) !== null) {
+            const inp = m[1].toLowerCase(), out = m[2].toLowerCase();
+            if (uniqueLangs.includes(inp) && uniqueLangs.includes(out) && inp !== out &&
+                !pairs.find(p => p.input === inp && p.output === out))
+                pairs.push({ input: inp, output: out });
+        }
+
+        if (pairs.length >= 1) {
+            info.langMode = { type: 'swap', pairs };
+            info.lang     = null;
+            info.langRule = null;
         }
     }
-    // ── Single word "speak French" style (no explicit "when I…") ─────────────
+    // ── Single explicit language switch ───────────────────────────────────────
+    else if (uniqueLangs.length === 1 && hasLangVerb) {
+        const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an','back','normal','default']);
+        if (!notLang.has(uniqueLangs[0])) {
+            info.langMode = { type: 'single', lang: uniqueLangs[0] };
+            info.lang     = null;
+            info.langRule = null;
+        }
+    }
+    // ── Single-word "speak French" style ──────────────────────────────────────
     else {
         const langSet = msg.match(
             /(?:speak|talk(?:\s+to\s+me)?(?:\s+in)?|reply(?:\s+in)?|respond(?:\s+in)?|use|switch(?:\s+to)?|write(?:\s+in)?)\s+(?:in\s+)?([a-zA-ZÀ-ÿ]{3,20})(?:\s|$|[.,!?])/i
@@ -376,7 +412,8 @@ function extractUserInfo(msg) {
             const candidate = langSet[1].toLowerCase();
             const notLang = new Set(['me','you','my','your','the','that','this','more','less','just','only','now','please','a','an']);
             if (!notLang.has(candidate)) {
-                info.lang = candidate;
+                info.langMode = { type: 'single', lang: candidate };
+                info.lang     = null;
                 info.langRule = null;
             }
         }
@@ -384,7 +421,8 @@ function extractUserInfo(msg) {
 
     // ── Reset to default (English/Pidgin) ─────────────────────────────────────
     if (/(?:go\s+back|switch\s+back|back)\s+to\s+(?:english|pidgin|normal|default)|speak\s+english\s+again|use\s+english\s+again|stop\s+(?:speaking|using)\s+\w+/i.test(msg)) {
-        info.lang = 'default';
+        info.langMode = { type: 'default' };
+        info.lang     = 'default';
         info.langRule = null;
     }
 
