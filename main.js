@@ -272,6 +272,7 @@ const { ephotoCommand, ephoto2Command, ephotolistCommand } = require('./commands
 const { tempphoneCommand, smsinboxCommand } = require('./commands/gifted-tempgen');
 const { loremCommand, fakenameCommand, genemailCommand, randomnumCommand, coinflipCommand, dicerollCommand } = require('./commands/generators');
 const economyCommand = require('./commands/economy');
+const savedocCommand = require('./commands/savedoc');
 // Global settings
 global.packname = settings.packname;
 global.ytch = "Daratech";
@@ -557,6 +558,11 @@ if (checkAFK(senderId)) {
 
         switch (true) {
             // === NEW COMMANDS ===
+            case userMessage.startsWith('$savedoc'):
+                await savedocCommand(sock, chatId, message, userMessage);
+                commandExecuted = true;
+                break;
+
             case userMessage.startsWith('$savestatus'):
                 await savestatusCommand(sock, chatId, message);
                 commandExecuted = true;
