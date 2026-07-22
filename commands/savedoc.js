@@ -1,93 +1,35 @@
 'use strict';
 
-const https    = require('https');
-const fs       = require('fs');
-const path     = require('path');
-const settings = require('../settings');
+const fs   = require('fs');
+const path = require('path');
 
-const REPO        = 'adtelecominfo-png/savedoc';
-const BRANCH      = 'main';
-const DOCS_FOLDER = 'savedocs';
-const CFG_PATH    = path.join(__dirname, '../data/savedoc_config.json');
+const DOCS_DIR = path.join(__dirname, '../data/savedocs');
 
-// ─── Token storage (local file — never committed) ─────────────────────────────
-function loadCfg() {
-    try { return JSON.parse(fs.readFileSync(CFG_PATH, 'utf8')); } catch { return {}; }
-}
-function saveCfg(obj) {
-    fs.writeFileSync(CFG_PATH, JSON.stringify(obj, null, 2));
-}
-function getToken() {
-    return process.env.GITHUB_TOKEN
-        || process.env.GITHUB_PERSONAL_ACCESS_TOKEN
-        || settings.githubToken
-        || loadCfg().githubToken
-        || '';
-}
+// ensure folder exists
+if (!fs.existsSync(DOCS_DIR)) fs.mkdirSync(DOCS_DIR, { recursive: true });
 
-// ─── GitHub API helper ────────────────────────────────────────────────────────
-function ghRequest(method, urlPath, body) {
-    return new Promise((resolve, reject) => {
-        const token = getToken();
-        const data  = body ? JSON.stringify(body) : null;
-        const opts  = {
-            hostname: 'api.github.com',
-            path:     urlPath,
-            method,
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept':        'application/vnd.github+json',
-                'User-Agent':    'DaraTech-Bot',
-                'Content-Type':  'application/json',
-                ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}),
-            },
-        };
-        const req = https.request(opts, (res) => {
-            let raw = '';
-            res.on('data', chunk => raw += chunk);
-            res.on('end', () => {
-                try   { resolve({ status: res.statusCode, data: JSON.parse(raw) }); }
-                catch { resolve({ status: res.statusCode, data: raw }); }
-            });
-        });
-        req.on('error', reject);
-        if (data) req.write(data);
-        req.end();
-    });
-}
-
-// ─── GitHub file helpers ──────────────────────────────────────────────────────
-async function getFile(name) {
-    const res = await ghRequest('GET', `/repos/${REPO}/contents/${DOCS_FOLDER}/${name}.txt?ref=${BRANCH}`, null);
-    return res.status === 200 ? res.data : null;
-}
-
-async function listFiles() {
-    const res = await ghRequest('GET', `/repos/${REPO}/contents/${DOCS_FOLDER}?ref=${BRANCH}`, null);
-    return (res.status === 200 && Array.isArray(res.data)) ? res.data : [];
-}
-
-async function putFile(name, content, sha) {
-    const body = {
-        message: `savedoc: ${sha ? 'update' : 'create'} ${name}.txt`,
-        content: Buffer.from(content).toString('base64'),
-        branch:  BRANCH,
-        ...(sha ? { sha } : {}),
-    };
-    return ghRequest('PUT', `/repos/${REPO}/contents/${DOCS_FOLDER}/${name}.txt`, body);
-}
-
-async function removeFile(name, sha) {
-    const body = {
-        message: `savedoc: delete ${name}.txt`,
-        sha,
-        branch: BRANCH,
-    };
-    return ghRequest('DELETE', `/repos/${REPO}/contents/${DOCS_FOLDER}/${name}.txt`, body);
-}
-
-// ─── Validate doc name ────────────────────────────────────────────────────────
+function docPath(name) { return path.join(DOCS_DIR, `${name}.txt`); }
 function validName(name) { return /^[a-zA-Z0-9_-]{1,40}$/.test(name); }
+
+function listDocs() {
+    return fs.readdirSync(DOCS_DIR)
+        .filter(f => f.endsWith('.txt'))
+        .map(f => f.replace('.txt', ''));
+}
+
+function readDoc(name) {
+    const p = docPath(name);
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
+}
+
+function writeDoc(name, content) {
+    fs.writeFileSync(docPath(name), content, 'utf8');
+}
+
+function deleteDoc(name) {
+    const p = docPath(name);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+}
 
 // ─── Main command ─────────────────────────────────────────────────────────────
 async function savedocCommand(sock, chatId, message, userMessage) {
@@ -96,59 +38,38 @@ async function savedocCommand(sock, chatId, message, userMessage) {
 
     // ── $savedoc  /  $savedoc list ─────────────────────────────────────────
     if (!raw || raw === 'list') {
-        try {
-            const files = await listFiles();
-            const docs  = files.filter(f => f.name.endsWith('.txt'));
-            if (!docs.length) {
-                return reply(
-                    '📂 *Saved Docs*\n\n' +
-                    'No documents yet.\n\n' +
-                    '_Create one:_  $savedoc new <name>\n' +
-                    '_Write to it:_ $savedoc <name> <text>'
-                );
-            }
-            const list = docs.map((f, i) => `${i + 1}. 📄 ${f.name.replace('.txt', '')}`).join('\n');
+        const docs = listDocs();
+        if (!docs.length) {
             return reply(
-                `📂 *Saved Docs* (${docs.length})\n\n${list}\n\n` +
-                '_$savedoc <name> <text>_ → write\n' +
-                '_$savedoc view <name>_   → read\n' +
-                '_$savedoc delete <name>_ → delete'
+                '📂 *Saved Docs*\n\n' +
+                'No documents yet.\n\n' +
+                '_Create one:_  $savedoc new <name>\n' +
+                '_Write to it:_ $savedoc <name> <text>'
             );
-        } catch {
-            return reply('❌ Failed to list docs. Is the GitHub token set?');
         }
+        const list = docs.map((d, i) => `${i + 1}. 📄 ${d}`).join('\n');
+        return reply(
+            `📂 *Saved Docs* (${docs.length})\n\n${list}\n\n` +
+            '_$savedoc <name> <text>_ → write\n' +
+            '_$savedoc view <name>_   → read\n' +
+            '_$savedoc delete <name>_ → delete'
+        );
     }
 
     const parts = raw.split(' ');
     const sub   = parts[0].toLowerCase();
-
-    // ── $savedoc setup <token> ─────────────────────────────────────────────
-    if (sub === 'setup') {
-        const token = parts[1];
-        if (!token || !token.startsWith('ghp_')) return reply('❌ Usage: *$savedoc setup ghp_xxxx*\nGet a token at github.com/settings/tokens (needs repo scope)');
-        try {
-            const cfg = loadCfg();
-            cfg.githubToken = token;
-            saveCfg(cfg);
-            return reply('✅ GitHub token saved! $savedoc is ready to use.\n\nTry: $savedoc list');
-        } catch {
-            return reply('❌ Failed to save token. Check bot data folder permissions.');
-        }
-    }
 
     // ── $savedoc new <name> ────────────────────────────────────────────────
     if (sub === 'new') {
         const name = parts[1];
         if (!name) return reply('❌ Usage: *$savedoc new <name>*\nName must be letters, numbers, _ or -');
         if (!validName(name)) return reply('❌ Name can only use letters, numbers, _ and - (max 40 chars)');
+        if (readDoc(name) !== null) return reply(`❌ *${name}* already exists.\n\nWrite to it: $savedoc ${name} <text>\nRead it: $savedoc view ${name}`);
         try {
-            const existing = await getFile(name);
-            if (existing) return reply(`❌ *${name}* already exists.\n\nWrite to it: $savedoc ${name} <text>\nRead it: $savedoc view ${name}`);
-            const res = await putFile(name, `# ${name}\n`);
-            if (res.status === 201) return reply(`✅ *${name}* created!\n\nWrite to it:\n$savedoc ${name} <your text here>`);
-            return reply(`❌ Couldn't create doc. GitHub said: ${res.data?.message || res.status}`);
+            writeDoc(name, `# ${name}\n`);
+            return reply(`✅ *${name}* created!\n\nWrite to it:\n$savedoc ${name} <your text here>`);
         } catch {
-            return reply('❌ Error creating doc. Try again.');
+            return reply('❌ Error creating doc. Check bot data folder permissions.');
         }
     }
 
@@ -156,14 +77,12 @@ async function savedocCommand(sock, chatId, message, userMessage) {
     if (sub === 'delete') {
         const name = parts[1];
         if (!name) return reply('❌ Usage: *$savedoc delete <name>*');
+        if (readDoc(name) === null) return reply(`❌ *${name}* doesn't exist.`);
         try {
-            const file = await getFile(name);
-            if (!file) return reply(`❌ *${name}* doesn't exist.`);
-            const res = await removeFile(name, file.sha);
-            if (res.status === 200) return reply(`🗑️ *${name}* deleted.`);
-            return reply(`❌ Couldn't delete. GitHub said: ${res.data?.message || res.status}`);
+            deleteDoc(name);
+            return reply(`🗑️ *${name}* deleted.`);
         } catch {
-            return reply('❌ Error deleting doc. Try again.');
+            return reply('❌ Error deleting doc.');
         }
     }
 
@@ -171,14 +90,9 @@ async function savedocCommand(sock, chatId, message, userMessage) {
     if (sub === 'view' || sub === 'read') {
         const name = parts[1];
         if (!name) return reply('❌ Usage: *$savedoc view <name>*');
-        try {
-            const file = await getFile(name);
-            if (!file) return reply(`❌ *${name}* doesn't exist.\nCreate it: $savedoc new ${name}`);
-            const content = Buffer.from(file.content, 'base64').toString('utf8');
-            return reply(`📄 *${name}*\n\n${content.trim() || '_(empty)_'}`);
-        } catch {
-            return reply('❌ Error reading doc.');
-        }
+        const content = readDoc(name);
+        if (content === null) return reply(`❌ *${name}* doesn't exist.\nCreate it: $savedoc new ${name}`);
+        return reply(`📄 *${name}*\n\n${content.trim() || '_(empty)_'}`);
     }
 
     // ── $savedoc <name> <text>  — append text ─────────────────────────────
@@ -199,39 +113,26 @@ async function savedocCommand(sock, chatId, message, userMessage) {
 
     // No text supplied → show the doc
     if (!text) {
-        try {
-            const file = await getFile(name);
-            if (!file) return reply(`❌ *${name}* doesn't exist.\nCreate it: $savedoc new ${name}`);
-            const content = Buffer.from(file.content, 'base64').toString('utf8');
-            return reply(`📄 *${name}*\n\n${content.trim() || '_(empty)_'}`);
-        } catch {
-            return reply('❌ Error reading doc.');
-        }
+        const content = readDoc(name);
+        if (content === null) return reply(`❌ *${name}* doesn't exist.\nCreate it: $savedoc new ${name}`);
+        return reply(`📄 *${name}*\n\n${content.trim() || '_(empty)_'}`);
     }
 
     // Append text — auto-create doc if it doesn't exist yet
     try {
-        const file      = await getFile(name);
+        const existing  = readDoc(name);
         const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
-
         let newContent;
-        let sha;
 
-        if (!file) {
-            // Auto-create
+        if (existing === null) {
             newContent = `# ${name}\n\n[${timestamp}]\n${text}\n`;
         } else {
-            const existing = Buffer.from(file.content, 'base64').toString('utf8');
-            sha        = file.sha;
             newContent = existing.trimEnd() + `\n\n[${timestamp}]\n${text}\n`;
         }
 
-        const res = await putFile(name, newContent, sha);
-        if (res.status === 200 || res.status === 201) {
-            const action = file ? 'Saved to' : 'Created & saved to';
-            return reply(`✅ ${action} *${name}*:\n\n${text}`);
-        }
-        return reply(`❌ Couldn't save. GitHub said: ${res.data?.message || res.status}`);
+        writeDoc(name, newContent);
+        const action = existing === null ? 'Created & saved to' : 'Saved to';
+        return reply(`✅ ${action} *${name}*:\n\n${text}`);
     } catch {
         return reply('❌ Error writing to doc. Try again.');
     }
