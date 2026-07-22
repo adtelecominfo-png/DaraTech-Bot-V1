@@ -18,10 +18,10 @@ function saveCfg(obj) {
     fs.writeFileSync(CFG_PATH, JSON.stringify(obj, null, 2));
 }
 function getToken() {
-    return loadCfg().githubToken
-        || settings.githubToken
-        || process.env.GITHUB_TOKEN
+    return process.env.GITHUB_TOKEN
         || process.env.GITHUB_PERSONAL_ACCESS_TOKEN
+        || settings.githubToken
+        || loadCfg().githubToken
         || '';
 }
 
