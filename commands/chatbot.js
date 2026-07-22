@@ -1,8 +1,7 @@
 'use strict';
 const fs   = require('fs');
 const path = require('path');
-const { get }                  = require('../lib/gifted');
-const { callPollinationsChat } = require('../lib/pollinations');
+const { get } = require('../lib/gifted');
 
 const USER_GROUP_DATA    = path.join(__dirname, '../data/userGroupData.json');
 const VELORA_MEMORY_FILE = path.join(__dirname, '../data/velora_memory.json');
@@ -236,14 +235,14 @@ function buildPrompt(userMessage, context) {
         .map(m => `${m.role === 'user' ? 'U' : 'V'}: ${m.content.slice(0, 120)}`)
         .join('\n');
 
-    // Assemble, then hard-cap at 1100 chars to stay safe in GET URLs
+    // Assemble, then hard-cap at 1800 chars (letmegpt handles 2000+ safely)
     let prompt = VELORA_CORE;
     if (identity) prompt += `\n${identity}`;
     if (turns)    prompt += `\nRecent:\n${turns}`;
     prompt += `\nU: ${userMessage}\nV:`;
 
-    if (prompt.length > 1100) {
-        // If still too long, drop history and trim system
+    if (prompt.length > 1800) {
+        // If still too long, drop history and keep system + message only
         prompt = `${VELORA_CORE}\n`;
         if (identity) prompt += `${identity}\n`;
         prompt += `U: ${userMessage}\nV:`;
@@ -261,41 +260,30 @@ function cleanReply(raw) {
     return (s.length >= 5 && s.length <= 4000) ? s : null;
 }
 
-// ─── AI call — Gifted primary (no quota), direct Pollinations fallback ────────
+// ─── AI call — letmegpt primary, gemini fallback (both verified working) ─────
 async function getAIResponse(userMessage, context) {
-    const history  = context?.messages || [];
-    const senderId = context?.senderId || '';
-
-    // ── Primary: Gifted /ai/pollinations with compact prompt ─────────────────
     const fullQuery = buildPrompt(userMessage, context);
+
+    // ── Primary: letmegpt (handles up to 2000+ chars, no quota) ─────────────
     try {
-        const data = await get('/ai/pollinations', { q: fullQuery, model: 'openai-fast' }, 30000);
+        const data = await get('/ai/letmegpt', { q: fullQuery }, 30000);
         if (!data?.success) throw new Error(data?.message || 'no response');
         const reply = cleanReply(data.result);
         if (reply) return reply;
-        throw new Error('empty or oversized');
-    } catch {}
+        throw new Error('empty or bad');
+    } catch (e) {
+        console.error('[Velora] letmegpt failed:', e.message);
+    }
 
-    // ── Fallback: direct Pollinations (truly free, no quota at all) ──────────
-    // Build a proper messages array — system prompt + last 6 turns + current msg
+    // ── Fallback: gemini ──────────────────────────────────────────────────────
     try {
-        const recent = history
-            .slice(-7, -1)   // last 6 turns before this user message
-            .map(m => ({
-                role:    m.role === 'user' ? 'user' : 'assistant',
-                content: m.content.slice(0, 300),
-            }));
-
-        const messages = [
-            { role: 'system', content: VELORA_SYSTEM },
-            ...recent,
-            { role: 'user', content: userMessage },
-        ];
-
-        const raw   = await callPollinationsChat(messages, 'openai-fast', 800, 0.9);
-        const reply = cleanReply(raw);
+        const data = await get('/ai/gemini', { q: fullQuery }, 30000);
+        if (!data?.success) throw new Error(data?.message || 'no response');
+        const reply = cleanReply(data.result);
         if (reply) return reply;
-    } catch {}
+    } catch (e) {
+        console.error('[Velora] gemini fallback failed:', e.message);
+    }
 
     return null;
 }
