@@ -1,6 +1,7 @@
 'use strict';
 
-const https = require('https');
+const https    = require('https');
+const settings = require('../settings');
 
 const REPO        = 'adtelecominfo-png/DaraTech-Bot-V1';
 const BRANCH      = 'main';
@@ -9,7 +10,7 @@ const DOCS_FOLDER = 'savedocs';
 // ─── GitHub API helper ────────────────────────────────────────────────────────
 function ghRequest(method, urlPath, body) {
     return new Promise((resolve, reject) => {
-        const token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+        const token = settings.githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
         const data  = body ? JSON.stringify(body) : null;
         const opts  = {
             hostname: 'api.github.com',

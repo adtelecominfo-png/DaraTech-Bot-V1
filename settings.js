@@ -10,6 +10,10 @@ const settings = {
   storeWriteInterval: 10000,
   description: "Daratech - a multi-purpose WhatsApp bot with 1000+ commands.",
   version: "1.0.0",
+  // GitHub personal access token — used by $savedoc to read/write files
+  // Generate one at: https://github.com/settings/tokens (needs repo scope)
+  githubToken: process.env.GITHUB_TOKEN || "",
+
   // GitHub repo — used for git auto-update AND as ZIP fallback
   githubRepo: "https://github.com/adtelecominfo-png/DaraTech-Bot-V1",
   githubBranch: "main",
