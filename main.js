@@ -290,6 +290,12 @@ async function handleMessages(sock, messageUpdate, printLog) {
         if (type !== 'notify') return;
 
         const message = messages[0];
+
+        // Anti group-mention runs BEFORE the message.message guard because the
+        // "This group was mentioned" notification arrives as a stub message
+        // (message.message is null) and would be filtered out otherwise.
+        handleAntigroupmentionMessage(sock, message).catch(() => {});
+
         if (!message?.message) return;
 
         // Handle autoread functionality
@@ -305,8 +311,6 @@ async function handleMessages(sock, messageUpdate, printLog) {
 
         // Anti-media enforcement (antiimage/antivideo/antisticker/antiaudio/antimention)
         handleAntiMediaMessage(sock, message).catch(() => {});
-        // Anti group-mention enforcement
-        handleAntigroupmentionMessage(sock, message).catch(() => {});
         // Auto-sticker conversion
         handleAutostickerMessage(sock, message).catch(() => {});
         // Store messages for $clean/$purge

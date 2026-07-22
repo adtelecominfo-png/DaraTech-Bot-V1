@@ -155,29 +155,59 @@ function unwrapMessage(msg) {
 /**
  * Returns true if this message is a WhatsApp Status group-mention notification.
  *
- * Baileys can deliver it in several shapes depending on the WA version:
- *  1. message.message.statusMentionMessage            (most common)
- *  2. unwrapped inner message has statusMentionMessage
- *  3. extendedTextMessage.contextInfo.groupMentions[] contains the group JID
- *  4. Any contextInfo.groupMentions[] on any unwrapped layer
+ * Baileys can deliver it in several shapes depending on the WA/Baileys version:
+ *
+ *  A. message.message is NULL (stub message) — the "This group was mentioned"
+ *     notification arrives with no message body at all; only messageStubType
+ *     and/or messageStubParameters are set.  We treat ANY stub in a group as a
+ *     potential status mention (the caller already checks the feature is enabled,
+ *     and non-admin senders are the only ones who can trigger it).
+ *
+ *  B. message.message.groupMentionedMessage — the explicit type the GROUP
+ *     receives when tagged in a status (distinct from statusMentionMessage which
+ *     is on the status creator's side).
+ *
+ *  C. message.message.statusMentionMessage — older/alternate delivery shape.
+ *
+ *  D. Wrapped inside ephemeralMessage / viewOnceMessage / etc.
+ *
+ *  E. extendedTextMessage / imageMessage / … contextInfo.groupMentions[]
+ *     containing this group's JID.
  */
 function isStatusMention(message, chatId) {
-    const outer = message.message;
-    if (!outer) return false;
+    // Shape A — stub message (message.message is null/undefined)
+    // These are system notifications; "group was mentioned" arrives this way
+    // in many Baileys versions.
+    if (!message.message) {
+        // Only flag it if the stub parameters mention this group or if
+        // there are no parameters at all (bare stub in a group chat)
+        const params = message.messageStubParameters || [];
+        if (params.length === 0) return true;             // bare stub
+        const groupNum = chatId.split('@')[0];
+        if (params.some(p => p.includes(groupNum) || p.includes('@g.us'))) return true;
+        return false;
+    }
 
-    // Shape 1 — direct statusMentionMessage
+    const outer = message.message;
+
+    // Shape B — groupMentionedMessage (what the GROUP receives)
+    if (outer.groupMentionedMessage) return true;
+
+    // Shape C — statusMentionMessage (alternate shape)
     if (outer.statusMentionMessage) return true;
 
-    // Shape 2 — wrapped inside ephemeral/viewOnce/etc.
+    // Shape D — wrapped inside ephemeral/viewOnce/etc.
     const inner = unwrapMessage(outer);
-    if (inner && inner !== outer && inner.statusMentionMessage) return true;
+    if (inner && inner !== outer) {
+        if (inner.groupMentionedMessage) return true;
+        if (inner.statusMentionMessage)  return true;
+    }
 
-    // Shape 3 / 4 — groupMentions in contextInfo (any layer)
+    // Shape E — groupMentions in contextInfo on any message layer
     const matchesGroup = (gm) => {
         const jid = typeof gm === 'string' ? gm : (gm.groupJid || gm.jid || '');
         return jid === chatId || jid.split('@')[0] === chatId.split('@')[0];
     };
-
     const checkGroupMentions = (msgObj) => {
         if (!msgObj) return false;
         const ctx = msgObj.extendedTextMessage?.contextInfo ||
@@ -187,7 +217,6 @@ function isStatusMention(message, chatId) {
                     msgObj.documentMessage?.contextInfo;
         return !!(ctx?.groupMentions?.some(matchesGroup));
     };
-
     if (checkGroupMentions(outer)) return true;
     if (inner && inner !== outer && checkGroupMentions(inner)) return true;
 
