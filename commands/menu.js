@@ -2,7 +2,11 @@
 const settings   = require('../settings');
 const { CATEGORIES, findCategory } = require('../lib/categories');
 const { davidGet } = require('../lib/gifted');
-const { isOwner }  = require('./economy');
+const settings2   = require('../settings'); // for owner check
+function isOwner(jid) {
+    const digits = jid.replace(/[^0-9]/g, '');
+    return digits.includes((settings2.ownerNumber || '').replace(/[^0-9]/g, ''));
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

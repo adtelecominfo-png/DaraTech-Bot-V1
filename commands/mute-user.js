@@ -1,6 +1,6 @@
 // commands/mute-user.js
 const isAdmin = require('../lib/isAdmin');
-const mutedUsers = new Map(); // Store muted users: { jid: expiryTime }
+const { mutedUsers } = require('../lib/muteState');
 
 async function muteUserCommand(sock, chatId, message, userMessage) {
     try {
@@ -73,4 +73,4 @@ function isUserMuted(jid, groupId) {
     return true;
 }
 
-module.exports = { muteUserCommand, isUserMuted, mutedUsers };
+module.exports = { muteUserCommand };

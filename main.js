@@ -164,7 +164,7 @@ const { addCommandReaction, handleAreactCommand } = require('./lib/reactions');
 const { goodnightCommand } = require('./commands/goodnight');
 const { shayariCommand } = require('./commands/shayari');
 const { rosedayCommand } = require('./commands/roseday');
-const imagineCommand = require('./commands/imagine');
+const imagineCommand = require('./commands/ai'); // imagine/flux are handled inside ai.js
 const { ytvideoCommand } = require('./commands/video');
 const {
     twitterDlCommand, igdlCommand, pinterestDlCommand, douyinCommand,
@@ -192,7 +192,8 @@ const uptimeCommand = require('./commands/uptime');
 const { afkCommand, checkAFK, removeAFK } = require('./commands/afk');
 const vcfCommand = require('./commands/vcf');
 const addCommand = require('./commands/add');
-const { muteUserCommand, isUserMuted } = require('./commands/mute-user');
+const { muteUserCommand } = require('./commands/mute-user');
+const { isUserMuted }    = require('./lib/muteState');
 const unmuteUserCommand = require('./commands/unmute-user');
 const pinCommand = require('./commands/pin');
 const pingCommand = require('./commands/ping');

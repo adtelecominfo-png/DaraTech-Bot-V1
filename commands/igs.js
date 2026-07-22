@@ -6,7 +6,7 @@ const path = require('path');
 const webp = require('node-webpmux');
 const crypto = require('crypto');
 const settings = require('../settings');
-const { stickercropFromBuffer } = require('./stickercrop');
+const { stickercropFromBuffer } = require('../lib/stickerUtils');
 
 async function convertBufferToStickerWebp(inputBuffer, isAnimated, cropSquare) {
     const tmpDir = path.join(process.cwd(), 'tmp');

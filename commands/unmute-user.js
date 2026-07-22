@@ -1,6 +1,6 @@
 // commands/unmute-user.js
 const isAdmin = require('../lib/isAdmin');
-const { mutedUsers } = require('./mute-user');
+const { mutedUsers } = require('../lib/muteState');
 
 async function unmuteUserCommand(sock, chatId, message) {
     try {
