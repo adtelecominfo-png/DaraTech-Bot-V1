@@ -3,47 +3,62 @@ const fs   = require('fs');
 const path = require('path');
 const { get } = require('../lib/gifted');
 
-const USER_GROUP_DATA    = path.join(__dirname, '../data/userGroupData.json');
-const VELORA_MEMORY_FILE = path.join(__dirname, '../data/velora_memory.json');
+const USER_GROUP_DATA   = path.join(__dirname, '../data/userGroupData.json');
+const VELORA_MEMORY_DIR = path.join(__dirname, '../data/velora_memory');
+if (!fs.existsSync(VELORA_MEMORY_DIR)) fs.mkdirSync(VELORA_MEMORY_DIR, { recursive: true });
 
-// ─── In-memory chat history (loaded from disk on startup) ────────────────────
-const chatMemory = {
-    messages: new Map(),   // senderId → [{role, content}, …] last 100
-    userInfo:  new Map(),  // senderId → {name?, age?, location?}
-};
+// ─── In-memory cache: memKey → { messages, userInfo } ────────────────────────
+const chatMemory = new Map();
 
-// ─── Disk persistence ─────────────────────────────────────────────────────────
-function loadChatMemory() {
+// ─── File name helpers ────────────────────────────────────────────────────────
+// memKey is "senderId" (DM) or "senderId::chatId" (group)
+// Produces e.g. "2348152077346_velora_memory.json"  or
+//              "2348152077346_120363XXXXXX_velora_memory.json"
+function memKeyToFilename(memKey) {
+    return memKey
+        .replace(/@[a-z.]+/g, '')   // strip @s.whatsapp.net / @g.us / @lid
+        .replace(/::/g, '_')        // group separator
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        + '_velora_memory.json';
+}
+
+function memFilePath(memKey) {
+    return path.join(VELORA_MEMORY_DIR, memKeyToFilename(memKey));
+}
+
+// ─── Lazy per-file load ───────────────────────────────────────────────────────
+function loadMemForKey(memKey) {
+    if (chatMemory.has(memKey)) return;
     try {
-        if (!fs.existsSync(VELORA_MEMORY_FILE)) return;
-        const raw = JSON.parse(fs.readFileSync(VELORA_MEMORY_FILE, 'utf8'));
-        for (const [id, msgs] of Object.entries(raw.messages || {}))
-            chatMemory.messages.set(id, msgs.slice(-100));
-        for (const [id, info] of Object.entries(raw.userInfo || {}))
-            chatMemory.userInfo.set(id, info);
-        console.log(`[Velora] Loaded memory for ${chatMemory.messages.size} user(s).`);
-    } catch (e) {
-        console.error('[Velora] Failed to load memory:', e.message);
+        const p = memFilePath(memKey);
+        if (fs.existsSync(p)) {
+            const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
+            chatMemory.set(memKey, {
+                messages: (raw.messages || []).slice(-100),
+                userInfo: raw.userInfo || {},
+            });
+        } else {
+            chatMemory.set(memKey, { messages: [], userInfo: {} });
+        }
+    } catch {
+        chatMemory.set(memKey, { messages: [], userInfo: {} });
     }
 }
 
-let _saveTimer = null;
-function scheduleSave() {
-    if (_saveTimer) return;
-    _saveTimer = setTimeout(() => {
-        _saveTimer = null;
+// ─── Per-key debounced save ───────────────────────────────────────────────────
+const _saveTimers = new Map();
+function scheduleSaveForKey(memKey) {
+    if (_saveTimers.has(memKey)) return;
+    _saveTimers.set(memKey, setTimeout(() => {
+        _saveTimers.delete(memKey);
         try {
-            const out = { messages: {}, userInfo: {} };
-            for (const [id, msgs] of chatMemory.messages) out.messages[id] = msgs;
-            for (const [id, info] of chatMemory.userInfo)  out.userInfo[id]  = info;
-            fs.writeFileSync(VELORA_MEMORY_FILE, JSON.stringify(out), 'utf8');
+            const mem = chatMemory.get(memKey);
+            if (mem) fs.writeFileSync(memFilePath(memKey), JSON.stringify(mem), 'utf8');
         } catch (e) {
-            console.error('[Velora] Failed to save memory:', e.message);
+            console.error('[Velora] Failed to save memory for', memKey, e.message);
         }
-    }, 3000);
+    }, 3000));
 }
-
-loadChatMemory();
 
 // ─── userGroupData helpers ────────────────────────────────────────────────────
 function loadUserGroupData() {
@@ -310,17 +325,14 @@ function getMemKey(senderId, chatId) {
 }
 
 function ensureMemory(memKey) {
-    if (!chatMemory.messages.has(memKey)) {
-        chatMemory.messages.set(memKey, []);
-        chatMemory.userInfo.set(memKey, {});
-    }
+    loadMemForKey(memKey);  // no-op if already cached
 }
 
 function pushHistory(memKey, role, content) {
-    const msgs = chatMemory.messages.get(memKey);
-    msgs.push({ role, content });
-    if (msgs.length > 100) msgs.splice(0, msgs.length - 100);
-    scheduleSave();
+    const mem = chatMemory.get(memKey);
+    mem.messages.push({ role, content });
+    if (mem.messages.length > 100) mem.messages.splice(0, mem.messages.length - 100);
+    scheduleSaveForKey(memKey);
 }
 
 // ─── Extract quoted/replied-to message text ───────────────────────────────────
@@ -362,16 +374,17 @@ function buildQueryWithQuoted(query, quoted) {
 async function veloraRespond(sock, chatId, message, userText, senderId, mentions = []) {
     const memKey = getMemKey(senderId, chatId);
     ensureMemory(memKey);
+    const mem  = chatMemory.get(memKey);
     const info = extractUserInfo(userText);
     if (Object.keys(info).length)
-        chatMemory.userInfo.set(memKey, { ...chatMemory.userInfo.get(memKey), ...info });
+        mem.userInfo = { ...mem.userInfo, ...info };
 
     pushHistory(memKey, 'user', userText);
 
     // Kick off AI fetch immediately — indicator runs in parallel
     const aiPromise = getAIResponse(userText, {
-        messages:  chatMemory.messages.get(memKey),
-        userInfo:  chatMemory.userInfo.get(memKey),
+        messages: mem.messages,
+        userInfo: mem.userInfo,
         senderId,
     });
 
