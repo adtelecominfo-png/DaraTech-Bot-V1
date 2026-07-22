@@ -5,7 +5,7 @@ const fs       = require('fs');
 const path     = require('path');
 const settings = require('../settings');
 
-const REPO        = 'adtelecominfo-png/DaraTech-Bot-V1';
+const REPO        = 'adtelecominfo-png/savedoc';
 const BRANCH      = 'main';
 const DOCS_FOLDER = 'savedocs';
 const CFG_PATH    = path.join(__dirname, '../data/savedoc_config.json');
