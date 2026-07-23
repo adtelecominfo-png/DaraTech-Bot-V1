@@ -48,6 +48,7 @@ const { join } = require('path')
 
 // Import lightweight store
 const store = require('./lib/lightweight_store')
+const sessionRegistry = require('./lib/sessionRegistry')
 
 // ── Self-restart duplicate guard ───────────────────────────────────────────────
 // If the panel tries to restart after we self-spawned, this exits the duplicate.
@@ -165,24 +166,35 @@ function saveSessionToEnv() {
     }
 }
 
-async function startXeonBotInc() {
+async function startSession(config = {}) {
+    // ── Per-session identity ──────────────────────────────────────────────────
+    const sessionId      = config.id        || 'default';
+    const sessionName    = config.name      || settings.sessionName || global.botname || 'Daratech';
+    const sessionDir     = config.sessionDir|| 'session';
+    const sessionOwnerNum= (config.ownerNumber || '').replace(/\D/g, '') || phoneNumber;
+
+    sessionRegistry.setConnecting(sessionId, sessionName);
+    console.log(chalk.cyan(`[${sessionName}] Starting session (dir: ${sessionDir})…`));
+
     try {
         let { version, isLatest } = await fetchLatestBaileysVersion()
         // Ensure session dir exists (gitignored, so absent on fresh deploys)
-        if (!fs.existsSync('./session')) fs.mkdirSync('./session', { recursive: true });
-        // Restore creds from $env SESSION_ID if session folder is empty (e.g. after .update)
-        restoreSessionFromEnv();
-        const { state, saveCreds } = await useMultiFileAuthState(`./session`)
+        if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
+        // Restore creds from $env SESSION_ID only for the default session folder
+        if (sessionDir === 'session') restoreSessionFromEnv();
+        const { state, saveCreds } = await useMultiFileAuthState(sessionDir)
 
         // Only write SESSION_ID to $env after a real successful connection —
         // never during initial pairing (where creds are partial/empty)
         let sessionConnected = false;
         const msgRetryCounterCache = new NodeCache()
 
+        const sessionPairingCode = !!sessionOwnerNum || process.argv.includes("--pairing-code");
+
         const XeonBotInc = makeWASocket({
             version,
             logger: pino({ level: 'silent' }),
-            printQRInTerminal: !pairingCode,
+            printQRInTerminal: !sessionPairingCode,
             browser: ["Ubuntu", "Chrome", "20.0.04"],
             auth: {
                 creds: state.creds,
@@ -201,6 +213,10 @@ async function startXeonBotInc() {
             connectTimeoutMs: 60000,
             keepAliveIntervalMs: 10000,
         })
+
+        // Tag socket with session identity so main.js can read the name
+        XeonBotInc._sessionId   = sessionId;
+        XeonBotInc._sessionName = sessionName;
 
         // Save credentials when they update.
         // Only sync SESSION_ID to $env after a real successful connection —
@@ -287,38 +303,39 @@ async function startXeonBotInc() {
 
     XeonBotInc.serializeM = (m) => smsg(XeonBotInc, m, store)
 
-    // Handle pairing code
-    if (pairingCode && !XeonBotInc.authState.creds.registered) {
+    // Handle pairing code — uses per-session owner number
+    if (sessionPairingCode && !XeonBotInc.authState.creds.registered) {
         if (useMobile) throw new Error('Cannot use pairing code with mobile api')
 
-        let phoneNumber
-        if (!!global.phoneNumber) {
-            // Reuse number from a previous (expired/failed) attempt — no re-prompt needed
-            phoneNumber = global.phoneNumber
-        } else {
-            phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`Please type your WhatsApp number 😍\nFormat: 2347030626048 (without + or spaces) : `)))
-            phoneNumber = phoneNumber.replace(/[^0-9]/g, '')
+        let pairingPhone = sessionOwnerNum;
+        // Per-session stored number (for reconnect retries)
+        const pairingKey = `phoneNumber_${sessionId}`;
+        if (!pairingPhone && global[pairingKey]) {
+            pairingPhone = global[pairingKey];
+        } else if (!pairingPhone) {
+            pairingPhone = await question(chalk.bgBlack(chalk.greenBright(`[${sessionName}] Please type your WhatsApp number 😍\nFormat: 2347030626048 (without + or spaces) : `)))
+            pairingPhone = pairingPhone.replace(/[^0-9]/g, '')
 
             // Validate the phone number using awesome-phonenumber
             const pn = require('awesome-phonenumber');
-            if (!pn('+' + phoneNumber).isValid()) {
-                console.log(chalk.red('Invalid phone number. Please enter your full international number (e.g., 15551234567 for US, 447911123456 for UK, etc.) without + or spaces.'));
+            if (!pn('+' + pairingPhone).isValid()) {
+                console.log(chalk.red(`[${sessionName}] Invalid phone number. Please enter full international number without + or spaces.`));
                 process.exit(1);
             }
 
-            // Store globally so reconnect retries reuse it without prompting again
-            global.phoneNumber = phoneNumber
+            // Store so reconnect retries reuse it without prompting again
+            global[pairingKey] = pairingPhone;
         }
 
         const requestNewPairingCode = async () => {
             try {
-                let code = await XeonBotInc.requestPairingCode(phoneNumber)
+                let code = await XeonBotInc.requestPairingCode(pairingPhone)
                 code = code?.match(/.{1,4}/g)?.join("-") || code
-                console.log(chalk.black(chalk.bgGreen(`Your Pairing Code : `)), chalk.black(chalk.white(code)))
+                console.log(chalk.black(chalk.bgGreen(`[${sessionName}] Pairing Code : `)), chalk.black(chalk.white(code)))
                 console.log(chalk.yellow(`\nEnter this code in WhatsApp:\n1. Open WhatsApp → Settings → Linked Devices\n2. Tap "Link a Device"\n3. Choose "Link with phone number instead"\n4. Enter the code above\n\n⏱️  Code expires in ~60 seconds. A new one will be shown if needed.`))
             } catch (error) {
-                console.error('Error requesting pairing code:', error)
-                console.log(chalk.red('Failed to get pairing code. Will retry on reconnect.'))
+                console.error(`[${sessionName}] Error requesting pairing code:`, error)
+                console.log(chalk.red(`[${sessionName}] Failed to get pairing code. Will retry on reconnect.`))
             }
         }
 
@@ -341,6 +358,8 @@ async function startXeonBotInc() {
         if (connection == "open") {
             // Mark session as truly connected — now safe to write SESSION_ID to $env
             sessionConnected = true;
+            // Register in the shared session registry
+            sessionRegistry.register(sessionId, { name: sessionName, sock: XeonBotInc, startTime: Date.now() });
             // Clear stored phone number so it doesn't interfere with future fresh starts
             global.phoneNumber = null;
 
@@ -488,22 +507,23 @@ async function startXeonBotInc() {
             const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut
             const statusCode = lastDisconnect?.error?.output?.statusCode
 
-            console.log(chalk.red(`Connection closed due to ${lastDisconnect?.error}, reconnecting ${shouldReconnect}`))
+            console.log(chalk.red(`[${sessionName}] Connection closed due to ${lastDisconnect?.error}, reconnecting ${shouldReconnect}`))
+            sessionRegistry.setOffline(sessionId, sessionName);
 
             if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
                 try {
-                    rmSync('./session', { recursive: true, force: true })
-                    console.log(chalk.yellow('Session folder deleted. Please re-authenticate.'))
+                    rmSync(sessionDir, { recursive: true, force: true })
+                    console.log(chalk.yellow(`[${sessionName}] Session folder deleted. Please re-authenticate.`))
                 } catch (error) {
-                    console.error('Error deleting session:', error)
+                    console.error(`[${sessionName}] Error deleting session:`, error)
                 }
-                console.log(chalk.red('Session logged out. Please re-authenticate.'))
+                console.log(chalk.red(`[${sessionName}] Session logged out. Please re-authenticate.`))
             }
 
             if (shouldReconnect) {
-                console.log(chalk.yellow('Reconnecting...'))
+                console.log(chalk.yellow(`[${sessionName}] Reconnecting...`))
                 await delay(5000)
-                startXeonBotInc()
+                startSession(config)
             }
 
             // If connection closed before we were ever registered (pairing expired/failed),
@@ -554,15 +574,53 @@ async function startXeonBotInc() {
 
     return XeonBotInc
     } catch (error) {
-        console.error('Error in startXeonBotInc:', error)
+        console.error(`[${sessionName}] Error in startSession:`, error)
+        sessionRegistry.setOffline(sessionId, sessionName);
         await delay(5000)
-        startXeonBotInc()
+        startSession(config)
     }
 }
 
+// ── Multi-session launcher ─────────────────────────────────────────────────────
+async function startAllSessions() {
+    const sessionsPath = path.join(process.cwd(), 'data', 'sessions.json');
+    let sessions = [];
+
+    try {
+        if (fs.existsSync(sessionsPath)) {
+            const data = JSON.parse(fs.readFileSync(sessionsPath, 'utf8'));
+            sessions = (data.sessions || []).filter(s => s.enabled !== false);
+        }
+    } catch (e) {
+        console.error('[sessions] Failed to load sessions.json:', e.message);
+    }
+
+    // Fallback: single default session using existing settings
+    if (sessions.length === 0) {
+        sessions = [{
+            id:          'default',
+            name:        settings.sessionName || global.botname || 'Daratech',
+            sessionDir:  'session',
+            enabled:     true,
+            ownerNumber: '',
+        }];
+    }
+
+    const plural = sessions.length === 1 ? 'session' : 'sessions';
+    console.log(chalk.cyan(`🤖 Launching ${sessions.length} ${plural}…`));
+
+    for (const config of sessions) {
+        // Start each session independently — they reconnect themselves
+        startSession(config).catch(err => {
+            console.error(`[session:${config.id}] Fatal:`, err.message);
+        });
+        // Small stagger to avoid simultaneous pairing prompts
+        if (sessions.length > 1) await delay(2000);
+    }
+}
 
 // Start the bot with error handling
-startXeonBotInc().catch(error => {
+startAllSessions().catch(error => {
     console.error('Fatal error:', error)
     process.exit(1)
 })

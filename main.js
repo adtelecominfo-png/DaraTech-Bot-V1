@@ -209,6 +209,7 @@ const calcCommand = require('./commands/calc');
 const { netinfoCommand, cpuinfoCommand, meminfoCommand, diskinfoCommand, timezoneCommand } = require('./commands/netinfo');
 const { autoUpdateCommand } = require('./lib/autoUpdate');
 const reportnumCommand = require('./commands/reportnum');
+const botsCommand      = require('./commands/bots');
 const freefireSensitivityCommand = require('./commands/freefiresensi');
 const pubgSensiCommand = require('./commands/pubgsensi');
 const codmSensiCommand = require('./commands/codmsensi');
@@ -516,7 +517,7 @@ if (checkAFK(senderId)) {
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$reportnum'];
+        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$reportnum', '$bots'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -568,6 +569,37 @@ if (checkAFK(senderId)) {
         let commandExecuted = false;
 
         switch (true) {
+
+            // ── Bare $ greeting ──────────────────────────────────────────────
+            case userMessage === '$': {
+                const sessionName = sock._sessionName || settings.sessionName || settings.botName || 'Versa';
+                let senderName = senderId.split('@')[0];
+                try {
+                    const n = sock.getName ? sock.getName(senderId) : null;
+                    if (n && typeof n === 'string') senderName = n;
+                    else if (n && typeof n.then === 'function') senderName = (await n) || senderName;
+                } catch { /* keep phone number fallback */ }
+                await sock.sendMessage(chatId, {
+                    text: [
+                        `╭━━━「 💠 *${sessionName.toUpperCase()}* 」━━━`,
+                        `┃`,
+                        `┃  👋 Hello, *${senderName}*`,
+                        `┃  ✅ *${sessionName}* is active & ready.`,
+                        `┃`,
+                        `┃  ◈ *$menu*  → Browse all commands`,
+                        `┃  ◈ *$help*  → Detailed command guide`,
+                        `┃  ◈ *$ping*  → Check response time`,
+                        `┃  ◈ *$bots*  → All sessions status`,
+                        `┃`,
+                        `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+                        ``,
+                        `> _Powered by Daratech_ ⚡`,
+                    ].join('\n')
+                }, { quoted: message });
+                commandExecuted = true;
+                break;
+            }
+
             // === NEW COMMANDS ===
             case userMessage.startsWith('$savedoc'):
                 await savedocCommand(sock, chatId, message, userMessage);
@@ -602,6 +634,11 @@ case userMessage.startsWith('$vcf'):
 
 case userMessage.startsWith('$reportnum'):
     await reportnumCommand(sock, chatId, senderId, message);
+    commandExecuted = true;
+    break;
+
+case userMessage.startsWith('$bots'):
+    await botsCommand(sock, chatId, senderId, message);
     commandExecuted = true;
     break;
 

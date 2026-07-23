@@ -1,0 +1,11 @@
+{
+  "sessions": [
+    {
+      "id": "versa",
+      "name": "Versa",
+      "sessionDir": "session",
+      "enabled": true,
+      "ownerNumber": ""
+    }
+  ]
+}

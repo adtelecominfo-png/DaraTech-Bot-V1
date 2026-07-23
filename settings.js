@@ -1,6 +1,7 @@
 const settings = {
   packname: 'Daratech',
   botName: "Daratech",
+  sessionName: "Versa",   // per-instance display name (shown in greetings + $bots)
   botOwner: 'Daratech', // Your name
   ownerNumber: '2348152077346', // Set your number here without + symbol
   ownerContact: '2348152077346', // Number shown when someone uses $owner command
