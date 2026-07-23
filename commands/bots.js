@@ -2,41 +2,28 @@
 /**
  * bots.js — $bots
  *
- * Shows all configured bot sessions with live status and uptime.
+ * Fetches all deployed bot instances from the GitHub registry
+ * (updated automatically each time any bot connects) and displays them.
  * Owner-only.
  *
  * Usage: $bots
  */
 
-const fs   = require('fs');
-const path = require('path');
-const isOwnerOrSudo = require('../lib/isOwner');
-const sessionRegistry = require('../lib/sessionRegistry');
+const isOwnerOrSudo  = require('../lib/isOwner');
+const { fetchAllBots } = require('../lib/botRegistry');
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function fmtUptime(ms) {
-    if (!ms || ms <= 0) return '—';
-    const totalSec = Math.floor(ms / 1000);
-    const d = Math.floor(totalSec / 86400);
-    const h = Math.floor((totalSec % 86400) / 3600);
-    const m = Math.floor((totalSec % 3600) / 60);
-    if (d > 0) return `${d}d ${h}h ${m}m`;
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
+// Format an ISO timestamp into a readable relative string
+function timeAgo(isoStr) {
+    if (!isoStr) return '—';
+    const diffMs  = Date.now() - new Date(isoStr).getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1)   return 'just now';
+    if (diffMin < 60)  return `${diffMin}m ago`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24)    return `${diffH}h ago`;
+    const diffD = Math.floor(diffH / 24);
+    return `${diffD}d ago`;
 }
-
-function loadConfiguredSessions() {
-    const p = path.join(process.cwd(), 'data', 'sessions.json');
-    try {
-        if (fs.existsSync(p)) {
-            return JSON.parse(fs.readFileSync(p, 'utf8')).sessions || [];
-        }
-    } catch { /* ignore */ }
-    return [];
-}
-
-// ── Command ────────────────────────────────────────────────────────────────────
 
 async function botsCommand(sock, chatId, senderId, message) {
     try {
@@ -47,54 +34,44 @@ async function botsCommand(sock, chatId, senderId, message) {
                 { quoted: message });
         }
 
-        const configured = loadConfiguredSessions();
-        const now = Date.now();
-        const allIds = new Set(configured.map(s => s.id));
+        await sock.sendMessage(chatId,
+            { text: '⏳ Fetching connected bots from registry…' },
+            { quoted: message });
 
-        // Also include any registry entries not in the config file (dynamically added)
-        for (const { id } of sessionRegistry.getAll()) allIds.add(id);
+        const bots = await fetchAllBots();
 
-        const entries = [];
-        for (const id of allIds) {
-            const cfg  = configured.find(s => s.id === id) || {};
-            const live = sessionRegistry.get(id);
-            const name   = live?.name || cfg.name || id;
-            const status = live?.status || 'offline';
-            const uptime = (status === 'online' && live?.startTime)
-                ? fmtUptime(now - live.startTime)
-                : null;
-            entries.push({ name, status, uptime });
+        if (!bots.length) {
+            return sock.sendMessage(chatId, {
+                text: [
+                    `╭━━━「 🤖 *DEPLOYED ACCOUNTS* 」━━━`,
+                    `┃`,
+                    `┃  No bots registered yet.`,
+                    `┃  Registry updates automatically when`,
+                    `┃  any bot instance connects to WhatsApp.`,
+                    `┃`,
+                    `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+                ].join('\n'),
+            }, { quoted: message });
         }
 
-        // Sort: online first, then alphabetically
-        entries.sort((a, b) => {
-            if (a.status === b.status) return a.name.localeCompare(b.name);
-            return a.status === 'online' ? -1 : 1;
-        });
+        // Sort by lastSeen descending (most recently connected first)
+        bots.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
 
-        const onlineCount = entries.filter(e => e.status === 'online').length;
-        const total       = entries.length;
-
-        const lines = entries.map((e, i) => {
-            const branch = i === entries.length - 1 ? '╰' : '├';
-            const circle = e.status === 'online'
-                ? '🟢'
-                : e.status === 'connecting'
-                    ? '🟡'
-                    : '🔴';
-            const detail = e.status === 'online' && e.uptime
-                ? ` _(${e.uptime})_`
-                : e.status === 'connecting'
-                    ? ' _(connecting…)_'
-                    : ' _(offline)_';
-            return `${branch}◆ ${circle} *${e.name}*${detail}`;
+        const lines = bots.map((b, i) => {
+            const branch = i === bots.length - 1 ? '╰' : '├';
+            return (
+                `${branch}◆ 🟢 *${b.name}*\n` +
+                `┃   📱 +${b.number}\n` +
+                `┃   🕐 Last seen: ${timeAgo(b.lastSeen)}`
+            );
         });
 
         const text = [
             `╭━━━「 🤖 *DEPLOYED ACCOUNTS* 」━━━`,
+            `┃`,
             ...lines,
             `┃`,
-            `┃ Online: *${onlineCount}/${total}* account(s)`,
+            `┃ Total: *${bots.length}* account(s) registered`,
             `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
             ``,
             `_Daratech_ ⚡`,
@@ -105,7 +82,7 @@ async function botsCommand(sock, chatId, senderId, message) {
     } catch (err) {
         console.error('[bots] error:', err.message);
         return sock.sendMessage(chatId,
-            { text: `❌ Failed to fetch session list: ${err.message}` },
+            { text: `❌ Failed to fetch bot registry: ${err.message}` },
             { quoted: message });
     }
 }

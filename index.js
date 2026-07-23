@@ -382,6 +382,12 @@ async function startSession(config = {}) {
             sessionConnected = true;
             // Register in the shared session registry
             sessionRegistry.register(sessionId, { name: sessionName, sock: XeonBotInc, startTime: Date.now() });
+            // Register in the GitHub-backed global bot registry (fire-and-forget)
+            try {
+                const { registerBot } = require('./lib/botRegistry');
+                const botNum = XeonBotInc.user?.id?.split(':')[0] || '';
+                if (botNum) registerBot(sessionName, botNum).catch(() => {});
+            } catch { /* non-fatal */ }
             // Clear stored phone number so it doesn't interfere with future fresh starts
             global.phoneNumber = null;
 
@@ -603,84 +609,23 @@ async function startSession(config = {}) {
     }
 }
 
-// ── Multi-session launcher ─────────────────────────────────────────────────────
+// ── Single-session launcher ────────────────────────────────────────────────────
 async function startAllSessions() {
-    const sessionsPath = path.join(process.cwd(), 'data', 'sessions.json');
-    let sessions = [];
+    // Single session: name from NAME env, creds from SESSION_ID env.
+    // Each deployment runs one bot. $bots shows all deployments via GitHub registry.
+    const config = {
+        id:           'default',
+        name:         process.env.NAME || settings.sessionName || global.botname || 'Daratech',
+        sessionDir:   'session',
+        envSessionVar: 'SESSION_ID',
+        enabled:      true,
+        ownerNumber:  '',
+    };
 
-    // 1. Load from sessions.json
-    try {
-        if (fs.existsSync(sessionsPath)) {
-            const data = JSON.parse(fs.readFileSync(sessionsPath, 'utf8'));
-            sessions = (data.sessions || []).filter(s => s.enabled !== false);
-        }
-    } catch (e) {
-        console.error('[sessions] Failed to load sessions.json:', e.message);
-    }
-
-    // 1b. Let NAME env var override the primary session's display name
-    //     (the primary session is whichever uses SESSION_ID or is first)
-    if (process.env.NAME) {
-        const primary = sessions.find(s => !s.envSessionVar || s.envSessionVar === 'SESSION_ID') || sessions[0];
-        if (primary) primary.name = process.env.NAME;
-    }
-
-    // 2. Scan environment for BOT_N_* vars (N = 1 … 20)
-    //    BOT_1_NAME, BOT_1_SESSION, BOT_1_NUMBER  →  one bot config
-    //    These OVERRIDE a sessions.json entry with the same N-based id,
-    //    or ADD a new entry if no match exists.
-    for (let n = 1; n <= 20; n++) {
-        const envName    = process.env[`BOT_${n}_NAME`];
-        const envSession = process.env[`BOT_${n}_SESSION`];
-        const envNumber  = process.env[`BOT_${n}_NUMBER`];
-        if (!envName && !envSession && !envNumber) continue; // skip gaps, don't stop (supports BOT_2 without BOT_1)
-
-        const envId     = `bot${n}`;
-        const envDir    = n === 1 ? 'session' : `session/bot${n}`;
-        const envVarKey = n === 1 ? 'SESSION_ID' : `BOT_${n}_SESSION`;
-
-        const existing = sessions.findIndex(s => s.id === envId);
-        const merged = {
-            id:           envId,
-            name:         envName  || (existing >= 0 ? sessions[existing].name : `Bot${n}`),
-            sessionDir:   existing >= 0 ? sessions[existing].sessionDir : envDir,
-            ownerNumber:  envNumber || (existing >= 0 ? sessions[existing].ownerNumber : ''),
-            envSessionVar: envSession ? `BOT_${n}_SESSION` : (n === 1 ? 'SESSION_ID' : undefined),
-            enabled:      true,
-        };
-
-        if (existing >= 0) sessions[existing] = merged;
-        else sessions.push(merged);
-    }
-
-    // 3. Fallback: single default session when nothing is configured at all
-    if (sessions.length === 0) {
-        sessions = [{
-            id:           'default',
-            name:         process.env.NAME || settings.sessionName || global.botname || 'Daratech',
-            sessionDir:   'session',
-            envSessionVar:'SESSION_ID',
-            enabled:      true,
-            ownerNumber:  '',
-        }];
-    }
-
-    const plural = sessions.length === 1 ? 'session' : 'sessions';
-    console.log(chalk.cyan(`🤖 Launching ${sessions.length} ${plural}…`));
-    if (sessions.length > 1) {
-        sessions.forEach((s, i) =>
-            console.log(chalk.cyan(`  ${i + 1}. ${s.name} (${s.sessionDir})`))
-        );
-    }
-
-    for (const config of sessions) {
-        // Start each session independently — they reconnect themselves
-        startSession(config).catch(err => {
-            console.error(`[session:${config.id}] Fatal:`, err.message);
-        });
-        // Small stagger to avoid simultaneous pairing prompts on a fresh pair
-        if (sessions.length > 1) await delay(2000);
-    }
+    console.log(chalk.cyan(`🤖 Starting session: ${config.name}…`));
+    startSession(config).catch(err => {
+        console.error(`[session] Fatal:`, err.message);
+    });
 }
 
 // Start the bot with error handling
