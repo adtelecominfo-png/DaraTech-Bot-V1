@@ -257,6 +257,7 @@ const {
     creategcCommand, promoteallCommand, demoteallCommand, kickallCommand,
     removeByCountryCommand
 } = require('./commands/group');
+const { gpermCommand, editinfoCommand, memberaddCommand, invitelinkCommand, approvalCommand } = require('./commands/groupperms');
 const { numfactCommand, datefactCommand, yearfactCommand, mathfactCommand } = require('./commands/numfact');
 const { dadjoke, chuckCommand, programmingJokeCommand, yomammaCommand, darkJokeCommand } = require('./commands/funjokes');
 const { riddleCommand, riddleAnswerCommand } = require('./commands/riddle');
@@ -530,7 +531,7 @@ if (checkAFK(senderId)) {
         }
 
         // List of admin commands
-        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus', '$antigroupmention', '$agm', '$autosticker', '$autos', '$asticker', '$clean', '$purge', '$pending', '$accept', '$reject'];
+        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus', '$antigroupmention', '$agm', '$autosticker', '$autos', '$asticker', '$clean', '$purge', '$pending', '$accept', '$reject', '$gperm', '$editinfo', '$memberadd', '$invitelink', '$approval'];
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
@@ -2118,6 +2119,31 @@ case userMessage.startsWith('$bssensi'):
 
             case userMessage === '$closegroup':
                 await closegroupCommand(sock, chatId, senderId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '$gperm':
+                await gpermCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('$editinfo'):
+                await editinfoCommand(sock, chatId, senderId, message, userMessage.slice('$editinfo'.length).trim());
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('$memberadd'):
+                await memberaddCommand(sock, chatId, senderId, message, userMessage.slice('$memberadd'.length).trim());
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('$invitelink'):
+                await invitelinkCommand(sock, chatId, senderId, message, userMessage.slice('$invitelink'.length).trim());
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('$approval'):
+                await approvalCommand(sock, chatId, senderId, message, userMessage.slice('$approval'.length).trim());
                 commandExecuted = true;
                 break;
 
