@@ -633,7 +633,7 @@ async function startAllSessions() {
         const envName    = process.env[`BOT_${n}_NAME`];
         const envSession = process.env[`BOT_${n}_SESSION`];
         const envNumber  = process.env[`BOT_${n}_NUMBER`];
-        if (!envName && !envSession && !envNumber) break; // stop at first gap
+        if (!envName && !envSession && !envNumber) continue; // skip gaps, don't stop (supports BOT_2 without BOT_1)
 
         const envId     = `bot${n}`;
         const envDir    = n === 1 ? 'session' : `session/bot${n}`;

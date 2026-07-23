@@ -1,9 +1,18 @@
 {
   "sessions": [
     {
-      "id": "versa",
+      "id": "bot1",
       "name": "Versa",
       "sessionDir": "session",
+      "envSessionVar": "SESSION_ID",
+      "enabled": true,
+      "ownerNumber": ""
+    },
+    {
+      "id": "bot2",
+      "name": "Valora",
+      "sessionDir": "session/valora",
+      "envSessionVar": "BOT_2_SESSION",
       "enabled": true,
       "ownerNumber": ""
     }
