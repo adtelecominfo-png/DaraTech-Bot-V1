@@ -208,6 +208,7 @@ const leaveCommand = require('./commands/leave');
 const calcCommand = require('./commands/calc');
 const { netinfoCommand, cpuinfoCommand, meminfoCommand, diskinfoCommand, timezoneCommand } = require('./commands/netinfo');
 const { autoUpdateCommand } = require('./lib/autoUpdate');
+const reportnumCommand = require('./commands/reportnum');
 const freefireSensitivityCommand = require('./commands/freefiresensi');
 const pubgSensiCommand = require('./commands/pubgsensi');
 const codmSensiCommand = require('./commands/codmsensi');
@@ -515,7 +516,7 @@ if (checkAFK(senderId)) {
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats'];
+        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$reportnum'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -596,6 +597,11 @@ case userMessage.startsWith('$afk'):
 
 case userMessage.startsWith('$vcf'):
     await vcfCommand(sock, chatId, message);
+    commandExecuted = true;
+    break;
+
+case userMessage.startsWith('$reportnum'):
+    await reportnumCommand(sock, chatId, senderId, message);
     commandExecuted = true;
     break;
 
