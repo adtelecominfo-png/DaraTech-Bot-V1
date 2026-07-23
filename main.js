@@ -286,6 +286,12 @@ global.ytch = "Daratech";
 // channelInfo is kept as empty object — spreading it is a no-op (no newsletter)
 const channelInfo = {};
 
+// Cross-session dedup: when multiple bot sessions are online in the same group,
+// each session receives every message event. This Set ensures only the FIRST
+// session to reach a given message actually processes and responds to it —
+// preventing duplicate replies (e.g. "already disabled" twice on $chatbot off).
+const _handledMsgIds = new Set();
+
 async function handleMessages(sock, messageUpdate, printLog) {
     try {
         const { messages, type } = messageUpdate;
@@ -299,6 +305,17 @@ async function handleMessages(sock, messageUpdate, printLog) {
         handleAntigroupmentionMessage(sock, message).catch(() => {});
 
         if (!message?.message) return;
+
+        // Cross-session dedup: skip if another session already handled this message.
+        // Keep the set bounded to the last 500 IDs to avoid unbounded memory growth.
+        const _msgId = message.key.id;
+        if (_msgId) {
+            if (_handledMsgIds.has(_msgId)) return;
+            _handledMsgIds.add(_msgId);
+            if (_handledMsgIds.size > 500) {
+                _handledMsgIds.delete(_handledMsgIds.values().next().value);
+            }
+        }
 
         // Handle autoread functionality
         await handleAutoread(sock, message);

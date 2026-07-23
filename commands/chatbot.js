@@ -635,6 +635,11 @@ async function handleChatbotCommand(sock, chatId, message, match) {
 
 // ─── Velora name trigger ──────────────────────────────────────────────────────
 async function handleVeloraNameTrigger(sock, chatId, message, userMessage, senderId) {
+    // In groups, respect the $chatbot on/off toggle
+    if (chatId.endsWith('@g.us')) {
+        const data = loadUserGroupData();
+        if (!data.chatbot[chatId]) return;
+    }
     const memKey   = getMemKey(senderId, chatId);
     const langMode = chatMemory.get(memKey)?.userInfo?.langMode;
     const quoted   = extractQuotedContext(message);
