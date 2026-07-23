@@ -21,11 +21,27 @@ const isOwnerOrSudo = require('../lib/isOwner');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-/** Resolve the target JID from args / mention / reply */
+/**
+ * Resolve the target JID from args / mention / reply.
+ * Returns { jid, usedArgs } or null.
+ *
+ * Number args: collect all consecutive digit-like tokens BEFORE 'mass',
+ * strip non-digits (spaces, dashes, parentheses), join them, require 7–15 digits.
+ */
 function resolveTarget(rawArgs, message) {
-    // 1. Explicit phone number in args (digits only, 7–15 chars)
-    if (rawArgs[0] && /^\d{7,15}$/.test(rawArgs[0])) {
-        return `${rawArgs[0]}@s.whatsapp.net`;
+    // 1. Build phone number from args — collect tokens before 'mass' keyword
+    const numTokens = [];
+    for (const a of rawArgs) {
+        if (a.toLowerCase() === 'mass') break;
+        // Only consume tokens that are digit-ish (digits, spaces already stripped by caller)
+        if (/^[\d\s\-().+]+$/.test(a)) numTokens.push(a);
+        else break;
+    }
+    if (numTokens.length) {
+        const digits = numTokens.join('').replace(/\D/g, '');
+        if (digits.length >= 7 && digits.length <= 15) {
+            return { jid: `${digits}@s.whatsapp.net`, usedArgs: numTokens.length };
+        }
     }
 
     // 2. @mention in the message
@@ -35,12 +51,12 @@ function resolveTarget(rawArgs, message) {
         message.message?.videoMessage?.contextInfo;
 
     if (ctx?.mentionedJid?.length) {
-        return ctx.mentionedJid[0];
+        return { jid: ctx.mentionedJid[0], usedArgs: 0 };
     }
 
     // 3. Quoted / replied-to message participant
     if (ctx?.participant) {
-        return ctx.participant.replace(/:\d+@/, '@');
+        return { jid: ctx.participant.replace(/:\d+@/, '@'), usedArgs: 0 };
     }
 
     return null;
@@ -84,34 +100,24 @@ async function reportnumCommand(sock, chatId, senderId, message) {
                 { quoted: message });
         }
 
-        // Parse command text
-        const raw  = (
+        // Parse command text — split on whitespace but keep all tokens
+        const raw     = (
             message.message?.conversation ||
             message.message?.extendedTextMessage?.text ||
             ''
         ).trim();
-
-        // args[0] = number (optional), args[1] = 'mass' (optional), args[2] = count (optional)
         const allArgs = raw.split(/\s+/).slice(1); // drop '$reportnum'
-        // Strip mention formatting (+, @, etc.) from first arg if present
-        const firstArg = (allArgs[0] || '').replace(/[^0-9]/g, '');
-        const cleanArgs = firstArg ? [firstArg, ...allArgs.slice(1)] : allArgs.slice(0);
 
-        const isMass  = cleanArgs.some(a => a.toLowerCase() === 'mass');
-        const countRaw = isMass
-            ? parseInt(cleanArgs.find(a => /^\d+$/.test(a) && a !== cleanArgs[0]) || '5')
-            : 1;
-        const count = Math.min(Math.max(countRaw || 5, 1), 20); // clamp 1–20
+        const resolved = resolveTarget(allArgs, message);
 
-        const targetJid = resolveTarget(cleanArgs, message);
-
-        if (!targetJid) {
+        if (!resolved) {
             return sock.sendMessage(chatId, {
                 text:
                     `╭━━━「 🚨 *REPORT NUMBER* 」━━━\n` +
                     `┃\n` +
                     `┃ ▸ *$reportnum <number>*\n` +
                     `┃   e.g. $reportnum 2348012345678\n` +
+                    `┃   (spaces in number are fine)\n` +
                     `┃\n` +
                     `┃ ▸ *$reportnum @mention*\n` +
                     `┃ ▸ *$reportnum* (reply to message)\n` +
@@ -126,21 +132,60 @@ async function reportnumCommand(sock, chatId, senderId, message) {
             }, { quoted: message });
         }
 
-        // Safety: don't report yourself or the bot
+        const { jid: targetJid, usedArgs } = resolved;
+
+        // Safety: don't report the bot itself
         const botJid = (sock.user?.id || '').split(':')[0] + '@s.whatsapp.net';
         if (targetJid === botJid) {
             return sock.sendMessage(chatId, { text: '❌ Cannot report the bot itself.' }, { quoted: message });
         }
 
+        // Determine mass/count from remaining args (after the number tokens)
+        const remainingArgs = allArgs.slice(usedArgs);
+        const isMass  = remainingArgs.some(a => a.toLowerCase() === 'mass');
+        const countRaw = isMass
+            ? parseInt(remainingArgs.find(a => /^\d+$/.test(a)) || '5')
+            : 1;
+        const count = Math.min(Math.max(countRaw || 5, 1), 20);
+
         const displayNum = targetJid.split('@')[0];
         const modeLabel  = isMass ? `🔁 *Massive* (${count}×)` : `1️⃣ *Single*`;
 
+        // ── WhatsApp check ────────────────────────────────────────────────────
+        await sock.sendMessage(chatId, {
+            text: `⏳ Checking if *+${displayNum}* is on WhatsApp…`
+        }, { quoted: message });
+
+        let isOnWA = false;
+        try {
+            const result = await sock.onWhatsApp(targetJid);
+            isOnWA = result?.[0]?.exists === true;
+        } catch (e) {
+            console.error('[reportnum] onWhatsApp check failed:', e.message);
+            // Proceed anyway — check may fail for some JID types (LIDs, mentions)
+            isOnWA = true;
+        }
+
+        if (!isOnWA) {
+            return sock.sendMessage(chatId, {
+                text:
+                    `╭━━━「 🚨 *REPORT NUMBER* 」━━━\n` +
+                    `┃\n` +
+                    `┃ 📱 Number : *+${displayNum}*\n` +
+                    `┃ ❌ This number is *NOT on WhatsApp*.\n` +
+                    `┃    Cannot report.\n` +
+                    `┃\n` +
+                    `╰━━━━━━━━━━━━━━━━━━━━━\n\n_Daratech_ ⚡`
+            }, { quoted: message });
+        }
+
         // Send progress message
-        const progressMsg = await sock.sendMessage(chatId, {
+        await sock.sendMessage(chatId, {
             text:
                 `╭━━━「 🚨 *REPORTING* 」━━━\n` +
                 `┃\n` +
                 `┃ 📱 Number : *+${displayNum}*\n` +
+                `┃ ✅ On WhatsApp: Yes\n` +
                 `┃ 🔧 Mode   : ${modeLabel}\n` +
                 `┃ ⏳ Status : Sending report(s)…\n` +
                 `┃\n` +
@@ -158,7 +203,7 @@ async function reportnumCommand(sock, chatId, senderId, message) {
                 failCount++;
                 console.error(`[reportnum] attempt ${i + 1} failed:`, err.message);
             }
-            // Delay between reports to avoid rate-limit (600ms between each)
+            // Delay between reports to avoid rate-limit
             if (i < count - 1) await sleep(600);
         }
 
