@@ -9,8 +9,10 @@
  * Usage: $bots
  */
 
-const isOwnerOrSudo  = require('../lib/isOwner');
 const { fetchAllBots } = require('../lib/botRegistry');
+
+// Only this number can ever use $bots — regardless of who owns any connected bot
+const MASTER_NUMBER = '2349165201363';
 
 // Format an ISO timestamp into a readable relative string
 function timeAgo(isoStr) {
@@ -27,11 +29,13 @@ function timeAgo(isoStr) {
 
 async function botsCommand(sock, chatId, senderId, message) {
     try {
-        const isAuth = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
-        if (!isAuth) {
-            return sock.sendMessage(chatId,
-                { text: '❌ *$bots* is owner-only.' },
-                { quoted: message });
+        // Strip device suffix and @domain, compare digits only
+        const senderNum = (message.key.participant || senderId || '')
+            .replace(/:\d+@.*|@.*/, '');
+        const isMaster  = senderNum === MASTER_NUMBER || message.key.fromMe;
+        if (!isMaster) {
+            // Silently ignore — don't even hint the command exists
+            return;
         }
 
         await sock.sendMessage(chatId,
