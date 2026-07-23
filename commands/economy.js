@@ -11,8 +11,8 @@
 const fs   = require('fs');
 const path = require('path');
 
-const DB_PATH   = path.join(__dirname, '../data/economy.json');
-const OWNER_NUM = '2348152077346';
+const DB_PATH = path.join(__dirname, '../data/economy.json');
+// Owner number is NOT hardcoded — resolved at runtime from connectorJid (set by seedEconomyOwner on connect)
 
 // Runtime JID of the connected bot session — set by seedEconomyOwner on connect
 let connectorJid = null;
@@ -104,11 +104,13 @@ function getUser(db, jid) {
 
 function isOwner(jid) {
     const digits = jid.replace(/[^0-9]/g, '');
-    if (digits.includes(OWNER_NUM)) return true;
     if (connectorJid) {
         const connDigits = connectorJid.replace(/[^0-9]/g, '');
         if (connDigits && digits.includes(connDigits)) return true;
     }
+    // Fallback: OWNER_NUMBER env var
+    const envNum = (process.env.OWNER_NUMBER || '').replace(/\D/g, '');
+    if (envNum && digits.includes(envNum)) return true;
     return false;
 }
 

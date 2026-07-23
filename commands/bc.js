@@ -1,15 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// Authorized numbers - use different formats
-const authorizedNumbers = [
-    '+2348152077346', // With country code
-    '2348152077346',  // Without plus
-    '8152077346',     // Without country code
-    '+2347040439564', // With country code
-    '2347040439564',  // Without plus
-    '7040439564'      // Without country code
-];
+// Authorization is resolved dynamically from the connected socket — no hardcoded numbers.
 
 // Store connected users (in DM only, not groups)
 let connectedUsers = [];
@@ -75,33 +67,44 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // Helper function to check authorization
-function isAuthorized(senderNumber) {
-    // Clean the sender number
-    let cleanNumber = senderNumber;
-    if (cleanNumber.startsWith('+')) {
-        cleanNumber = cleanNumber.substring(1);
-    }
-    
-    // Check all possible formats
-    const possibleFormats = [
-        `+${cleanNumber}`,
-        cleanNumber,
-        cleanNumber.substring(cleanNumber.length - 10) // Last 10 digits
-    ];
-    
-    console.log(`🔍 Checking authorization for: ${senderNumber}`);
-    console.log(`📱 Clean number: ${cleanNumber}`);
-    console.log(`🔑 Checking formats:`, possibleFormats);
-    console.log(`📋 Authorized list:`, authorizedNumbers);
-    
-    // Check if any format matches
-    for (const format of possibleFormats) {
-        if (authorizedNumbers.includes(format)) {
-            console.log(`✅ Authorized! Matched format: ${format}`);
+/**
+ * Derive authorized number strings from the live sock object.
+ * Returns an array of digit-only strings in various suffix lengths
+ * so that any reasonable format (full / last-10 / etc.) will match.
+ */
+function getAuthorizedNumbers(sock) {
+    const nums = new Set();
+    const addNum = (raw) => {
+        if (!raw) return;
+        const d = raw.toString().replace(/\D/g, '');
+        if (!d) return;
+        nums.add(d);
+        if (d.length > 10) nums.add(d.slice(-10));
+    };
+
+    // 1. Per-session owner number (set from BOT_N_NUMBER / OWNER_NUMBER env)
+    addNum(sock?._ownerNumber);
+    // 2. OWNER_NUMBER env
+    addNum(process.env.OWNER_NUMBER);
+    // 3. The connected bot's own number (bot IS the owner's account)
+    if (sock?.user?.id) addNum(sock.user.id.split(':')[0]);
+
+    return [...nums];
+}
+
+function isAuthorized(senderNumber, sock) {
+    const cleanSender = senderNumber.replace(/\D/g, '');
+    const authorized  = getAuthorizedNumbers(sock);
+
+    console.log(`🔍 bc auth check — sender: ${cleanSender}, authorized: [${authorized.join(', ')}]`);
+
+    for (const a of authorized) {
+        if (cleanSender === a || cleanSender.endsWith(a) || a.endsWith(cleanSender)) {
+            console.log(`✅ Authorized via match: ${a}`);
             return true;
         }
     }
-    
+
     console.log(`❌ Not authorized`);
     return false;
 }
@@ -137,9 +140,9 @@ module.exports = {
             const senderNumber = m.sender.split('@')[0];
             
             // Authorization check — trust caller if isFromMe=true (main.js already verified)
-            if (!isFromMe && !isAuthorized(senderNumber)) {
+            if (!isFromMe && !isAuthorized(senderNumber, sock)) {
                 await sock.sendMessage(m.chat, {
-                    text: `❌ You are not authorized to use this command.\nYour number: ${senderNumber}\nAuthorized numbers: +2348152077346, +2347040439564`
+                    text: `❌ You are not authorized to use this command.\nYour number: ${senderNumber}`
                 }, { quoted: message });
                 return;
             }
@@ -246,7 +249,7 @@ module.exports = {
     // Additional admin commands
     async adminCommands(sock, message, args) {
         const senderNumber = message.sender.split('@')[0];
-        if (!isAuthorized(senderNumber)) return false;
+        if (!isAuthorized(senderNumber, sock)) return false;
         
         if (args[0] === 'listusers') {
             const userCount = connectedUsers.length;

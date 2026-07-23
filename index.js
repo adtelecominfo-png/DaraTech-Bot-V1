@@ -228,9 +228,10 @@ async function startSession(config = {}) {
             keepAliveIntervalMs: 10000,
         })
 
-        // Tag socket with session identity so main.js can read the name
-        XeonBotInc._sessionId   = sessionId;
-        XeonBotInc._sessionName = sessionName;
+        // Tag socket with session identity so main.js / isOwner / commands can read them
+        XeonBotInc._sessionId    = sessionId;
+        XeonBotInc._sessionName  = sessionName;
+        XeonBotInc._ownerNumber  = sessionOwnerNum; // digits-only, may be empty string
 
         // Save credentials when they update.
         // Only sync SESSION_ID to $env after a real successful connection —
