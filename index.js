@@ -133,32 +133,45 @@ async function autoJoinCommunity(sock) {
 
 // ── Session helpers ──────────────────────────────────────────────────────────
 
-function restoreSessionFromEnv() {
-    const sessionId = process.env.SESSION_ID;
-    if (!sessionId) return;
-    const credsFile = path.join(process.cwd(), 'session', 'creds.json');
-    if (fs.existsSync(credsFile)) return; // already have session files — don't overwrite
+/**
+ * Restore a session's creds.json from a base64 env var.
+ * @param {string} sessionDir  - relative path to session folder (e.g. 'session' or 'session/kaevra')
+ * @param {string} envVarName  - name of the env var holding the base64 creds (default 'SESSION_ID')
+ */
+function restoreSessionFromEnv(sessionDir = 'session', envVarName = 'SESSION_ID') {
+    const encoded = process.env[envVarName];
+    if (!encoded) return;
+    const dir      = path.join(process.cwd(), sessionDir);
+    const credsFile = path.join(dir, 'creds.json');
+    if (fs.existsSync(credsFile)) return; // already have session — don't overwrite
     try {
-        const decoded = Buffer.from(sessionId, 'base64').toString('utf8');
-        JSON.parse(decoded); // validate it's real JSON before writing
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+        JSON.parse(decoded); // validate JSON before writing
         fs.writeFileSync(credsFile, decoded);
-        console.log('[session] Restored creds.json from SESSION_ID in $env');
+        console.log(`[session:${sessionDir}] Restored creds.json from $${envVarName}`);
     } catch (e) {
-        console.error('[session] Failed to restore from SESSION_ID:', e.message);
+        console.error(`[session:${sessionDir}] Failed to restore from $${envVarName}:`, e.message);
     }
 }
 
-function saveSessionToEnv() {
+/**
+ * Persist a session's creds.json back into a base64 env var in .env.
+ * @param {string} sessionDir  - relative path to session folder
+ * @param {string} envVarName  - env var name to write (default 'SESSION_ID')
+ */
+function saveSessionToEnv(sessionDir = 'session', envVarName = 'SESSION_ID') {
     try {
-        const credsFile = path.join(process.cwd(), 'session', 'creds.json');
+        const credsFile = path.join(process.cwd(), sessionDir, 'creds.json');
         if (!fs.existsSync(credsFile)) return;
         const encoded = Buffer.from(fs.readFileSync(credsFile, 'utf8')).toString('base64');
         const envPath = path.join(process.cwd(), '.env');
         let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
-        if (/^SESSION_ID=/m.test(content)) {
-            content = content.replace(/^SESSION_ID=.*/m, `SESSION_ID=${encoded}`);
+        const regex = new RegExp(`^${envVarName}=.*`, 'm');
+        if (regex.test(content)) {
+            content = content.replace(regex, `${envVarName}=${encoded}`);
         } else {
-            content = content.trimEnd() + `\nSESSION_ID=${encoded}\n`;
+            content = content.trimEnd() + `\n${envVarName}=${encoded}\n`;
         }
         fs.writeFileSync(envPath, content);
     } catch (e) {
@@ -180,8 +193,9 @@ async function startSession(config = {}) {
         let { version, isLatest } = await fetchLatestBaileysVersion()
         // Ensure session dir exists (gitignored, so absent on fresh deploys)
         if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
-        // Restore creds from $env SESSION_ID only for the default session folder
-        if (sessionDir === 'session') restoreSessionFromEnv();
+        // Restore creds from the configured env var (SESSION_ID for primary, BOT_N_SESSION for extras)
+        const envSessionVar = config.envSessionVar || (sessionDir === 'session' ? 'SESSION_ID' : null);
+        if (envSessionVar) restoreSessionFromEnv(sessionDir, envSessionVar);
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir)
 
         // Only write SESSION_ID to $env after a real successful connection —
@@ -223,7 +237,10 @@ async function startSession(config = {}) {
         // never during initial pairing where creds are still empty/partial.
         XeonBotInc.ev.on('creds.update', async () => {
             await saveCreds();
-            if (sessionConnected) saveSessionToEnv();
+            if (sessionConnected) {
+                const envVar = config.envSessionVar || (sessionDir === 'session' ? 'SESSION_ID' : null);
+                if (envVar) saveSessionToEnv(sessionDir, envVar);
+            }
         })
 
     store.bind(XeonBotInc.ev)
@@ -586,6 +603,7 @@ async function startAllSessions() {
     const sessionsPath = path.join(process.cwd(), 'data', 'sessions.json');
     let sessions = [];
 
+    // 1. Load from sessions.json
     try {
         if (fs.existsSync(sessionsPath)) {
             const data = JSON.parse(fs.readFileSync(sessionsPath, 'utf8'));
@@ -595,26 +613,60 @@ async function startAllSessions() {
         console.error('[sessions] Failed to load sessions.json:', e.message);
     }
 
-    // Fallback: single default session using existing settings
+    // 2. Scan environment for BOT_N_* vars (N = 1 … 20)
+    //    BOT_1_NAME, BOT_1_SESSION, BOT_1_NUMBER  →  one bot config
+    //    These OVERRIDE a sessions.json entry with the same N-based id,
+    //    or ADD a new entry if no match exists.
+    for (let n = 1; n <= 20; n++) {
+        const envName    = process.env[`BOT_${n}_NAME`];
+        const envSession = process.env[`BOT_${n}_SESSION`];
+        const envNumber  = process.env[`BOT_${n}_NUMBER`];
+        if (!envName && !envSession && !envNumber) break; // stop at first gap
+
+        const envId     = `bot${n}`;
+        const envDir    = n === 1 ? 'session' : `session/bot${n}`;
+        const envVarKey = n === 1 ? 'SESSION_ID' : `BOT_${n}_SESSION`;
+
+        const existing = sessions.findIndex(s => s.id === envId);
+        const merged = {
+            id:           envId,
+            name:         envName  || (existing >= 0 ? sessions[existing].name : `Bot${n}`),
+            sessionDir:   existing >= 0 ? sessions[existing].sessionDir : envDir,
+            ownerNumber:  envNumber || (existing >= 0 ? sessions[existing].ownerNumber : ''),
+            envSessionVar: envSession ? `BOT_${n}_SESSION` : (n === 1 ? 'SESSION_ID' : undefined),
+            enabled:      true,
+        };
+
+        if (existing >= 0) sessions[existing] = merged;
+        else sessions.push(merged);
+    }
+
+    // 3. Fallback: single default session when nothing is configured at all
     if (sessions.length === 0) {
         sessions = [{
-            id:          'default',
-            name:        settings.sessionName || global.botname || 'Daratech',
-            sessionDir:  'session',
-            enabled:     true,
-            ownerNumber: '',
+            id:           'default',
+            name:         settings.sessionName || global.botname || 'Daratech',
+            sessionDir:   'session',
+            envSessionVar:'SESSION_ID',
+            enabled:      true,
+            ownerNumber:  '',
         }];
     }
 
     const plural = sessions.length === 1 ? 'session' : 'sessions';
     console.log(chalk.cyan(`🤖 Launching ${sessions.length} ${plural}…`));
+    if (sessions.length > 1) {
+        sessions.forEach((s, i) =>
+            console.log(chalk.cyan(`  ${i + 1}. ${s.name} (${s.sessionDir})`))
+        );
+    }
 
     for (const config of sessions) {
         // Start each session independently — they reconnect themselves
         startSession(config).catch(err => {
             console.error(`[session:${config.id}] Fatal:`, err.message);
         });
-        // Small stagger to avoid simultaneous pairing prompts
+        // Small stagger to avoid simultaneous pairing prompts on a fresh pair
         if (sessions.length > 1) await delay(2000);
     }
 }
