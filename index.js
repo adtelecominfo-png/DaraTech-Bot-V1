@@ -222,12 +222,18 @@ async function startSession(config = {}) {
             generateHighQualityLinkPreview: true,
             syncFullHistory: false,
             getMessage: async (key) => {
-                let jid = jidNormalizedUser(key.remoteJid)
-                let msg = await store.loadMessage(jid, key.id)
-                return msg?.message || ""
+                // Must return undefined (not "" or null) when not found.
+                // Returning "" tells Baileys the message exists but is empty,
+                // causing it to retry decryption with wrong keys indefinitely
+                // → Bad MAC spam + command queue blocked.
+                // Returning undefined tells Baileys to request a key retry
+                // from the sender and move on.
+                const jid = jidNormalizedUser(key.remoteJid);
+                const msg = await store.loadMessage(jid, key.id);
+                return msg?.message || undefined;
             },
             msgRetryCounterCache,
-            defaultQueryTimeoutMs: 60000,
+            defaultQueryTimeoutMs: 15000,
             connectTimeoutMs: 60000,
             keepAliveIntervalMs: 10000,
         })
