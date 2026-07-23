@@ -1,8 +1,14 @@
 'use strict';
+const fs         = require('fs');
+const path       = require('path');
 const settings   = require('../settings');
 const { CATEGORIES, findCategory } = require('../lib/categories');
-const { davidGet } = require('../lib/gifted');
 const settings2   = require('../settings'); // for owner check
+
+// Fixed bot picture — loaded once at startup
+const BOT_PIC_PATH = path.join(__dirname, '../assets/botpic.png');
+let BOT_PIC_BUFFER = null;
+try { BOT_PIC_BUFFER = fs.readFileSync(BOT_PIC_PATH); } catch { /* no pic */ }
 function isOwner(jid) {
     const digits = jid.replace(/[^0-9]/g, '');
     return digits.includes((settings2.ownerNumber || '').replace(/[^0-9]/g, ''));
@@ -22,96 +28,15 @@ function uptimeStr() {
     return `${Math.floor(t / 3600)}h ${Math.floor((t % 3600) / 60)}m ${Math.floor(t % 60)}s`;
 }
 
-// ─── Category → wallpaper search keyword ─────────────────────────────────────
+// ─── Send helper — fixed bot pic or text fallback ────────────────────────────
 
-const CAT_WALLPAPER = {
-    start:      'technology bot digital',
-    ai:         'artificial intelligence robot future',
-    movies:     'cinema movie night popcorn',
-    download:   'music headphones beats',
-    fun:        'party games fun colorful',
-    gaming:     'gaming controller esports neon',
-    stickers:   'art colorful abstract creative',
-    tools:      'tools gadgets workshop',
-    search:     'search explore discover',
-    sports:     'sports stadium crowd energy',
-    anime:      'anime girl wallpaper',
-    manga:      'manga comic book panel art',
-    stalk:      'social media network connect',
-    crypto:     'bitcoin cryptocurrency digital gold',
-    groups:     'team people community',
-    owner:      'settings control dashboard',
-    tempgen:    'email inbox message',
-    language:   'books library reading knowledge',
-    country:    'world map globe travel',
-    animals:    'cute animals wildlife nature',
-    food:       'food delicious restaurant cooking',
-    space:      'galaxy stars universe nebula cosmos',
-    texttools:  'code programming terminal hacker',
-    fonts:      'typography font design letters art',
-    generators: 'dice random generator creative fun',
-    bible:      'church cross spiritual sunset sky holy book',
-    quran:      'mosque islamic architecture crescent moon',
-    converters: 'calculator math measurement science',
-    economy:    'gold coins treasure wealth fantasy rpg',
-};
-
-// ─── Fetch a random image for overview ───────────────────────────────────────
-
-const OVERVIEW_KEYWORDS = [
-    'anime girl wallpaper',
-    'digital art futuristic neon',
-    'beautiful scenery nature landscape',
-    'cyberpunk city night lights',
-    'anime aesthetic wallpaper',
-];
-
-async function fetchOverviewImage() {
-    // Use the same wallpaper endpoint that works for categories
-    const query = OVERVIEW_KEYWORDS[Math.floor(Math.random() * OVERVIEW_KEYWORDS.length)];
+async function sendWithImage(sock, chatId, message, text) {
     try {
-        const data = await davidGet(`/search/wallpaper?text=${encodeURIComponent(query)}`);
-        const list = data?.result || data?.results || data?.data || [];
-        if (Array.isArray(list) && list.length) {
-            const pick = list[Math.floor(Math.random() * Math.min(list.length, 5))];
-            const url  = pick?.url || pick?.image || pick?.src || pick;
-            if (typeof url === 'string' && url.startsWith('http')) return url;
-        }
-        const direct = data?.result?.url || data?.url;
-        if (typeof direct === 'string' && direct.startsWith('http')) return direct;
-    } catch { /* ignore */ }
-    return null;
-}
-
-// ─── Fetch a thematic wallpaper for a category ───────────────────────────────
-
-async function fetchCategoryImage(slug) {
-    const query = CAT_WALLPAPER[slug] || 'wallpaper';
-    try {
-        const data = await davidGet(`/search/wallpaper?text=${encodeURIComponent(query)}`);
-        // API returns { result: [ { url: '...' }, ... ] } or similar
-        const list = data?.result || data?.results || data?.data || [];
-        if (Array.isArray(list) && list.length) {
-            const pick = list[Math.floor(Math.random() * Math.min(list.length, 5))];
-            const url  = pick?.url || pick?.image || pick?.src || pick;
-            if (typeof url === 'string' && url.startsWith('http')) return url;
-        }
-        // Some endpoints return a single result directly
-        const direct = data?.result?.url || data?.url;
-        if (typeof direct === 'string' && direct.startsWith('http')) return direct;
-    } catch { /* ignore */ }
-    return null;
-}
-
-// ─── Send helper — image if available, text otherwise ────────────────────────
-
-async function sendWithImage(sock, chatId, message, text, imageUrl) {
-    try {
-        if (imageUrl) {
+        if (BOT_PIC_BUFFER) {
             await sock.sendMessage(chatId, {
-                image: { url: imageUrl },
+                image: BOT_PIC_BUFFER,
                 caption: text,
-                mimetype: 'image/jpeg',
+                mimetype: 'image/png',
             }, { quoted: message });
             return;
         }
@@ -166,9 +91,7 @@ async function sendOverview(sock, chatId, message) {
 
     const text = lines.join('\n');
 
-    // Fetch random waifu image in parallel with building text
-    const imageUrl = await fetchOverviewImage();
-    await sendWithImage(sock, chatId, message, text, imageUrl);
+    await sendWithImage(sock, chatId, message, text);
 }
 
 // ─── Search across all categories ────────────────────────────────────────────
@@ -255,9 +178,7 @@ async function sendCategoryMenu(sock, chatId, message, input) {
         `\n_Daratech_ ⚡`,
     ].filter(l => l !== '').join('\n');
 
-    // Fetch category-themed image in parallel with building text
-    const imageUrl = await fetchCategoryImage(cat.slug);
-    await sendWithImage(sock, chatId, message, text, imageUrl);
+    await sendWithImage(sock, chatId, message, text);
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
