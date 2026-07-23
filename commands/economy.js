@@ -103,14 +103,25 @@ function getUser(db, jid) {
 }
 
 function isOwner(jid) {
+    // 1. Direct LID match — owner's linked-device ID arrives as a pure number @lid
+    //    connectorLid e.g. "12374589370511@lid" or "12374589370511:0@lid"
+    if (connectorLid) {
+        const lidBase = connectorLid.split('@')[0].split(':')[0];
+        const jidBase = jid.split('@')[0].split(':')[0];
+        if (lidBase && lidBase === jidBase) return true;
+    }
+
+    // 2. Phone number match via connectorJid
     const digits = jid.replace(/[^0-9]/g, '');
     if (connectorJid) {
         const connDigits = connectorJid.replace(/[^0-9]/g, '');
         if (connDigits && digits.includes(connDigits)) return true;
     }
-    // Fallback: OWNER_NUMBER env var
+
+    // 3. Fallback: OWNER_NUMBER env var
     const envNum = (process.env.OWNER_NUMBER || '').replace(/\D/g, '');
     if (envNum && digits.includes(envNum)) return true;
+
     return false;
 }
 

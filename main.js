@@ -573,12 +573,38 @@ if (checkAFK(senderId)) {
             // ── Bare $ greeting ──────────────────────────────────────────────
             case userMessage === '$': {
                 const sessionName = sock._sessionName || settings.sessionName || settings.botName || 'Versa';
-                let senderName = senderId.split('@')[0];
-                try {
-                    const n = sock.getName ? sock.getName(senderId) : null;
-                    if (n && typeof n === 'string') senderName = n;
-                    else if (n && typeof n.then === 'function') senderName = (await n) || senderName;
-                } catch { /* keep phone number fallback */ }
+
+                // Name resolution priority:
+                //   1. message.pushName  — the actual WhatsApp display name; always present
+                //   2. sock.getName()    — contact store lookup
+                //   3. phone number      — if JID is a normal s.whatsapp.net JID
+                //   4. 'there'           — safe fallback when only a LID is available
+                const isLidLike = (s) => /^\d{8,}$/.test(s); // pure long number = LID / raw ID
+
+                let senderName = null;
+
+                // Push name is the gold standard — set by the sender themselves
+                if (message.pushName && !isLidLike(message.pushName)) {
+                    senderName = message.pushName;
+                }
+
+                if (!senderName && sock.getName) {
+                    try {
+                        const n = sock.getName(senderId);
+                        const resolved = (n && typeof n.then === 'function') ? (await n) : n;
+                        if (resolved && typeof resolved === 'string' && !isLidLike(resolved)) {
+                            senderName = resolved;
+                        }
+                    } catch { /* ignore */ }
+                }
+
+                if (!senderName) {
+                    const rawId = senderId.split('@')[0].split(':')[0];
+                    // Use phone number only if it looks like one (7-15 digits, not a LID)
+                    senderName = (!isLidLike(rawId) && rawId.length >= 7 && rawId.length <= 15)
+                        ? `+${rawId}`
+                        : 'there';
+                }
                 await sock.sendMessage(chatId, {
                     text: [
                         `╭━━━「 💠 *${sessionName.toUpperCase()}* 」━━━`,
