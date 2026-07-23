@@ -614,6 +614,13 @@ async function startAllSessions() {
         console.error('[sessions] Failed to load sessions.json:', e.message);
     }
 
+    // 1b. Let NAME env var override the primary session's display name
+    //     (the primary session is whichever uses SESSION_ID or is first)
+    if (process.env.NAME) {
+        const primary = sessions.find(s => !s.envSessionVar || s.envSessionVar === 'SESSION_ID') || sessions[0];
+        if (primary) primary.name = process.env.NAME;
+    }
+
     // 2. Scan environment for BOT_N_* vars (N = 1 … 20)
     //    BOT_1_NAME, BOT_1_SESSION, BOT_1_NUMBER  →  one bot config
     //    These OVERRIDE a sessions.json entry with the same N-based id,
@@ -646,7 +653,7 @@ async function startAllSessions() {
     if (sessions.length === 0) {
         sessions = [{
             id:           'default',
-            name:         settings.sessionName || global.botname || 'Daratech',
+            name:         process.env.NAME || settings.sessionName || global.botname || 'Daratech',
             sessionDir:   'session',
             envSessionVar:'SESSION_ID',
             enabled:      true,
