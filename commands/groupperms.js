@@ -2,13 +2,14 @@
 /**
  * groupperms.js — Group permission toggles
  *
- * $gperm                  — show current group permission settings
+ * $gperm                  — show all current group permission settings
  * $editinfo on|off        — members can/cannot edit group info (name, icon, desc)
- * $memberadd on|off       — members can/cannot add other members
- * $invitelink on|off      — members can/cannot invite via link or QR code
+ * $memberadd on|off       — members can/cannot add other members directly
+ * $invitelink on|off      — toggle invite link (off = revoke link, on = fresh link sent)
  * $approval on|off        — admins must/not approve new members before they join
  *
  * All commands: group-only, caller must be admin, bot must be admin.
+ * Every command reads current state from metadata before acting.
  */
 
 const isAdmin = require('../lib/isAdmin');
@@ -35,7 +36,7 @@ async function adminGuard(sock, chatId, senderId, message) {
     return true;
 }
 
-function parseOnOff(arg, cmdName, usageHint) {
+function parseOnOff(arg) {
     const v = (arg || '').toLowerCase().trim();
     if (v !== 'on' && v !== 'off') return null;
     return v;
@@ -47,15 +48,22 @@ async function gpermCommand(sock, chatId, message) {
     try {
         const meta = await sock.groupMetadata(chatId);
 
-        // announce: true → only admins send (group "closed")
-        // restrict: true → only admins edit group info (locked)
-        // memberAddMode: 'admin_add' → only admins can add / invite
-        // joinApprovalMode: 'on' → approval required
-        const sendMsgs    = meta.announce      ? '🔒 Admins only'  : '✅ All members';
-        const editInfo    = meta.restrict      ? '🔒 Admins only'  : '✅ All members';
-        const memberAdd   = (meta.memberAddMode   === 'admin_add') ? '🔒 Admins only' : '✅ All members';
-        const invLink     = (meta.memberAddMode   === 'admin_add') ? '🔒 Admins only' : '✅ All members';
-        const approval    = (meta.joinApprovalMode === 'on')       ? '✅ On (required)' : '🔓 Off';
+        // Resolve each permission from metadata
+        const editInfo  = meta.restrict      ? '🔒 OFF — admins only'   : '✅ ON  — all members';
+        const sendMsgs  = meta.announce      ? '🔒 OFF — admins only'   : '✅ ON  — all members';
+        const memberAdd = (meta.memberAddMode === 'admin_add')
+                         ? '🔒 OFF — admins only'   : '✅ ON  — all members';
+
+        // Invite link: try to fetch current invite code — if it exists link is active
+        let invLink = '✅ ON  — active';
+        try {
+            const code = await sock.groupInviteCode(chatId);
+            invLink = code ? '✅ ON  — active' : '🔒 OFF — revoked';
+        } catch { invLink = '❓ unknown'; }
+
+        const approval = (meta.joinApprovalMode === 'on')
+                        ? '✅ ON  — approval required'
+                        : '🔓 OFF — anyone can join';
 
         return sock.sendMessage(chatId, {
             text: [
@@ -104,12 +112,31 @@ async function editinfoCommand(sock, chatId, senderId, message, arg) {
     }
 
     try {
+        // Read current state first
+        const meta       = await sock.groupMetadata(chatId);
+        const currentlyOn = !meta.restrict; // restrict:true → locked → members CANNOT edit
+        const currentStr  = currentlyOn ? '✅ ON' : '🔒 OFF';
+
+        if ((state === 'on') === currentlyOn) {
+            return sock.sendMessage(chatId, {
+                text: `ℹ️ *Edit group settings* is already *${currentStr}*. No change made.`,
+            }, { quoted: message });
+        }
+
         // 'unlocked' → members can edit | 'locked' → admins only
         await sock.groupSettingUpdate(chatId, state === 'on' ? 'unlocked' : 'locked');
+
         return sock.sendMessage(chatId, {
-            text: state === 'on'
-                ? '✅ *Edit group settings — ON*\nAll members can now edit the group name, icon, and description.'
-                : '🔒 *Edit group settings — OFF*\nOnly admins can now edit group settings.',
+            text: [
+                `⚙️ *Edit group settings updated*`,
+                `│`,
+                `│  Was  : ${currentStr}`,
+                `│  Now  : ${state === 'on' ? '✅ ON' : '🔒 OFF'}`,
+                `│`,
+                state === 'on'
+                    ? '│  All members can now edit the group name, icon & description.'
+                    : '│  Only admins can now change group settings.',
+            ].join('\n'),
         }, { quoted: message });
     } catch (e) {
         console.error('[editinfo]', e.message);
@@ -128,24 +155,42 @@ async function memberaddCommand(sock, chatId, senderId, message, arg) {
             text: [
                 '❌ *Usage:* $memberadd on | off',
                 '',
-                '• *on*  — all members can add others to the group',
+                '• *on*  — all members can add others directly to the group',
                 '• *off* — only admins can add members',
             ].join('\n'),
         }, { quoted: message });
     }
 
     try {
+        // Read current state first
+        const meta        = await sock.groupMetadata(chatId);
+        const currentlyOn = meta.memberAddMode !== 'admin_add';
+        const currentStr  = currentlyOn ? '✅ ON' : '🔒 OFF';
+
+        if ((state === 'on') === currentlyOn) {
+            return sock.sendMessage(chatId, {
+                text: `ℹ️ *Add members* is already *${currentStr}*. No change made.`,
+            }, { quoted: message });
+        }
+
         const mode = state === 'on' ? 'all_member_add' : 'admin_add';
         if (typeof sock.groupMemberAddMode === 'function') {
             await sock.groupMemberAddMode(chatId, mode);
         } else {
-            // Older Baileys builds expose this via groupSettingUpdate
             await sock.groupSettingUpdate(chatId, mode);
         }
+
         return sock.sendMessage(chatId, {
-            text: state === 'on'
-                ? '✅ *Add members — ON*\nAll members can now add others to the group.'
-                : '🔒 *Add members — OFF*\nOnly admins can now add members.',
+            text: [
+                `⚙️ *Add members updated*`,
+                `│`,
+                `│  Was  : ${currentStr}`,
+                `│  Now  : ${state === 'on' ? '✅ ON' : '🔒 OFF'}`,
+                `│`,
+                state === 'on'
+                    ? '│  All members can now add others to the group.'
+                    : '│  Only admins can now add new members.',
+            ].join('\n'),
         }, { quoted: message });
     } catch (e) {
         console.error('[memberadd]', e.message);
@@ -154,6 +199,9 @@ async function memberaddCommand(sock, chatId, senderId, message, arg) {
 }
 
 // ── $invitelink on|off ────────────────────────────────────────────────────────
+// OFF → revoke the invite link (old link is invalidated, a fresh one is generated
+//       but not shared — so effectively only admins with bot access can get it)
+// ON  → fetch & send the current invite link (confirms it is active)
 async function invitelinkCommand(sock, chatId, senderId, message, arg) {
     if (!groupOnly(sock, chatId, message)) return;
     if (!await adminGuard(sock, chatId, senderId, message)) return;
@@ -164,28 +212,48 @@ async function invitelinkCommand(sock, chatId, senderId, message, arg) {
             text: [
                 '❌ *Usage:* $invitelink on | off',
                 '',
-                '• *on*  — members can share the invite link / QR code',
-                '• *off* — only admins can share the invite link',
+                '• *on*  — fetch & confirm the active invite link',
+                '• *off* — revoke the current invite link (old link stops working)',
+                '',
+                '_Note: $resetlink also revokes the link and returns the new one._',
             ].join('\n'),
         }, { quoted: message });
     }
 
     try {
-        // WhatsApp uses the same member_add_mode to gate link sharing
-        const mode = state === 'on' ? 'all_member_add' : 'admin_add';
-        if (typeof sock.groupMemberAddMode === 'function') {
-            await sock.groupMemberAddMode(chatId, mode);
-        } else {
-            await sock.groupSettingUpdate(chatId, mode);
+        if (state === 'off') {
+            // Revoke the current invite link
+            const newCode = await sock.groupRevokeInvite(chatId);
+            return sock.sendMessage(chatId, {
+                text: [
+                    '🔒 *Invite link — OFF (revoked)*',
+                    '│',
+                    '│  The old invite link has been revoked.',
+                    '│  Nobody can join via the previous link anymore.',
+                    '│',
+                    newCode
+                        ? `│  A new code has been generated (not shared).\n│  Use *$invitelink on* to view & share it.`
+                        : '│  Use *$invitelink on* when you want to re-enable link sharing.',
+                ].join('\n'),
+            }, { quoted: message });
         }
+
+        // state === 'on' — fetch current invite link and share it
+        const code = await sock.groupInviteCode(chatId);
+        const link = `https://chat.whatsapp.com/${code}`;
         return sock.sendMessage(chatId, {
-            text: state === 'on'
-                ? '✅ *Invite via link — ON*\nAll members can now share the group invite link or QR code.'
-                : '🔒 *Invite via link — OFF*\nOnly admins can share the invite link now.',
+            text: [
+                '✅ *Invite link — ON (active)*',
+                '│',
+                `│  🔗 ${link}`,
+                '│',
+                '│  Members can now use this link to join.',
+                '│  Use *$invitelink off* to revoke it.',
+            ].join('\n'),
         }, { quoted: message });
     } catch (e) {
         console.error('[invitelink]', e.message);
-        return sock.sendMessage(chatId, { text: `❌ Failed to update setting.\n${e.message}` }, { quoted: message });
+        return sock.sendMessage(chatId, { text: `❌ Failed to update invite link.\n${e.message}` }, { quoted: message });
     }
 }
 
@@ -209,19 +277,37 @@ async function approvalCommand(sock, chatId, senderId, message, arg) {
     }
 
     try {
+        // Read current state first
+        const meta        = await sock.groupMetadata(chatId);
+        const currentlyOn = meta.joinApprovalMode === 'on';
+        const currentStr  = currentlyOn ? '✅ ON' : '🔓 OFF';
+
+        if ((state === 'on') === currentlyOn) {
+            return sock.sendMessage(chatId, {
+                text: `ℹ️ *Admin approval* is already *${currentStr}*. No change made.`,
+            }, { quoted: message });
+        }
+
         if (typeof sock.groupJoinApprovalMode === 'function') {
             await sock.groupJoinApprovalMode(chatId, state);
         } else {
-            // Fallback for Baileys builds without the dedicated helper
             await sock.groupSettingUpdate(
                 chatId,
                 state === 'on' ? 'membership_approval_mode' : 'not_membership_approval_mode'
             );
         }
+
         return sock.sendMessage(chatId, {
-            text: state === 'on'
-                ? '✅ *Admin approval — ON*\nAdmins must now approve every join request.\n\nUse *$pending* to view requests, *$accept* / *$reject* to action them.'
-                : '🔓 *Admin approval — OFF*\nAnyone with the invite link can now join without approval.',
+            text: [
+                `⚙️ *Admin approval updated*`,
+                `│`,
+                `│  Was  : ${currentStr}`,
+                `│  Now  : ${state === 'on' ? '✅ ON' : '🔓 OFF'}`,
+                `│`,
+                state === 'on'
+                    ? '│  Admins must now approve every join request.\n│  Use *$pending* / *$accept* / *$reject* to manage.'
+                    : '│  Anyone with the invite link can now join without approval.',
+            ].join('\n'),
         }, { quoted: message });
     } catch (e) {
         console.error('[approval]', e.message);
