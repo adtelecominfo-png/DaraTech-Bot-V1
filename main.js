@@ -1548,7 +1548,7 @@ case userMessage.startsWith('$bssensi'):
             case userMessage.startsWith('$spotify'):
                 await spotifyCommand(sock, chatId, message);
                 break;
-            case userMessage === '$ytaudio' || userMessage.startsWith('$ytaudio '):
+            case userMessage === '$ytaudio' || userMessage.startsWith('$ytaudio ') || userMessage === '$play' || userMessage.startsWith('$play '):
                 await ytaudioCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
