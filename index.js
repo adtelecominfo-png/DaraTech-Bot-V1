@@ -56,6 +56,10 @@ const { writePid, isDuplicatePanelRestart } = require('./lib/selfRestart');
 if (isDuplicatePanelRestart()) process.exit(0);
 writePid(); // register our PID so future panel restarts can detect us
 
+// Guard: only send the "connected" startup message once per process lifetime,
+// not on every Baileys reconnect (connection drops and re-opens are normal).
+const _startupMsgSentMap = new Map(); // sessionId → true
+
 // Initialize store
 store.readFromFile()
 const settings = require('./settings')
@@ -360,7 +364,7 @@ async function startSession(config = {}) {
         setTimeout(requestNewPairingCode, 3000)
     }
 
-    let _startupMsgSent = false; // guard: only send startup/update-done once per process
+    // _startupMsgSent is now module-level (_startupMsgSentMap) so reconnects don't re-send
     // Connection handling
     XeonBotInc.ev.on('connection.update', async (s) => {
         const { connection, lastDisconnect, qr } = s
@@ -420,8 +424,8 @@ async function startSession(config = {}) {
                 console.log(chalk.yellow('⚠ Could not follow newsletter:'), error.message);
             }
 
-            if (!_startupMsgSent) {
-                _startupMsgSent = true;
+            if (!_startupMsgSentMap.get(sessionId)) {
+                _startupMsgSentMap.set(sessionId, true);
                 try {
                     const botNumber = XeonBotInc.user.id.split(':')[0] + '@s.whatsapp.net';
                     const now = new Date();
