@@ -172,14 +172,13 @@ function formatLobby(session, db) {
         .map(jid => `• ${mention(jid)} — ${displayName(db, jid)}`)
         .join('\n');
     return (
-        `🎌 ANIME QUIZ ROOM\n\n` +
-        `🆔 Room ID: ${session.roomId}\n` +
+        `⚔️ ANIME QUIZ — ROOM ${session.roomId}\n\n` +
         `👑 Host: ${mention(session.host)}\n` +
-        `👥 Players: ${session.players.size}\n\n` +
-        `${names || 'No players yet'}\n\n` +
-        `⏳ Lobby closes in 1 minute.\n` +
-        `Join with: $join ${session.roomId}\n` +
-        `Leave with: $leaveroom ${session.roomId}`
+        `👥 ${session.players.size} in the ring\n\n` +
+        `${names || 'No one yet — be the first!'}\n\n` +
+        `🕐 Lobby open for 1 minute\n` +
+        `› $join ${session.roomId}  —  enter\n` +
+        `› $leaveroom ${session.roomId}  —  bail`
     );
 }
 
@@ -228,10 +227,10 @@ async function startQuestion(sock, session) {
         await send(
             sock,
             session.chatId,
-            `🎯 ANIME QUIZ — QUESTION ${round}\n\n` +
-            `❓ ${question.question}\n\n${optionText(question)}\n\n` +
-            `⏳ You have 45 seconds to answer.\n` +
-            `Reply with the option letter or the answer.`,
+            `⚡ QUESTION ${round}\n\n` +
+            `${question.question}\n\n` +
+            `${optionText(question)}\n\n` +
+            `🕐 45 seconds — letter or full answer, go!`,
             null,
             playerMentions(session),
         );
@@ -260,9 +259,9 @@ async function finishQuestion(sock, session, round) {
     await send(
         sock,
         session.chatId,
-        `⏰ Time's up! Nobody got it.\n\n` +
-        `✅ The answer was: ${session.question.answerText}\n\n` +
-        `⏳ Wait for next question…`,
+        `⌛ Time! Nobody cracked it.\n\n` +
+        `› Answer: *${session.question.answerText}*\n\n` +
+        `Next round loading…`,
     );
 
     session.nextTimer = setTimeout(() => void startQuestion(sock, session), 2200);
@@ -307,20 +306,20 @@ async function finishGame(sock, session, winnerJid) {
     });
     saveEconomyDB(db);
 
-    const board = ranked.map(jid => {
-        return `${mention(jid)} — ${session.scores.get(jid) || 0} pts`;
-    }).join('\n');
+    const medals = ['🥇', '🥈', '🥉'];
+    const board = ranked.map((jid, i) =>
+        `${medals[i] || '  '} ${mention(jid)} — ${session.scores.get(jid) || 0} pts`
+    ).join('\n');
     const winner = winnerJid || ranked[0];
     const winnerPrize = payouts.get(winner) || 0;
 
     await send(
         sock,
         session.chatId,
-        `✅ CORRECT! 🎉\n\n` +
-        `🏆 ${mention(winner)} WINS THE QUIZ! 🏆\n\n` +
-        `💰 Prize: $${winnerPrize.toLocaleString()} added to your wallet!\n\n` +
-        `📊 Final Scoreboard:\n\n${board}\n\n` +
-        `Thanks for playing! Start a new game with $aquiz`,
+        `👑 ${mention(winner)} is the Anime Master!\n\n` +
+        `💸 Prize: $${winnerPrize.toLocaleString()} added to wallet\n\n` +
+        `📊 Final Standings:\n${board}\n\n` +
+        `GG everyone! Run it back with $aquiz`,
         null,
         playerMentions(session),
     );
@@ -331,17 +330,17 @@ async function startLobby(sock, session) {
     session.lobbyTimer = setTimeout(async () => {
         if (sessionsByChat.get(session.chatId) !== session || session.state !== 'lobby') return;
         if (session.players.size === 0) {
-            await send(sock, session.chatId, '⌛ Anime quiz cancelled. Nobody joined the room.');
+            await send(sock, session.chatId, 'Lobby closed — nobody showed up. Start over with $aquiz');
             removeSession(session);
             return;
         }
         await send(
             sock,
             session.chatId,
-            `🎮 The anime quiz is starting!\n\n` +
-            `👥 Players: ${session.players.size}\n` +
-            `🏆 First to 10 points wins.\n\n` +
-            `⏳ Preparing the first question…`,
+            `🔥 The battle begins!\n\n` +
+            `👥 ${session.players.size} player(s) stepping up\n` +
+            `🏆 First to 10 points takes the crown\n\n` +
+            `Loading round 1…`,
             null,
             playerMentions(session),
         );
@@ -445,7 +444,7 @@ async function endAnimeQuiz(sock, chatId, message, senderId, roomInput) {
         return send(sock, chatId, '❌ Only the room owner can end this quiz.', message);
     }
     removeSession(session);
-    await send(sock, chatId, '🛑 *Anime quiz ended by the room owner.*', message);
+    await send(sock, chatId, '🛑 Quiz shut down by the host.', message);
 }
 
 async function handleAnimeQuizAnswer(sock, chatId, message, senderId, answer) {
@@ -467,7 +466,7 @@ async function handleAnimeQuizAnswer(sock, chatId, message, senderId, answer) {
         await send(
             sock,
             chatId,
-            `❌ Wrong answer, ${mention(registration.jid)}! 🔒 You are locked out for this question. Wait for the next question to try again!`,
+            `💢 Nah ${mention(registration.jid)}! Wrong move — sit this round out. Next question is your redemption arc.`,
             message,
             [registration.jid],
         );
@@ -495,10 +494,10 @@ async function handleAnimeQuizAnswer(sock, chatId, message, senderId, answer) {
     await send(
         sock,
         chatId,
-        `✅ CORRECT! 🎌\n\n` +
-        `${mention(registration.jid)} got it right! Answer: ${session.question.answerText}\n\n` +
-        `🏅 Score: ${score}/10 pts\n\n` +
-        `⏳ Wait for next question…`,
+        `🔥 ${mention(registration.jid)} got it!\n\n` +
+        `› *${session.question.answerText}*\n\n` +
+        `📈 ${score}/10 — keep it up!\n\n` +
+        `Next round loading…`,
         message,
         [registration.jid],
     );
