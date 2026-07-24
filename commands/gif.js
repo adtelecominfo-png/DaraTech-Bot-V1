@@ -1,8 +1,8 @@
 const axios = require('axios');
-const settings = require('../settings');
+const settings = require('../settings'); // Assuming the API key is stored here
 
 async function gifCommand(sock, chatId, query) {
-    const apiKey = settings.giphyApiKey;
+    const apiKey = settings.giphyApiKey; // Replace with your Giphy API Key
 
     if (!query) {
         await sock.sendMessage(chatId, { text: 'Please provide a search term for the GIF.' });
@@ -19,21 +19,10 @@ async function gifCommand(sock, chatId, query) {
             }
         });
 
-        const images = response.data.data[0]?.images || {};
-        // WhatsApp needs an MP4 for gifPlayback. Giphy provides MP4 renditions
-        // alongside the original GIF, so prefer those over the raw .gif URL.
-        const gifUrl =
-            images.original_mp4?.mp4 ||
-            images.downsized_small?.mp4 ||
-            images.downsized_medium?.mp4;
+        const gifUrl = response.data.data[0]?.images?.downsized_medium?.url;
 
         if (gifUrl) {
-            await sock.sendMessage(chatId, {
-                video: { url: gifUrl },
-                gifPlayback: true,
-                mimetype: 'video/mp4',
-                caption: `Here is your GIF for "${query}"`
-            });
+            await sock.sendMessage(chatId, { video: { url: gifUrl }, caption: `Here is your GIF for "${query}"` });
         } else {
             await sock.sendMessage(chatId, { text: 'No GIFs found for your search term.' });
         }

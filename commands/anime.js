@@ -64,12 +64,9 @@ async function sendAnimu(sock, chatId, message, type) {
 
     if (data.link) {
         const link = data.link;
-        let pathname = link.toLowerCase();
-        try {
-            pathname = new URL(link).pathname.toLowerCase();
-        } catch {}
-        const isGifLink = pathname.endsWith('.gif');
-        const isImageLink = /\.(jpg|jpeg|png|webp)$/.test(pathname);
+        const lower = link.toLowerCase();
+        const isGifLink  = lower.endsWith('.gif');
+        const isImageLink = lower.match(/\.(jpg|jpeg|png|webp)$/);
 
         // Convert all media (GIFs and images) to stickers
         if (isGifLink || isImageLink) {
