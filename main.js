@@ -445,11 +445,6 @@ async function handleMessages(sock, messageUpdate, printLog) {
 
         // Anime quiz answers are ordinary messages (A-D or the answer text).
         if (!userMessage.startsWith('$')) {
-            const plainQuizJoin = userMessage.match(/^join\s+([a-z0-9]+)$/i);
-            if (plainQuizJoin && isAnimeQuizRoom(chatId, plainQuizJoin[1])) {
-                await joinAnimeQuiz(sock, chatId, message, senderId, plainQuizJoin[1]);
-                return;
-            }
             const handledQuizAnswer = await handleAnimeQuizAnswer(sock, chatId, message, senderId, userMessage);
             if (handledQuizAnswer) return;
         }
@@ -1142,8 +1137,8 @@ case userMessage.startsWith('$bssensi'):
                 await openAnimeQuiz(sock, chatId, message, senderId);
                 commandExecuted = true;
                 break;
-            case userMessage.startsWith('$join ') && isAnimeQuizRoom(chatId, userMessage.slice(6).trim()):
-                await joinAnimeQuiz(sock, chatId, message, senderId, userMessage.slice(5).trim());
+            case userMessage === '$qjoin' || userMessage.startsWith('$qjoin '):
+                await joinAnimeQuiz(sock, chatId, message, senderId, userMessage.slice(7).trim());
                 commandExecuted = true;
                 break;
             case userMessage === '$leaveroom' || userMessage.startsWith('$leaveroom '):

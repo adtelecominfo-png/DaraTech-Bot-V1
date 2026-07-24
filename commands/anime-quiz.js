@@ -177,7 +177,7 @@ function formatLobby(session, db) {
         `👥 ${session.players.size} in the ring\n\n` +
         `${names || 'No one yet — be the first!'}\n\n` +
         `🕐 Lobby open for 1 minute\n` +
-        `› $join ${session.roomId}  —  enter\n` +
+        `› $qjoin ${session.roomId}  —  enter\n` +
         `› $leaveroom ${session.roomId}  —  bail`
     );
 }
@@ -388,9 +388,18 @@ async function openAnimeQuiz(sock, chatId, message, senderId) {
 async function joinAnimeQuiz(sock, chatId, message, senderId, roomInput) {
     if (!chatId.endsWith('@g.us')) return send(sock, chatId, '❌ Anime Quiz can only be played in groups.', message);
     const roomId = cleanRoomId(roomInput);
+    if (!roomId) {
+        return send(sock, chatId, '❌ Provide a room code: *$qjoin <room id>*', message);
+    }
     const session = sessionsByRoom.get(roomId);
-    if (!session || session.chatId !== chatId || session.state !== 'lobby') {
-        return send(sock, chatId, '❌ That room is not open in this group.', message);
+    if (!session) {
+        return send(sock, chatId, `❌ Room *${roomId}* doesn't exist. Check the code and try again.`, message);
+    }
+    if (session.chatId !== chatId) {
+        return send(sock, chatId, `❌ Room *${roomId}* doesn't belong to this group.`, message);
+    }
+    if (session.state !== 'lobby') {
+        return send(sock, chatId, `❌ Room *${roomId}* is closed — the game has already started. Wait for the next one.`, message);
     }
 
     const db = loadEconomyDB();
