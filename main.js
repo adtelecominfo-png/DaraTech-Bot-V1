@@ -532,7 +532,8 @@ if (checkAFK(senderId)) {
 
         // List of admin commands
         const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus', '$antigroupmention', '$agm', '$autosticker', '$autos', '$asticker', '$clean', '$purge', '$pending', '$accept', '$reject', '$gperm', '$editinfo', '$memberadd', '$invitelink', '$approval', '$msghistory'];
-        const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
+        const isAdminCommand = !userMessage.startsWith('$mutesticker') &&
+            adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
         const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$reportnum', '$bots'];
@@ -818,7 +819,7 @@ case userMessage.startsWith('$bssensi'):
                 const mentionedJidListKick = message.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 await kickCommand(sock, chatId, senderId, mentionedJidListKick, message);
                 break;
-            case userMessage.startsWith('$mute'):
+            case userMessage.startsWith('$mute') && !userMessage.startsWith('$mutesticker'):
                 {
                     const parts = userMessage.trim().split(/\s+/);
                     const muteArg = parts[1];
