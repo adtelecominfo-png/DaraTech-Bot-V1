@@ -103,7 +103,7 @@ const { goodbyeCommand, handleLeaveEvent } = require('./commands/goodbye');
 const githubCommand = require('./commands/github');
 const { handleAntiBadwordCommand, handleBadwordDetection } = require('./lib/antibadword');
 const antibadwordCommand = require('./commands/antibadword');
-const { handleChatbotCommand, handleChatbotResponse, handleBotchatCommand, handleVeloraNameTrigger } = require('./commands/chatbot');
+const { handleChatbotCommand, handleChatbotResponse, handleBotchatCommand, handleRimuruNameTrigger } = require('./commands/chatbot');
 const { dirCommand, searchDirCommand } = require('./commands/dir');
 const takeCommand = require('./commands/take');
 const { flirtCommand } = require('./commands/flirt');
@@ -529,11 +529,11 @@ if (checkAFK(senderId)) {
                 }
             }
 
-            // Velora name trigger — DMs and groups, no $ needed
-            // Matches "Velora" in Latin + phonetic transliterations in common scripts
-            const VELORA_TRIGGER = /velora|велора|فيلورا|ڤيلورا|维洛拉|薇洛拉|威洛拉|維洛拉|ヴェロラ|ベロラ|벨로라|वेलोरा|เวโลรา|ולורה|βελορα|ველორა|ቬሎራ/i;
-            if (VELORA_TRIGGER.test(userMessage)) {
-                await handleVeloraNameTrigger(sock, chatId, message, userMessage, senderId);
+            // Rimuru name trigger — DMs and groups, no $ needed
+            // Matches "Rimuru" in Latin + phonetic transliterations in common scripts
+            const RIMURU_TRIGGER = /rimuru|римуру|ريمورو|리무루|リムル|里姆路|ริมุรุ|रिमुरु|ριμουρου|რიმურუ|ሪሙሩ/i;
+            if (RIMURU_TRIGGER.test(userMessage)) {
+                await handleRimuruNameTrigger(sock, chatId, message, userMessage, senderId);
             }
             return;
         }
@@ -1356,11 +1356,11 @@ case userMessage.startsWith('$bssensi'):
                 await vvdmCommand(sock, chatId, message, true); // noReact — no ✅ on emoji trigger
                 break;
             case userMessage.startsWith('$botchat'):
-            case userMessage.startsWith('$velora'): {
-                const veloraQuery = userMessage.startsWith('$velora')
+            case userMessage.startsWith('$rimuru'): {
+                const rimuruQuery = userMessage.startsWith('$rimuru')
                     ? userMessage.slice(7).trim()
                     : userMessage.slice(8).trim();
-                await handleBotchatCommand(sock, chatId, message, veloraQuery, senderId);
+                await handleBotchatCommand(sock, chatId, message, rimuruQuery, senderId);
                 break;
             }
             case userMessage === '$clearsession' || userMessage === '$clearsesi':
