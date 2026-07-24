@@ -1,4 +1,5 @@
 const isAdmin = require('../lib/isAdmin');  // Move isAdmin to helpers
+const { participantDisplayNumber } = require('../lib/participantDisplay');
 
 async function tagAllCommand(sock, chatId, senderId, message) {
     try {
@@ -27,7 +28,7 @@ async function tagAllCommand(sock, chatId, senderId, message) {
         // Create message with each member on a new line
         let messageText = '🔊 *Hello Everyone:*\n\n';
         participants.forEach(participant => {
-            messageText += `@${participant.id.replace(/:[^@]*/, '').split('@')[0]}\n`;
+            messageText += `@${participantDisplayNumber(participant)}\n`;
         });
 
         // Send message with mentions

@@ -1,4 +1,5 @@
 const { isAdmin } = require('../lib/isAdmin');
+const { asJid, resolveParticipantDisplayNumber } = require('../lib/participantDisplay');
 
 // Function to handle manual promotions via command
 async function promoteCommand(sock, chatId, mentionedJids, message) {
@@ -41,20 +42,21 @@ async function handlePromotionEvent(sock, groupId, participants, author) {
         // Get usernames for promoted participants
         const promotedUsernames = await Promise.all(participants.map(async jid => {
             // Handle case where jid might be an object or not a string
-            const jidString = typeof jid === 'string' ? jid : (jid.id || jid.toString());
-            return `@${jidString.replace(/:[^@]*/, '').split('@')[0]} `;
+            const displayNumber = await resolveParticipantDisplayNumber(sock, groupId, jid);
+            return `@${displayNumber} `;
         }));
 
         let promotedBy;
         let mentionList = participants.map(jid => {
             // Ensure all mentions are proper JID strings
-            return typeof jid === 'string' ? jid : (jid.id || jid.toString());
+            return asJid(jid);
         });
 
         if (author && author.length > 0) {
             // Ensure author has the correct format
-            const authorJid = typeof author === 'string' ? author : (author.id || author.toString());
-            promotedBy = `@${authorJid.replace(/:[^@]*/, '').split('@')[0]}`;
+            const authorJid = asJid(author);
+            const authorDisplayNumber = await resolveParticipantDisplayNumber(sock, groupId, authorJid);
+            promotedBy = `@${authorDisplayNumber}`;
             mentionList.push(authorJid);
         } else {
             promotedBy = 'System';

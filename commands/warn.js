@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const isAdmin = require('../lib/isAdmin');
+const { resolveParticipantDisplayNumber } = require('../lib/participantDisplay');
 
 // Define paths
 const databaseDir = path.join(process.cwd(), 'data');
@@ -93,11 +94,13 @@ async function warnCommand(sock, chatId, senderId, mentionedJids, message) {
             
             warnings[chatId][userToWarn]++;
             fs.writeFileSync(warningsPath, JSON.stringify(warnings, null, 2));
+            const warnedDisplayNumber = await resolveParticipantDisplayNumber(sock, chatId, userToWarn);
+            const senderDisplayNumber = await resolveParticipantDisplayNumber(sock, chatId, senderId);
 
             const warningMessage = `*『 WARNING ALERT 』*\n\n` +
-                `👤 *Warned User:* @${userToWarn.replace(/:[^@]*/, '').split('@')[0]}\n` +
+                `👤 *Warned User:* @${warnedDisplayNumber}\n` +
                 `⚠️ *Warning Count:* ${warnings[chatId][userToWarn]}/3\n` +
-                `👑 *Warned By:* @${senderId.replace(/:[^@]*/, '').split('@')[0]}\n\n` +
+                `👑 *Warned By:* @${senderDisplayNumber}\n\n` +
                 `📅 *Date:* ${new Date().toLocaleString()}`;
 
             await sock.sendMessage(chatId, { 
@@ -113,9 +116,11 @@ async function warnCommand(sock, chatId, senderId, mentionedJids, message) {
                 await sock.groupParticipantsUpdate(chatId, [userToWarn], "remove");
                 delete warnings[chatId][userToWarn];
                 fs.writeFileSync(warningsPath, JSON.stringify(warnings, null, 2));
-                
+
+                const kickedDisplayNumber = await resolveParticipantDisplayNumber(sock, chatId, userToWarn);
+
                 const kickMessage = `*『 AUTO-KICK 』*\n\n` +
-                    `@${userToWarn.replace(/:[^@]*/, '').split('@')[0]} has been removed from the group after receiving 3 warnings! ⚠️`;
+                    `@${kickedDisplayNumber} has been removed from the group after receiving 3 warnings! ⚠️`;
 
                 await sock.sendMessage(chatId, { 
                     text: kickMessage,

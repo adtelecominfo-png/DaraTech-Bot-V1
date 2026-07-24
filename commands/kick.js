@@ -1,4 +1,5 @@
 const isAdmin = require('../lib/isAdmin');
+const { resolveParticipantDisplayNumber } = require('../lib/participantDisplay');
 
 async function kickCommand(sock, chatId, senderId, mentionedJids, message) {
     const isOwner = message.key.fromMe;
@@ -112,7 +113,8 @@ async function kickCommand(sock, chatId, senderId, mentionedJids, message) {
         await sock.groupParticipantsUpdate(chatId, usersToKick, "remove");
         
         const usernames = await Promise.all(usersToKick.map(async jid => {
-            return `@${jid.replace(/:[^@]*/, '').split('@')[0]}`;
+            const displayNumber = await resolveParticipantDisplayNumber(sock, chatId, jid, metadata);
+            return `@${displayNumber}`;
         }));
         
         await sock.sendMessage(chatId, { 

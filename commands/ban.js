@@ -2,6 +2,7 @@ const fs = require('fs');
 const { channelInfo } = require('../lib/messageConfig');
 const isAdmin = require('../lib/isAdmin');
 const { isSudo } = require('../lib/index');
+const { resolveParticipantDisplayNumber } = require('../lib/participantDisplay');
 
 async function banCommand(sock, chatId, message) {
     // Restrict in groups to admins; in private to owner/sudo
@@ -70,15 +71,16 @@ async function banCommand(sock, chatId, message) {
 
             // Get user info
             const userInfo = await sock.onWhatsApp(userToBan);
-            const userName = userInfo[0]?.name || userToBan.replace(/:[^@]*/, '').split('@')[0];
+            const userName = userInfo[0]?.name || await resolveParticipantDisplayNumber(sock, chatId, userToBan);
 
             await sock.sendMessage(chatId, { 
                 text: `_@${userName} have been banned from using bot_`,
                 mentions: [userToBan],
             }, { quoted: message });
         } else {
+            const displayNumber = await resolveParticipantDisplayNumber(sock, chatId, userToBan);
             await sock.sendMessage(chatId, { 
-                text: `_@${userToBan.replace(/:[^@]*/, '').split('@')[0]} is already banned!_`,
+                text: `_@${displayNumber} is already banned!_`,
                 mentions: [userToBan],
             }, { quoted: message });
         }

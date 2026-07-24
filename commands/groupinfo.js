@@ -1,3 +1,5 @@
+const { participantDisplayNumber, resolveParticipantDisplayNumber } = require('../lib/participantDisplay');
+
 async function groupInfoCommand(sock, chatId, msg) {
     try {
         // Get group metadata
@@ -14,10 +16,11 @@ async function groupInfoCommand(sock, chatId, msg) {
         // Get admins from participants
         const participants = groupMetadata.participants;
         const groupAdmins = participants.filter(p => p.admin);
-        const listAdmin = groupAdmins.map((v, i) => `${i + 1}. @${v.id.replace(/:[^@]*/, '').split('@')[0]}`).join('\n');
+        const listAdmin = groupAdmins.map((v, i) => `${i + 1}. @${participantDisplayNumber(v)}`).join('\n');
         
         // Get group owner
         const owner = groupMetadata.owner || groupAdmins.find(p => p.admin === 'superadmin')?.id || chatId.split('-')[0] + '@s.whatsapp.net';
+        const ownerDisplayNumber = await resolveParticipantDisplayNumber(sock, chatId, owner, groupMetadata);
 
         // Create info text
         const text = `
@@ -29,7 +32,7 @@ async function groupInfoCommand(sock, chatId, msg) {
 ▢ *👥Members* :
 • ${participants.length}
 ▢ *🤿Group Owner:*
-• @${owner.replace(/:[^@]*/, '').split('@')[0]}
+• @${ownerDisplayNumber}
 ▢ *🕵🏻‍♂️Admins:*
 ${listAdmin}
 

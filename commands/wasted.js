@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { channelInfo } = require('../lib/messageConfig');
+const { resolveParticipantDisplayNumber } = require('../lib/participantDisplay');
 
 async function wastedCommand(sock, chatId, message) {
     let userToWaste;
@@ -36,11 +37,12 @@ async function wastedCommand(sock, chatId, message) {
             `https://some-random-api.com/canvas/overlay/wasted?avatar=${encodeURIComponent(profilePic)}`,
             { responseType: 'arraybuffer' }
         );
+        const displayNumber = await resolveParticipantDisplayNumber(sock, chatId, userToWaste);
 
         // Send the wasted image
         await sock.sendMessage(chatId, {
             image: Buffer.from(wastedResponse.data),
-            caption: `⚰️ *Wasted* : ${userToWaste.split('@')[0]} 💀\n\nRest in pieces!`,
+            caption: `⚰️ *Wasted* : ${displayNumber} 💀\n\nRest in pieces!`,
             mentions: [userToWaste],
             ...channelInfo
         });
