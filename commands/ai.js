@@ -18,9 +18,9 @@ const TEXT_MODELS = {
 };
 
 const MODEL_NAMES = {
-    ai:       'Gifted AI',
-    ask:      'Gifted AI',
-    chatbot:  'Gifted AI',
+    ai:       'AI',
+    ask:      'AI',
+    chatbot:  'AI',
     gpt:      'GPT-4o',
     gpt4o:    'GPT-4o',
     gptlarge: 'GPT-4o Large',
@@ -55,7 +55,7 @@ async function aiCommand(sock, chatId, message, userMessage) {
             }
             await sock.sendMessage(chatId, {
                 image: { url: imgUrl },
-                caption: `🎨 *${query}*\n\n_Gifted AI · Daratech_ ⚡`,
+                caption: `🎨 *${query}*\n\n_Daratech_ ⚡`,
             }, { quoted: message });
             await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
         } catch (err) {
@@ -67,7 +67,7 @@ async function aiCommand(sock, chatId, message, userMessage) {
 
     // Text AI commands
     const config    = TEXT_MODELS[cmd] || TEXT_MODELS.ai;
-    const modelName = MODEL_NAMES[cmd] || 'Gifted AI';
+    const modelName = MODEL_NAMES[cmd] || 'AI';
 
     if (!query) {
         return sock.sendMessage(chatId, { text: `🤖 Usage: $${cmd} <your question>` }, { quoted: message });
@@ -83,7 +83,7 @@ async function aiCommand(sock, chatId, message, userMessage) {
             : data.result?.answer || JSON.stringify(data.result);
 
         await sock.sendMessage(chatId, {
-            text: `🤖 *${modelName}* · Gifted AI\n\n${response.trim()}\n\n_Daratech_ ⚡`,
+            text: `🤖 *${modelName}*\n\n${response.trim()}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
         await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
     } catch (err) {
