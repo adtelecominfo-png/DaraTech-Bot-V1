@@ -475,6 +475,12 @@ async function handleAnimeQuizAnswer(sock, chatId, message, senderId, answer) {
             message,
             [registration.jid],
         );
+        // If every active player is now locked out, end the question immediately.
+        if (session.locked.size >= session.players.size && session.state === 'question') {
+            if (session.questionTimer) clearTimeout(session.questionTimer);
+            session.questionTimer = null;
+            void finishQuestion(sock, session, session.questionNumber);
+        }
         return true;
     }
 
