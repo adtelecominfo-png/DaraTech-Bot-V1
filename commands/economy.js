@@ -1482,3 +1482,7 @@ async function economyCommand(sock, chatId, message, userMessage) {
 module.exports = economyCommand;
 module.exports.seedEconomyOwner = seedEconomyOwner;
 module.exports.isOwner          = isOwner;
+module.exports.loadEconomyDB    = loadDB;
+module.exports.saveEconomyDB    = saveDB;
+module.exports.getEconomyUser   = getUser;
+module.exports.resolveEconomyJid = resolveDbJid;

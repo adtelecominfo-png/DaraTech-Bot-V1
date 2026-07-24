@@ -81,6 +81,14 @@ const simageCommand = require('./commands/simage');
 const attpCommand = require('./commands/attp');
 const { startHangman, guessLetter } = require('./commands/hangman');
 const { startTrivia, answerTrivia } = require('./commands/trivia');
+const {
+    openAnimeQuiz,
+    isAnimeQuizRoom,
+    joinAnimeQuiz,
+    leaveAnimeQuiz,
+    endAnimeQuiz,
+    handleAnimeQuizAnswer,
+} = require('./commands/anime-quiz');
 const { complimentCommand } = require('./commands/compliment');
 const { insultCommand } = require('./commands/insult');
 const { eightBallCommand } = require('./commands/eightball');
@@ -433,6 +441,17 @@ async function handleMessages(sock, messageUpdate, printLog) {
         if (/^[1-9]$/.test(userMessage) || userMessage.toLowerCase() === 'surrender') {
             await handleTicTacToeMove(sock, chatId, senderId, userMessage);
             return;
+        }
+
+        // Anime quiz answers are ordinary messages (A-D or the answer text).
+        if (!userMessage.startsWith('$')) {
+            const plainQuizJoin = userMessage.match(/^join\s+([a-z0-9]+)$/i);
+            if (plainQuizJoin && isAnimeQuizRoom(chatId, plainQuizJoin[1])) {
+                await joinAnimeQuiz(sock, chatId, message, senderId, plainQuizJoin[1]);
+                return;
+            }
+            const handledQuizAnswer = await handleAnimeQuizAnswer(sock, chatId, message, senderId, userMessage);
+            if (handledQuizAnswer) return;
         }
 
         /*  // Basic message response in private chat
@@ -1118,6 +1137,22 @@ case userMessage.startsWith('$bssensi'):
                 } else {
                     sock.sendMessage(chatId, { text: 'Please provide an answer using $answer <answer>', ...channelInfo }, { quoted: message });
                 }
+                break;
+            case userMessage === '$aquiz':
+                await openAnimeQuiz(sock, chatId, message, senderId);
+                commandExecuted = true;
+                break;
+            case userMessage.startsWith('$join ') && isAnimeQuizRoom(chatId, userMessage.slice(6).trim()):
+                await joinAnimeQuiz(sock, chatId, message, senderId, userMessage.slice(5).trim());
+                commandExecuted = true;
+                break;
+            case userMessage === '$leaveroom' || userMessage.startsWith('$leaveroom '):
+                await leaveAnimeQuiz(sock, chatId, message, senderId, userMessage.slice(10).trim());
+                commandExecuted = true;
+                break;
+            case userMessage === '$equiz' || userMessage.startsWith('$equiz '):
+                await endAnimeQuiz(sock, chatId, message, senderId, userMessage.slice(6).trim());
+                commandExecuted = true;
                 break;
             case userMessage.startsWith('$compliment'):
                 await complimentCommand(sock, chatId, message);
