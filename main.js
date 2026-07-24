@@ -537,8 +537,9 @@ if (checkAFK(senderId)) {
             }
             return;
         }
-        // In private mode, only owner/sudo can run commands
-        if (!isPublic && !isOwnerOrSudoCheck) {
+        // In private mode, only owner/sudo can run commands IN GROUPS
+        // DMs always pass through regardless of mode
+        if (!isPublic && isGroup && !isOwnerOrSudoCheck) {
             return;
         }
 
