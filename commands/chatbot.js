@@ -7,6 +7,9 @@ const USER_GROUP_DATA   = path.join(__dirname, '../data/userGroupData.json');
 const VELORA_MEMORY_DIR = path.join(__dirname, '../data/velora_memory');
 if (!fs.existsSync(VELORA_MEMORY_DIR)) fs.mkdirSync(VELORA_MEMORY_DIR, { recursive: true });
 
+const VELORA_RESPONSE_MARKER = '╭─〔 Velora 〕';
+const veloraResponseMessageIds = new Set();
+
 // ─── In-memory cache: memKey → { messages, userInfo } ────────────────────────
 const chatMemory = new Map();
 
@@ -85,6 +88,36 @@ const VELORA_HEADER = `╭─〔 Velora 〕\n│ Online • Thinking naturally\n
 
 function veloraBox(text) {
     return `${VELORA_HEADER}\n\n${text}`;
+}
+
+function getContextInfo(message) {
+    return message.message?.extendedTextMessage?.contextInfo
+        || message.message?.imageMessage?.contextInfo
+        || message.message?.videoMessage?.contextInfo
+        || message.message?.audioMessage?.contextInfo
+        || message.message?.documentMessage?.contextInfo;
+}
+
+function getQuotedText(quotedMessage) {
+    return quotedMessage?.conversation
+        || quotedMessage?.extendedTextMessage?.text
+        || quotedMessage?.imageMessage?.caption
+        || quotedMessage?.videoMessage?.caption
+        || quotedMessage?.documentMessage?.caption
+        || '';
+}
+
+function isVeloraResponseMessage(quotedMessage) {
+    return getQuotedText(quotedMessage).includes(VELORA_RESPONSE_MARKER);
+}
+
+function rememberVeloraResponse(messageKey) {
+    const id = messageKey?.id;
+    if (!id) return;
+    veloraResponseMessageIds.add(id);
+    if (veloraResponseMessageIds.size > 200) {
+        veloraResponseMessageIds.delete(veloraResponseMessageIds.values().next().value);
+    }
 }
 
 // ─── Split response into streamable sentence chunks ───────────────────────────
@@ -481,19 +514,10 @@ function pushHistory(memKey, role, content) {
 
 // ─── Extract quoted/replied-to message text ───────────────────────────────────
 function extractQuotedContext(message) {
-    const ctx = message.message?.extendedTextMessage?.contextInfo
-              || message.message?.imageMessage?.contextInfo
-              || message.message?.videoMessage?.contextInfo
-              || message.message?.audioMessage?.contextInfo
-              || message.message?.documentMessage?.contextInfo;
+    const ctx = getContextInfo(message);
     if (!ctx?.quotedMessage) return null;
     const q = ctx.quotedMessage;
-    const text = q.conversation
-               || q.extendedTextMessage?.text
-               || q.imageMessage?.caption
-               || q.videoMessage?.caption
-               || q.documentMessage?.caption
-               || '';
+    const text = getQuotedText(q);
     const type = !text ? (
         q.imageMessage    ? 'image'    :
         q.videoMessage    ? 'video'    :
@@ -556,6 +580,7 @@ async function veloraRespond(sock, chatId, message, userText, senderId, mentions
             { quoted: message }
         );
         indicatorKey = sent?.key;
+        rememberVeloraResponse(indicatorKey);
     } catch {}
 
     await delay(1300);
@@ -680,13 +705,17 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
 
         const isMentioned = userMessage.includes(`@${botId}`);
 
-        const quotedParticipant = (
-            message.message?.extendedTextMessage?.contextInfo?.participant || ''
-        );
+        const replyContext = getContextInfo(message);
+        const quotedParticipant = replyContext?.participant || '';
         const quotedPNum = quotedParticipant.split('@')[0].split(':')[0];
-        const isReplyToBot = !!(quotedParticipant && (
+        const isQuotedByBot = !!(quotedParticipant && (
             quotedPNum === botId || (botLid && quotedPNum === botLid)
         ));
+        const quotedIsVeloraResponse = !!(
+            replyContext?.stanzaId &&
+            veloraResponseMessageIds.has(replyContext.stanzaId)
+        ) || isVeloraResponseMessage(replyContext?.quotedMessage);
+        const isReplyToBot = isQuotedByBot && quotedIsVeloraResponse;
 
         const isDirectMessage = !chatId.endsWith('@g.us');
         if (!isDirectMessage && !isMentioned && !isReplyToBot) return;
