@@ -990,6 +990,8 @@ case userMessage.startsWith('$bssensi'):
                 try {
                     data.isPublic = action === 'public';
                     fs.writeFileSync('./data/messageCount.json', JSON.stringify(data, null, 2));
+                    // Keep sock.public in sync so the index.js layer never disagrees
+                    sock.public = data.isPublic;
                     await sock.sendMessage(chatId, { text: `✅ Bot is now in *${action}* mode`, ...channelInfo });
                 } catch (error) {
                     console.error('Error updating access mode:', error);
