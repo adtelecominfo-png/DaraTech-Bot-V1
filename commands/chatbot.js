@@ -209,9 +209,24 @@ function buildPrompt(userMessage, context) {
 
 function cleanReply(raw) {
     if (!raw) return null;
-    const s = (typeof raw === 'string' ? raw : (raw.answer || JSON.stringify(raw)))
+    let s = (typeof raw === 'string' ? raw : (raw.answer || JSON.stringify(raw)))
         .replace(/^(Rimuru|Rimuru Tempest|Raphael|Ciel|Dara|Bot|AI|Assistant):\s*/i, '')
         .trim();
+
+    // Convert markdown → WhatsApp formatting
+    s = s
+        .replace(/^#{1,6}\s+/gm, '')          // remove # ## ### headings
+        .replace(/\*\*\*(.+?)\*\*\*/g, '*$1*') // ***bold italic*** → *bold italic*
+        .replace(/\*\*(.+?)\*\*/g, '*$1*')     // **bold** → *bold*
+        .replace(/~~(.+?)~~/g, '~$1~')         // ~~strike~~ → ~strike~
+        .replace(/`{3}[\s\S]*?`{3}/g, m =>     // keep code blocks but strip backticks
+            m.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '').trim()
+        )
+        .replace(/`(.+?)`/g, '$1')             // inline `code` → plain
+        .replace(/^\s*[-*]\s+/gm, '• ')        // - list / * list → bullet
+        .replace(/^\s*\d+\.\s+/gm, m => m)     // numbered lists: leave as-is
+        .trim();
+
     return (s.length >= 5 && s.length <= 4000) ? s : null;
 }
 
