@@ -19,7 +19,7 @@ const axios = require('axios');
 const fs     = require('fs');
 const path   = require('path');
 
-const MOVIE_BASE   = 'https://runflix-api-v-3263--trumpmax.replit.app/api/v3';
+const MOVIE_BASE   = 'https://runflix-api-v-3264--akinrinlolapris.replit.app/api/v3';
 const CACHE_FILE   = path.join(__dirname, '../data/lastSearches.json');
 const CACHE_MAX    = 200; // max chatIds kept in file (rolling)
 
