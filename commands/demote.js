@@ -97,7 +97,7 @@ async function handleDemotionEvent(sock, groupId, participants, author) {
         const demotedUsernames = await Promise.all(participants.map(async jid => {
             // Handle case where jid might be an object or not a string
             const jidString = typeof jid === 'string' ? jid : (jid.id || jid.toString());
-            return `@${jidString.split('@')[0]}`;
+            return `@${jidString.replace(/:[^@]*/, '').split('@')[0]}`;
         }));
 
         let demotedBy;
@@ -109,7 +109,7 @@ async function handleDemotionEvent(sock, groupId, participants, author) {
         if (author && author.length > 0) {
             // Ensure author has the correct format
             const authorJid = typeof author === 'string' ? author : (author.id || author.toString());
-            demotedBy = `@${authorJid.split('@')[0]}`;
+            demotedBy = `@${authorJid.replace(/:[^@]*/, '').split('@')[0]}`;
             mentionList.push(authorJid);
         } else {
             demotedBy = 'System';

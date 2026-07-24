@@ -112,7 +112,7 @@ async function kickCommand(sock, chatId, senderId, mentionedJids, message) {
         await sock.groupParticipantsUpdate(chatId, usersToKick, "remove");
         
         const usernames = await Promise.all(usersToKick.map(async jid => {
-            return `@${jid.split('@')[0]}`;
+            return `@${jid.replace(/:[^@]*/, '').split('@')[0]}`;
         }));
         
         await sock.sendMessage(chatId, { 

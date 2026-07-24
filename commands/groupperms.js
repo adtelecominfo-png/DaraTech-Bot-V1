@@ -61,7 +61,8 @@ async function gpermCommand(sock, chatId, message) {
             invLink = code ? '✅ ON  — active' : '🔒 OFF — revoked';
         } catch { invLink = '❓ unknown'; }
 
-        const approval = (meta.joinApprovalMode === 'on')
+        const msgHistory = meta.memberHistoryFullAccess ? '✅ ON  — allowed' : '🔒 OFF — restricted';
+        const approval   = (meta.joinApprovalMode === 'on')
                         ? '✅ ON  — approval required'
                         : '🔓 OFF — anyone can join';
 
@@ -76,6 +77,7 @@ async function gpermCommand(sock, chatId, message) {
                 `│  💬  Send new messages   : ${sendMsgs}`,
                 `│  ➕  Add other members   : ${memberAdd}`,
                 `│  🔗  Invite via link     : ${invLink}`,
+                `│  📜  Send msg history    : ${msgHistory}`,
                 '│',
                 '├─ *Admins Can:*',
                 `│  ✔️  Approve new members : ${approval}`,
@@ -84,6 +86,7 @@ async function gpermCommand(sock, chatId, message) {
                 '│  $editinfo on/off',
                 '│  $memberadd on/off',
                 '│  $invitelink on/off',
+                '│  $msghistory on/off',
                 '│  $approval on/off',
                 '╰───────────────────────',
             ].join('\n'),
@@ -315,10 +318,64 @@ async function approvalCommand(sock, chatId, senderId, message, arg) {
     }
 }
 
+// ── $msghistory on|off ────────────────────────────────────────────────────────
+// Controls whether members can send past message history to newly joined members.
+async function msghistoryCommand(sock, chatId, senderId, message, arg) {
+    if (!groupOnly(sock, chatId, message)) return;
+    if (!await adminGuard(sock, chatId, senderId, message)) return;
+
+    const state = parseOnOff(arg);
+    if (!state) {
+        return sock.sendMessage(chatId, {
+            text: [
+                '❌ *Usage:* $msghistory on | off',
+                '',
+                '• *on*  — members can send past messages to newly joined members',
+                '• *off* — new members start fresh with no past message history',
+            ].join('\n'),
+        }, { quoted: message });
+    }
+
+    try {
+        // Read current state first
+        const meta        = await sock.groupMetadata(chatId);
+        const currentlyOn = !!meta.memberHistoryFullAccess;
+        const currentStr  = currentlyOn ? '✅ ON' : '🔒 OFF';
+
+        if ((state === 'on') === currentlyOn) {
+            return sock.sendMessage(chatId, {
+                text: `ℹ️ *Send message history* is already *${currentStr}*. No change made.`,
+            }, { quoted: message });
+        }
+
+        await sock.groupSettingUpdate(
+            chatId,
+            state === 'on' ? 'member_history_full_access' : 'not_member_history_full_access'
+        );
+
+        return sock.sendMessage(chatId, {
+            text: [
+                `⚙️ *Send message history updated*`,
+                `│`,
+                `│  Was  : ${currentStr}`,
+                `│  Now  : ${state === 'on' ? '✅ ON' : '🔒 OFF'}`,
+                `│`,
+                state === 'on'
+                    ? '│  Members can now send past messages to newly joined members.'
+                    : '│  New members will no longer receive past message history.',
+            ].join('\n'),
+        }, { quoted: message });
+    } catch (e) {
+        console.error('[msghistory]', e.message);
+        return sock.sendMessage(chatId, { text: `❌ Failed to update setting.\n${e.message}` }, { quoted: message });
+    }
+}
+
 module.exports = {
     gpermCommand,
     editinfoCommand,
     memberaddCommand,
     invitelinkCommand,
     approvalCommand,
+    msghistoryCommand,
 };

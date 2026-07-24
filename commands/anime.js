@@ -65,35 +65,49 @@ async function sendAnimu(sock, chatId, message, type) {
     if (data.link) {
         const link = data.link;
         const lower = link.toLowerCase();
-        const isGifLink = lower.endsWith('$gif');
+        const isGifLink  = lower.endsWith('.gif');
         const isImageLink = lower.match(/\.(jpg|jpeg|png|webp)$/);
 
-        // Convert all media (GIFs and images) to stickers
-        if (isGifLink || isImageLink) {
+        // GIFs → send as WhatsApp GIF (gifPlayback video)
+        if (isGifLink) {
             try {
                 const resp = await axios.get(link, {
                     responseType: 'arraybuffer',
                     timeout: 15000,
                     headers: { 'User-Agent': 'Mozilla/5.0' }
                 });
-                const mediaBuf = Buffer.from(resp.data);
-                const stickerBuf = await convertMediaToSticker(mediaBuf, isGifLink);
+                const gifBuf = Buffer.from(resp.data);
                 await sock.sendMessage(
                     chatId,
-                    { sticker: stickerBuf },
+                    { video: gifBuf, gifPlayback: true, mimetype: 'video/mp4' },
                     { quoted: message }
                 );
                 return;
             } catch (error) {
-                console.error('Error converting media to sticker:', error);
+                console.error('Error sending GIF:', error);
+                // fallback below
             }
         }
 
-        // Fallback to image if conversion fails
+        // Static images → send as image
+        if (isImageLink) {
+            try {
+                await sock.sendMessage(
+                    chatId,
+                    { image: { url: link } },
+                    { quoted: message }
+                );
+                return;
+            } catch (error) {
+                console.error('Error sending image:', error);
+            }
+        }
+
+        // Unknown format fallback — send URL directly
         try {
             await sock.sendMessage(
                 chatId,
-                { image: { url: link }, caption: `anime: ${type}` },
+                { image: { url: link } },
                 { quoted: message }
             );
             return;

@@ -70,7 +70,7 @@ async function banCommand(sock, chatId, message) {
 
             // Get user info
             const userInfo = await sock.onWhatsApp(userToBan);
-            const userName = userInfo[0]?.name || userToBan.split('@')[0];
+            const userName = userInfo[0]?.name || userToBan.replace(/:[^@]*/, '').split('@')[0];
 
             await sock.sendMessage(chatId, { 
                 text: `_@${userName} have been banned from using bot_`,
@@ -78,7 +78,7 @@ async function banCommand(sock, chatId, message) {
             }, { quoted: message });
         } else {
             await sock.sendMessage(chatId, { 
-                text: `_@${userToBan.split('@')[0]} is already banned!_`,
+                text: `_@${userToBan.replace(/:[^@]*/, '').split('@')[0]} is already banned!_`,
                 mentions: [userToBan],
             }, { quoted: message });
         }

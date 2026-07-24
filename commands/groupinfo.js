@@ -14,7 +14,7 @@ async function groupInfoCommand(sock, chatId, msg) {
         // Get admins from participants
         const participants = groupMetadata.participants;
         const groupAdmins = participants.filter(p => p.admin);
-        const listAdmin = groupAdmins.map((v, i) => `${i + 1}. @${v.id.split('@')[0]}`).join('\n');
+        const listAdmin = groupAdmins.map((v, i) => `${i + 1}. @${v.id.replace(/:[^@]*/, '').split('@')[0]}`).join('\n');
         
         // Get group owner
         const owner = groupMetadata.owner || groupAdmins.find(p => p.admin === 'superadmin')?.id || chatId.split('-')[0] + '@s.whatsapp.net';
@@ -29,7 +29,7 @@ async function groupInfoCommand(sock, chatId, msg) {
 ▢ *👥Members* :
 • ${participants.length}
 ▢ *🤿Group Owner:*
-• @${owner.split('@')[0]}
+• @${owner.replace(/:[^@]*/, '').split('@')[0]}
 ▢ *🕵🏻‍♂️Admins:*
 ${listAdmin}
 

@@ -257,7 +257,7 @@ const {
     creategcCommand, promoteallCommand, demoteallCommand, kickallCommand,
     removeByCountryCommand
 } = require('./commands/group');
-const { gpermCommand, editinfoCommand, memberaddCommand, invitelinkCommand, approvalCommand } = require('./commands/groupperms');
+const { gpermCommand, editinfoCommand, memberaddCommand, invitelinkCommand, approvalCommand, msghistoryCommand } = require('./commands/groupperms');
 const { numfactCommand, datefactCommand, yearfactCommand, mathfactCommand } = require('./commands/numfact');
 const { dadjoke, chuckCommand, programmingJokeCommand, yomammaCommand, darkJokeCommand } = require('./commands/funjokes');
 const { riddleCommand, riddleAnswerCommand } = require('./commands/riddle');
@@ -531,7 +531,7 @@ if (checkAFK(senderId)) {
         }
 
         // List of admin commands
-        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus', '$antigroupmention', '$agm', '$autosticker', '$autos', '$asticker', '$clean', '$purge', '$pending', '$accept', '$reject', '$gperm', '$editinfo', '$memberadd', '$invitelink', '$approval'];
+        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus', '$antigroupmention', '$agm', '$autosticker', '$autos', '$asticker', '$clean', '$purge', '$pending', '$accept', '$reject', '$gperm', '$editinfo', '$memberadd', '$invitelink', '$approval', '$msghistory'];
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
@@ -2144,6 +2144,11 @@ case userMessage.startsWith('$bssensi'):
 
             case userMessage.startsWith('$approval'):
                 await approvalCommand(sock, chatId, senderId, message, userMessage.slice('$approval'.length).trim());
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('$msghistory'):
+                await msghistoryCommand(sock, chatId, senderId, message, userMessage.slice('$msghistory'.length).trim());
                 commandExecuted = true;
                 break;
 

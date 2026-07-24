@@ -42,7 +42,7 @@ async function handlePromotionEvent(sock, groupId, participants, author) {
         const promotedUsernames = await Promise.all(participants.map(async jid => {
             // Handle case where jid might be an object or not a string
             const jidString = typeof jid === 'string' ? jid : (jid.id || jid.toString());
-            return `@${jidString.split('@')[0]} `;
+            return `@${jidString.replace(/:[^@]*/, '').split('@')[0]} `;
         }));
 
         let promotedBy;
@@ -54,7 +54,7 @@ async function handlePromotionEvent(sock, groupId, participants, author) {
         if (author && author.length > 0) {
             // Ensure author has the correct format
             const authorJid = typeof author === 'string' ? author : (author.id || author.toString());
-            promotedBy = `@${authorJid.split('@')[0]}`;
+            promotedBy = `@${authorJid.replace(/:[^@]*/, '').split('@')[0]}`;
             mentionList.push(authorJid);
         } else {
             promotedBy = 'System';
