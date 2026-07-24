@@ -151,10 +151,8 @@ const tiktokCommand = require('./commands/tiktok');
 const aiCommand = require('./commands/ai');
 const {
     letmegptCommand, unlimitedAiCommand, claudeCommand, deepseekCommand,
-    gpt4Command, llamaCommand, mistralAiCommand, geminiOcCommand,
-    grokCommand, qwenAiCommand, o1Command,
-    gifGeminiCommand, gifVeniceCommand, gifPollCommand,
-    muslimAiCommand, transcriptCommand, giftFluxCommand, giftTxt2ImgCommand,
+    gpt4Command, llamaCommand, grokCommand, o1Command,
+    muslimAiCommand, transcriptCommand,
     magicStudioCommand,
 } = require('./commands/gifted-ai');
 const urlCommand = require('./commands/url');
@@ -1593,36 +1591,12 @@ case userMessage.startsWith('$bssensi'):
                 await llamaCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
-            case userMessage === '$mistralai' || userMessage.startsWith('$mistralai '):
-                await mistralAiCommand(sock, chatId, message);
-                commandExecuted = true;
-                break;
-            case userMessage === '$geminioc' || userMessage.startsWith('$geminioc '):
-                await geminiOcCommand(sock, chatId, message);
-                commandExecuted = true;
-                break;
             case userMessage === '$grok' || userMessage.startsWith('$grok '):
                 await grokCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
-            case userMessage === '$qwenai' || userMessage.startsWith('$qwenai '):
-                await qwenAiCommand(sock, chatId, message);
-                commandExecuted = true;
-                break;
             case userMessage === '$o1' || userMessage.startsWith('$o1 '):
                 await o1Command(sock, chatId, message);
-                commandExecuted = true;
-                break;
-            case userMessage === '$gifgemini' || userMessage.startsWith('$gifgemini '):
-                await gifGeminiCommand(sock, chatId, message);
-                commandExecuted = true;
-                break;
-            case userMessage === '$gifvenice' || userMessage.startsWith('$gifvenice '):
-                await gifVeniceCommand(sock, chatId, message);
-                commandExecuted = true;
-                break;
-            case userMessage === '$gifpoll' || userMessage.startsWith('$gifpoll '):
-                await gifPollCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
             case userMessage === '$muslimai' || userMessage.startsWith('$muslimai '):
@@ -1630,14 +1604,6 @@ case userMessage.startsWith('$bssensi'):
                 commandExecuted = true;
                 break;
             // ── GiftedTech AI image generation ───────────────────────────────
-            case userMessage === '$giftflux' || userMessage.startsWith('$giftflux '):
-                await giftFluxCommand(sock, chatId, message);
-                commandExecuted = true;
-                break;
-            case userMessage === '$gifttxt2img' || userMessage.startsWith('$gifttxt2img '):
-                await giftTxt2ImgCommand(sock, chatId, message);
-                commandExecuted = true;
-                break;
             case userMessage === '$magicstudio' || userMessage.startsWith('$magicstudio '):
                 await magicStudioCommand(sock, chatId, message);
                 commandExecuted = true;
@@ -1647,15 +1613,21 @@ case userMessage.startsWith('$bssensi'):
                 await transcriptCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
-            // ── Pollinations AI (existing) ────────────────────────────────────
-            case userMessage.startsWith('$ai ') || userMessage === '$ai' ||
-                 userMessage.startsWith('$ask ') || userMessage === '$ask' ||
-                 userMessage.startsWith('$gpt') || userMessage.startsWith('$gemini') ||
-                 userMessage.startsWith('$venice') || userMessage.startsWith('$overchat') ||
-                 userMessage.startsWith('$mistral') || userMessage.startsWith('$qwen') ||
-                 userMessage.startsWith('$gptlarge') || userMessage.startsWith('$gptfast') ||
-                 userMessage.startsWith('$txt2img') || userMessage.startsWith('$text2img') ||
-                 userMessage.startsWith('$animegen') || userMessage.startsWith('$dalle'):
+            // ── GiftedTech AI (main AI commands) ──────────────────────────────
+            case userMessage === '$ai' || userMessage.startsWith('$ai ') ||
+                 userMessage === '$ask' || userMessage.startsWith('$ask ') ||
+                 userMessage === '$gpt' || userMessage.startsWith('$gpt ') ||
+                 userMessage === '$gpt4o' || userMessage.startsWith('$gpt4o ') ||
+                 userMessage === '$gemini' || userMessage.startsWith('$gemini ') ||
+                 userMessage === '$venice' || userMessage.startsWith('$venice ') ||
+                 userMessage === '$overchat' || userMessage.startsWith('$overchat ') ||
+                 userMessage === '$mistral' || userMessage.startsWith('$mistral ') ||
+                 userMessage === '$qwen' || userMessage.startsWith('$qwen ') ||
+                 userMessage === '$gptlarge' || userMessage.startsWith('$gptlarge ') ||
+                 userMessage === '$gptfast' || userMessage.startsWith('$gptfast ') ||
+                 userMessage === '$txt2img' || userMessage.startsWith('$txt2img ') ||
+                 userMessage === '$text2img' || userMessage.startsWith('$text2img ') ||
+                 userMessage === '$dalle' || userMessage.startsWith('$dalle '):
                 await aiCommand(sock, chatId, message, userMessage);
                 commandExecuted = true;
                 break;

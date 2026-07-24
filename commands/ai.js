@@ -1,30 +1,35 @@
 'use strict';
-const { callPollinationsAI, MODELS } = require('../lib/pollinations');
-const { getImageUrl } = require('../lib/pollinations');
+const { get } = require('../lib/gifted');
 
-// Maps command name → Pollinations model key
+// Maps command name → GiftedTech AI endpoint and optional model parameters.
 const TEXT_MODELS = {
-    ai:        'openai',
-    ask:       'openai',
-    chatbot:   'openai',
-    gpt:       'openai',
-    gpt4o:     'openai',
-    gptlarge:  'large',
-    gptfast:   'fast',
-    gemini:    'gemini',
-    mistral:   'mistral',
-    qwen:      'qwen',
-    venice:    'openai',
-    overchat:  'openai',
+    ai:        { endpoint: 'pollinations', params: {} },
+    ask:       { endpoint: 'pollinations', params: {} },
+    chatbot:   { endpoint: 'pollinations', params: {} },
+    gpt:       { endpoint: 'pollinations', params: { model: 'openai' } },
+    gpt4o:     { endpoint: 'pollinations', params: { model: 'openai' } },
+    gptlarge:  { endpoint: 'pollinations', params: { model: 'openai-large' } },
+    gptfast:   { endpoint: 'pollinations', params: { model: 'openai-fast' } },
+    gemini:    { endpoint: 'gemini', params: {} },
+    mistral:   { endpoint: 'overchat', params: { model: 'mistral' } },
+    qwen:      { endpoint: 'overchat', params: { model: 'qwen' } },
+    venice:    { endpoint: 'venice', params: {} },
+    overchat:  { endpoint: 'overchat', params: { model: 'gpt4' } },
 };
 
 const MODEL_NAMES = {
-    openai: 'GPT-4o',
-    large:  'GPT-4o Large',
-    fast:   'GPT-4o Fast',
-    gemini: 'Gemini',
-    mistral:'Mistral AI',
-    qwen:   'Qwen Coder',
+    ai:       'Gifted AI',
+    ask:      'Gifted AI',
+    chatbot:  'Gifted AI',
+    gpt:      'GPT-4o',
+    gpt4o:    'GPT-4o',
+    gptlarge: 'GPT-4o Large',
+    gptfast:  'GPT-4o Fast',
+    gemini:   'Gemini',
+    mistral:  'Mistral AI',
+    qwen:     'Qwen AI',
+    venice:   'Venice AI',
+    overchat: 'Overchat AI',
 };
 
 async function aiCommand(sock, chatId, message, userMessage) {
@@ -40,11 +45,17 @@ async function aiCommand(sock, chatId, message, userMessage) {
         }
         try {
             await sock.sendMessage(chatId, { react: { text: '⏳', key: message.key } });
-            const model = cmd === 'flux' || cmd === 'imagine' || cmd === 'dalle' ? 'flux' : 'turbo';
-            const imgUrl = getImageUrl(query, model);
+            const endpoint = cmd === 'flux' || cmd === 'imagine' || cmd === 'dalle'
+                ? 'fluximg'
+                : 'txt2img';
+            const data = await get(`/ai/${endpoint}`, { prompt: query }, 40000);
+            const imgUrl = data?.result?.url || data?.result?.image || data?.url || data?.image;
+            if (!data?.success || !imgUrl) {
+                throw new Error(data?.message || 'No image URL returned');
+            }
             await sock.sendMessage(chatId, {
                 image: { url: imgUrl },
-                caption: `🎨 *${query}*\n\n_Daratech_ ⚡`,
+                caption: `🎨 *${query}*\n\n_Gifted AI · Daratech_ ⚡`,
             }, { quoted: message });
             await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
         } catch (err) {
@@ -55,9 +66,8 @@ async function aiCommand(sock, chatId, message, userMessage) {
     }
 
     // Text AI commands
-    const modelKey  = TEXT_MODELS[cmd] || 'openai';
-    const modelName = MODEL_NAMES[modelKey] || 'GPT-4o';
-    const polModel  = MODELS[modelKey] || 'openai';
+    const config    = TEXT_MODELS[cmd] || TEXT_MODELS.ai;
+    const modelName = MODEL_NAMES[cmd] || 'Gifted AI';
 
     if (!query) {
         return sock.sendMessage(chatId, { text: `🤖 Usage: $${cmd} <your question>` }, { quoted: message });
@@ -66,23 +76,14 @@ async function aiCommand(sock, chatId, message, userMessage) {
     try {
         await sock.sendMessage(chatId, { react: { text: '⏳', key: message.key } });
 
-        let response;
-        try {
-            response = await callPollinationsAI(query, polModel);
-        } catch (primaryErr) {
-            // If the chosen model fails (404 / 429 / unavailable), fall back to the
-            // reliable openai (GPT-4o) model so the user still gets an answer.
-            const statusCode = primaryErr?.response?.status;
-            if (polModel !== 'openai' && (statusCode === 404 || statusCode === 429 || statusCode >= 400)) {
-                console.warn(`[ai:${cmd}] model '${polModel}' failed (${statusCode}), falling back to openai`);
-                response = await callPollinationsAI(query, 'openai');
-            } else {
-                throw primaryErr;
-            }
-        }
+        const data = await get(`/ai/${config.endpoint}`, { q: query, ...config.params });
+        if (!data?.success) throw new Error(data?.message || 'No response');
+        const response = typeof data.result === 'string'
+            ? data.result
+            : data.result?.answer || JSON.stringify(data.result);
 
         await sock.sendMessage(chatId, {
-            text: `🤖 *${modelName}* · Daratech\n\n${response.trim()}\n\n_Daratech_ ⚡`,
+            text: `🤖 *${modelName}* · Gifted AI\n\n${response.trim()}\n\n_Daratech_ ⚡`,
         }, { quoted: message });
         await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
     } catch (err) {
