@@ -68,46 +68,32 @@ async function sendAnimu(sock, chatId, message, type) {
         const isGifLink  = lower.endsWith('.gif');
         const isImageLink = lower.match(/\.(jpg|jpeg|png|webp)$/);
 
-        // GIFs → send as WhatsApp GIF (gifPlayback video)
-        if (isGifLink) {
+        // Convert all media (GIFs and images) to stickers
+        if (isGifLink || isImageLink) {
             try {
                 const resp = await axios.get(link, {
                     responseType: 'arraybuffer',
                     timeout: 15000,
                     headers: { 'User-Agent': 'Mozilla/5.0' }
                 });
-                const gifBuf = Buffer.from(resp.data);
+                const mediaBuf = Buffer.from(resp.data);
+                const stickerBuf = await convertMediaToSticker(mediaBuf, isGifLink);
                 await sock.sendMessage(
                     chatId,
-                    { video: gifBuf, gifPlayback: true, mimetype: 'video/mp4' },
+                    { sticker: stickerBuf },
                     { quoted: message }
                 );
                 return;
             } catch (error) {
-                console.error('Error sending GIF:', error);
-                // fallback below
+                console.error('Error converting media to sticker:', error);
             }
         }
 
-        // Static images → send as image
-        if (isImageLink) {
-            try {
-                await sock.sendMessage(
-                    chatId,
-                    { image: { url: link } },
-                    { quoted: message }
-                );
-                return;
-            } catch (error) {
-                console.error('Error sending image:', error);
-            }
-        }
-
-        // Unknown format fallback — send URL directly
+        // Fallback to image if conversion fails
         try {
             await sock.sendMessage(
                 chatId,
-                { image: { url: link } },
+                { image: { url: link }, caption: `anime: ${type}` },
                 { quoted: message }
             );
             return;
