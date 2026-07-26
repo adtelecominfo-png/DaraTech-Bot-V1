@@ -50,7 +50,7 @@ async function shazamCommand(sock, chatId, message) {
 
     await react(sock, message, '🎧');
     await sock.sendMessage(chatId, {
-        text: `🎧 *Listening to the music…*\n_Identifying track via AudD database…_`
+        text: `🎧 *Listening to the music…*`
     }, { quoted: message });
 
     try {
@@ -89,12 +89,25 @@ async function shazamCommand(sock, chatId, message) {
 
             txt += `\n\n_Daratech_ ⚡`;
 
-            const coverUrl = song.song_link || null;
+            // Prefer Spotify album art (direct CDN JPEG), fall back to Apple Music artwork
+            const spotifyImg = song.spotify?.album?.images?.[0]?.url || null;
+            const appleMusicImg = (() => {
+                const raw = song.apple_music?.artwork?.url;
+                if (!raw) return null;
+                return raw.replace('{w}', '600').replace('{h}', '600');
+            })();
+            const coverUrl = spotifyImg || appleMusicImg;
 
             if (coverUrl) {
                 try {
+                    const imgRes = await axios.get(coverUrl, {
+                        responseType: 'arraybuffer',
+                        timeout: 15000,
+                        headers: { 'User-Agent': 'Mozilla/5.0' },
+                    });
+                    const imgBuf = Buffer.from(imgRes.data);
                     await sock.sendMessage(chatId,
-                        { image: { url: coverUrl }, caption: txt },
+                        { image: imgBuf, caption: txt },
                         { quoted: message });
                 } catch {
                     await sock.sendMessage(chatId, { text: txt }, { quoted: message });
