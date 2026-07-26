@@ -154,6 +154,7 @@ const instagramCommand = require('./commands/instagram');
 const facebookCommand = require('./commands/facebook');
 const spotifyCommand = require('./commands/spotify');
 const spotifyPlaylistCommand = require('./commands/spotifyplaylist');
+const shazamCommand = require('./commands/shazam');
 const { ytaudioCommand, ytaudioDocCommand } = require('./commands/play');
 const tiktokCommand = require('./commands/tiktok');
 // songCommand removed — $song/$play/$music aliases removed
@@ -1581,6 +1582,9 @@ case userMessage.startsWith('$bssensi'):
                 break;
             case userMessage.startsWith('$spotifyplaylist') || userMessage.startsWith('$spplaylist'):
                 await spotifyPlaylistCommand(sock, chatId, message);
+                break;
+            case userMessage === '$shazam' || userMessage === '$findsong' || userMessage === '$whatsong':
+                await shazamCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('$spotify'):
                 await spotifyCommand(sock, chatId, message);
