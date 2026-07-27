@@ -155,6 +155,7 @@ const facebookCommand = require('./commands/facebook');
 const spotifyCommand = require('./commands/spotify');
 const spotifyPlaylistCommand = require('./commands/spotifyplaylist');
 const shazamCommand = require('./commands/shazam');
+const curlCommand = require('./commands/curl');
 const { ytaudioCommand, ytaudioDocCommand } = require('./commands/play');
 const tiktokCommand = require('./commands/tiktok');
 // songCommand removed — $song/$play/$music aliases removed
@@ -2358,6 +2359,11 @@ case userMessage.startsWith('$bssensi'):
 
             case userMessage.startsWith('$dns ') || userMessage === '$dns':
                 await dnsCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+
+            case userMessage.startsWith('$curl ') || userMessage === '$curl':
+                await curlCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
 
