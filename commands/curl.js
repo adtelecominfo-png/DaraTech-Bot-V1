@@ -82,6 +82,22 @@ function fmtSize(bytes) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Shorten content-type to a readable label e.g. "application/json" → "json" */
+function shortContentType(ct) {
+    if (!ct) return null;
+    const base = ct.split(';')[0].trim().toLowerCase();
+    const map = {
+        'application/json': 'json', 'text/json': 'json',
+        'text/html': 'html', 'text/plain': 'plain',
+        'text/xml': 'xml', 'application/xml': 'xml',
+        'application/javascript': 'js', 'text/javascript': 'js',
+        'text/css': 'css', 'application/octet-stream': 'binary',
+        'multipart/form-data': 'multipart',
+        'application/x-www-form-urlencoded': 'form',
+    };
+    return map[base] || base.split('/').pop();
+}
+
 /** HTTP status emoji */
 function statusEmoji(code) {
     if (code >= 500) return '🔴';
@@ -188,47 +204,33 @@ async function curlCommand(sock, chatId, message) {
     if (!response) {
         return sock.sendMessage(chatId, {
             text:
-                `╭━━━「 🌐 *REQUEST FAILED* 」━━━\n` +
-                `┃\n` +
-                `┃ ❌ *Error:* ${errMsg}\n` +
-                `┃ 🔗 *URL:* ${url}\n` +
-                `┃ ⏱️ *Duration:* ${duration} ms\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n_Daratech_ ⚡`
+                `╭─── 🌐 *REQUEST* ───╮\n` +
+                `│ ❌ *Failed*\n` +
+                `│ ⏱️ Speed: ${duration} ms\n` +
+                `│ ⚠️ ${errMsg}\n` +
+                `╰────────────────────╯\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 
     const { status, statusText, headers: resHeaders, data: body } = response;
-    const bodyStr2  = String(body || '');
-    const sizeBytes = Buffer.byteLength(bodyStr2, 'utf8');
+    const bodyStr2    = String(body || '');
+    const sizeBytes   = Buffer.byteLength(bodyStr2, 'utf8');
     const contentType = resHeaders['content-type'] || '';
 
-    // Filter response headers to meaningful ones
-    const filteredHeaders = Object.entries(resHeaders)
-        .filter(([k]) => SHOW_HEADERS.has(k.toLowerCase()))
-        .map(([k, v]) => `│   ${k}: ${v}`)
-        .join('\n');
+    // Compact header summary: "json | nginx" style
+    const ctShort  = shortContentType(contentType);
+    const server   = resHeaders['server'] || resHeaders['x-powered-by'] || null;
+    const hdrParts = [ctShort, server].filter(Boolean).map(s => s.toLowerCase());
+    const hdrLine  = hdrParts.length ? hdrParts.join(' | ') : 'none';
 
     const formattedBody = formatBody(bodyStr2, contentType);
 
     const out =
-        `╭━━━「 🌐 *REQUEST* 」━━━\n` +
-        `│\n` +
+        `╭─── 🌐 *REQUEST* ───╮\n` +
         `│ ${statusEmoji(status)} *Status:* ${status} ${statusText || ''}\n` +
-        `│ ⏱️ *Duration:* ${duration} ms\n` +
-        `│ 📦 *Size:* ${fmtSize(sizeBytes)}\n` +
-        `│ 🔗 *URL:* ${url}\n` +
-        `│ 🔄 *Method:* ${method}\n` +
-        (Object.keys(headers).length
-            ? `│\n│ 📤 *Request Headers:*\n` +
-              Object.entries(headers).map(([k, v]) => `│   ${k}: ${v}`).join('\n') + '\n'
-            : '') +
-        `│\n` +
-        `│ 📡 *Response Headers:*\n` +
-        (filteredHeaders || '│   (none)') + '\n' +
-        `│\n` +
-        `│ 📄 *Response Body:*\n` +
-        `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `│ ⏱️ Speed: ${duration} ms | 📦 Size: ${fmtSize(sizeBytes)}\n` +
+        `│ 📌 Headers: ${hdrLine}\n` +
+        `╰────────────────────╯\n\n` +
         `\`\`\`\n${formattedBody}\n\`\`\`\n\n_Daratech_ ⚡`;
 
     await sock.sendMessage(chatId, { text: out }, { quoted: message });
