@@ -305,7 +305,12 @@ const _handledMsgIds = new Set();
 async function handleMessages(sock, messageUpdate, printLog) {
     try {
         const { messages, type } = messageUpdate;
-        if (type !== 'notify') return;
+        // 'notify' = incoming messages from others.
+        // 'append' = messages sent FROM this device/account (fromMe).
+        // Allow 'append' only when it's a real fromMe command — this lets the owner
+        // use bot commands in any DM chat (not just their self-chat or groups).
+        // All other non-notify types (history sync, receipts, etc.) are skipped.
+        if (type !== 'notify' && !(type === 'append' && messages[0]?.key?.fromMe)) return;
 
         const message = messages[0];
 
