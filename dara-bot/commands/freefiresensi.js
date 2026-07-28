@@ -1,0 +1,126 @@
+'use strict';
+const { isKnownBrand } = require('../lib/brandCheck');
+
+/**
+ * $freefiresensi <device name> <RAM>GB <Android|iOS>
+ * e.g.  $freefiresensi Samsung S23 Ultra 12GB Android
+ *       $freefiresensi iPhone 15 Pro Max 8GB iOS
+ *
+ * All info in one line — no back-and-forth steps.
+ */
+
+const USAGE =
+    `🎮 *FREE FIRE SENSITIVITY*\n\n` +
+    `Usage: *$freefiresensi <device> [RAM]GB <Android|iOS>*\n\n` +
+    `Examples:\n` +
+    `• $freefiresensi Samsung S23 Ultra 12GB Android\n` +
+    `• $freefiresensi iPhone 15 Pro Max iOS\n` +
+    `• $freefiresensi POCO X6 Pro Android\n\n` +
+    `_RAM is optional — defaults to 6 GB if not given_`;
+
+function rand(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
+
+function generateSensitivity(ram, isIOS) {
+    let general, redDot, scope2x, scope4x, sniperScope, freeLook, dpi = null;
+
+    if (isIOS) {
+        if (ram >= 8) {
+            general = rand(95, 110); redDot = rand(85, 100); scope2x = rand(75, 85);
+            scope4x = rand(60, 70); sniperScope = rand(35, 45); freeLook = rand(100, 120);
+        } else if (ram >= 6) {
+            general = rand(90, 105); redDot = rand(80, 95); scope2x = rand(70, 80);
+            scope4x = rand(55, 65); sniperScope = rand(30, 40); freeLook = rand(95, 115);
+        } else {
+            general = rand(85, 100); redDot = rand(75, 90); scope2x = rand(65, 75);
+            scope4x = rand(50, 60); sniperScope = rand(25, 35); freeLook = rand(90, 110);
+        }
+    } else {
+        if (ram >= 12) {
+            general = rand(100, 120); redDot = rand(90, 105); scope2x = rand(80, 90);
+            scope4x = rand(65, 75); sniperScope = rand(40, 50); freeLook = rand(110, 130);
+        } else if (ram >= 8) {
+            general = rand(95, 110); redDot = rand(85, 100); scope2x = rand(75, 85);
+            scope4x = rand(60, 70); sniperScope = rand(35, 45); freeLook = rand(105, 125);
+        } else if (ram >= 6) {
+            general = rand(90, 105); redDot = rand(80, 95); scope2x = rand(70, 80);
+            scope4x = rand(55, 65); sniperScope = rand(30, 40); freeLook = rand(100, 120);
+        } else {
+            general = rand(80, 95); redDot = rand(70, 85); scope2x = rand(60, 70);
+            scope4x = rand(45, 55); sniperScope = rand(25, 35); freeLook = rand(90, 110);
+        }
+        const dpis = [320, 360, 400, 440, 480, 520, 560];
+        dpi = dpis[Math.floor(Math.random() * dpis.length)];
+        if (general > 100) dpi -= 40;
+        if (general > 120) dpi -= 20;
+        dpi = Math.max(dpi, 280);
+    }
+
+    return { general, redDot, scope2x, scope4x, sniperScope, freeLook, dpi };
+}
+
+async function freefireSensitivityCommand(sock, chatId, message, userMessage) {
+    try {
+        // Strip command prefix and get args
+        const args = userMessage.replace(/^\$freefiresensi\s*/i, '').trim();
+
+        if (!args) {
+            return sock.sendMessage(chatId, { text: USAGE }, { quoted: message });
+        }
+
+        // Detect platform — last word that is Android/iOS/iPhone
+        const platformMatch = args.match(/\b(android|ios|iphone|ipad)\b/i);
+        if (!platformMatch) {
+            return sock.sendMessage(chatId, {
+                text: `❌ Platform not found. End your message with *Android* or *iOS*.\n\n${USAGE}`
+            }, { quoted: message });
+        }
+        const platform = platformMatch[0];
+        const isIOS = /ios|iphone|ipad/i.test(platform);
+
+        // Detect RAM — a number followed by GB (optional, defaults to 6 GB)
+        const ramMatch = args.match(/(\d+)\s*gb/i);
+        const ram = ramMatch ? parseInt(ramMatch[1]) : 6;
+
+        // Device name = everything before the RAM part (or platform part)
+        const deviceName = args
+            .replace(/\d+\s*gb/i, '')
+            .replace(/\b(android|ios|iphone|ipad)\b/i, '')
+            .replace(/\s+/g, ' ')
+            .trim() || 'Unknown Device';
+
+        if (!isKnownBrand(args)) {
+            return sock.sendMessage(chatId, {
+                text: `❌ *"${deviceName}"* doesn't look like a real phone model.\n\nPlease use your actual device name.\nExamples: *Samsung S23 Ultra*, *iPhone 15 Pro Max*, *POCO X6 Pro*`
+            }, { quoted: message });
+        }
+
+        const s = generateSensitivity(ram, isIOS);
+
+        const text = [
+            `🎮 *FREE FIRE SENSITIVITY*`,
+            `━━━━━━━━━━━━━━━━━━━━`,
+            `📱 *${deviceName.toUpperCase()}*`,
+            `💾 ${ramMatch ? `RAM: ${ram}GB  •  ` : ''}${isIOS ? 'iPhone/iOS' : 'Android'}`,
+            `━━━━━━━━━━━━━━━━━━━━`,
+            ``,
+            `🔵 General      → *${s.general}*`,
+            `🔴 Red Dot      → *${s.redDot}*`,
+            `🔭 2x Scope     → *${s.scope2x}*`,
+            `🔭 4x Scope     → *${s.scope4x}*`,
+            `🎯 Sniper Scope → *${s.sniperScope}*`,
+            `👁️ Free Look     → *${s.freeLook}*`,
+            s.dpi ? `⚙️ DPI          → *${s.dpi}*` : `📱 _iOS — no DPI setting_`,
+            ``,
+            `━━━━━━━━━━━━━━━━━━━━`,
+            `_Generated by Daratech_ 🫶`,
+        ].join('\n');
+
+        await sock.sendMessage(chatId, { text }, { quoted: message });
+
+    } catch (error) {
+        console.error('[freefiresensi]', error.message);
+        await sock.sendMessage(chatId, { text: '❌ Failed to generate sensitivity.' }, { quoted: message });
+    }
+}
+
+module.exports = freefireSensitivityCommand;

@@ -21,6 +21,7 @@ package-lock.json
 .replit
 attached_assets/
 artifacts/
+dara-bot/
 
 # ── Editor ───────────────────────────────────────────────────────────
 .idea/
