@@ -274,7 +274,7 @@ const CATEGORIES = [
             '── 🌐 WEB ──',
             '$gsearch <query>      → Google web search (top 6 results)',
             '$gimage <query>       → Google image search',
-            '$get <url>            → fetch any image from a URL and send it',
+            '$get <url>            → fetch images, videos, audio, JSON or any file from a URL',
             '',
             '── 🎵 MUSIC ──',
             '$yts / $ytsearch <q>  → YouTube video search (top 7)',

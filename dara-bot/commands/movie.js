@@ -267,8 +267,15 @@ async function downloadBuffer(url, sizeHint) {
             timeout: 120000,        // 2 min — large files need time
             maxContentLength: VIDEO_LIMIT + 1,
             maxBodyLength:    VIDEO_LIMIT + 1,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+            },
         });
-        return Buffer.from(resp.data);
+        return {
+            buf: Buffer.from(resp.data),
+            contentType: (resp.headers['content-type'] || 'video/mp4').split(';')[0].trim().toLowerCase(),
+        };
     } catch (err) {
         console.warn('[movie:downloadBuffer] failed:', err.message);
         return null;
@@ -323,14 +330,16 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
 
     // Download to buffer (capped at 64 MB) — CDN URLs are short-lived signed
     // tokens; passing them directly to WA often results in 403 after expiry.
-    const buf      = await downloadBuffer(dlUrl, sizeHint);
-    const size     = buf?.length || parseInt(sizeHint) || 0;
+    const dlResult  = await downloadBuffer(dlUrl, sizeHint);
+    const buf       = dlResult?.buf || null;
+    const mimeType  = (dlResult?.contentType?.startsWith('video/') ? dlResult.contentType : 'video/mp4');
+    const size      = buf?.length || parseInt(sizeHint) || 0;
 
     // ── Tier 1: send as video (inline player, ≤ 64 MB) ──────────────────────────
     if (buf && size <= VIDEO_LIMIT) {
         try {
             await sock.sendMessage(chatId, {
-                video: buf, mimetype: 'video/mp4', caption,
+                video: buf, mimetype: mimeType, caption,
             }, { quoted: message });
             if (linksText) await sock.sendMessage(chatId, { text: linksText }, { quoted: message });
             return;
@@ -349,7 +358,7 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
 
         await sock.sendMessage(chatId, {
             ...docMedia,
-            mimetype: 'video/mp4',
+            mimetype: mimeType,
             fileName,
             caption,
         }, { quoted: message });
