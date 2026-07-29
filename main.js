@@ -147,6 +147,7 @@ const { antigroupmentionCommand, handleAntigroupmentionMessage } = require('./co
 const { autostickerCommand, handleAutostickerMessage } = require('./commands/autosticker');
 const { cleanCommand, storeForClean } = require('./commands/clean');
 const { dbstatsCommand } = require('./commands/dbstats');
+const consolelogCommand = require('./commands/consolelog');
 const clearTmpCommand = require('./commands/cleartmp');
 const setProfilePicture = require('./commands/setpp');
 const { setGroupDescription, setGroupName, setGroupPhoto } = require('./commands/groupmanage');
@@ -570,7 +571,7 @@ if (checkAFK(senderId)) {
             adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$reportnum', '$bots'];
+        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$consolelog', '$reportnum', '$bots'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -1555,6 +1556,9 @@ case userMessage.startsWith('$bssensi'):
                 break;
             case userMessage.startsWith('$dbstats'):
                 await dbstatsCommand(sock, chatId, senderId, message);
+                break;
+            case userMessage.startsWith('$consolelog'):
+                await consolelogCommand(sock, chatId, senderId, message, userMessage);
                 break;
             case userMessage.startsWith('$autorecording'):
                 await handleAutoRecordingCommand(sock, chatId, senderId, message);

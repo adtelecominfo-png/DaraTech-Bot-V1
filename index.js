@@ -1,3 +1,6 @@
+// Start capturing console output into the in-memory log buffer ASAP
+require('./lib/logger');
+
 /**
  * DaratechMD- A WhatsApp Bot
  * Copyright (c) 2024 Daratech SHOP
