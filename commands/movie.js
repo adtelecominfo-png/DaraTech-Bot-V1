@@ -265,8 +265,8 @@ async function downloadBuffer(url, sizeHint) {
         const resp = await axios.get(url, {
             responseType: 'arraybuffer',
             timeout: 120000,        // 2 min — large files need time
-            maxContentLength: VIDEO_LIMIT + 1,
-            maxBodyLength:    VIDEO_LIMIT + 1,
+            maxContentLength: Infinity,
+            maxBodyLength:    Infinity,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept': '*/*',
