@@ -49,11 +49,20 @@ async function ttsCommand(sock, chatId, text, message, language = 'en') {
     // Convert MP3 → OGG/OPUS (WhatsApp Baileys v7 requires Opus for audio bubbles)
     const oggBuf = await toOgg(mp3Buf);
 
-    await sock.sendMessage(chatId, {
-        audio:    oggBuf,
-        mimetype: 'audio/ogg; codecs=opus',
-        ptt:      false,
-    }, { quoted: message });
+    if (oggBuf) {
+        await sock.sendMessage(chatId, {
+            audio:    oggBuf,
+            mimetype: 'audio/ogg; codecs=opus',
+            ptt:      false,
+        }, { quoted: message });
+    } else {
+        // ffmpeg unavailable — send as MP3 document fallback
+        await sock.sendMessage(chatId, {
+            document: mp3Buf,
+            mimetype: 'audio/mpeg',
+            fileName: 'tts.mp3',
+        }, { quoted: message });
+    }
 }
 
 module.exports = ttsCommand;

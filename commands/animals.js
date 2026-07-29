@@ -188,7 +188,7 @@ async function raccoonCommand(sock, chatId, message) {
         let imgBuf, fact = '';
         try {
             // loremflickr bypasses CF entirely
-            imgBuf = await fetchImgBuf(flickrUrl('raccoon'));
+            imgBuf = await flickrImg('raccoon');
         } catch {
             const { data } = await axios.get(`${SRA}/raccoon`, { timeout: 12000, headers: SRA_HEADERS });
             imgBuf = await fetchImgBuf(data.image);
