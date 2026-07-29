@@ -2011,7 +2011,7 @@ case userMessage.startsWith('$bssensi'):
                 break;
             case userMessage === '$apimovie':
                 await sock.sendMessage(chatId, {
-                    text: `╭─〔 🎬 MOVIE API 〕─╮\n│\n│  🌐 *Daratech Movie API*\n│\n│  Access our full movie database,\n│  streaming links, and download\n│  endpoints via the API below:\n│\n│  🔗 [https://movieapi.runflix.name.ng](https://movieapi.runflix.name.ng)\n│     or 🔗 [https://apimovie.runflix.name.ng](https://apimovie.runflix.name.ng)\n│\n╰────────────────────────────────────╯\n\n_Daratech_ ⚡
+                    text: `╭─〔 🎬 MOVIE API 〕─╮\n│\n│  🌐 *Daratech Movie API*\n│\n│  Access our full movie database,\n│  streaming links, and download\n│  endpoints via the API below:\n│\n│  🔗 https://movieapi.runflix.name.ng\n│\n│or 🔗 https://apimovie.runflix.name.ng\n│\n╰────────────────────────────────────╯\n\n_Daratech_ ⚡
 `,
                 }, { quoted: message });
                 commandExecuted = true;
