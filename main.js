@@ -305,6 +305,19 @@ const _handledMsgIds = new Set();
 async function handleMessages(sock, messageUpdate, printLog) {
     try {
         const { messages, type } = messageUpdate;
+
+        // --- TEMPORARY DM DEBUG ---
+        if (messages?.[0]) {
+            const _m = messages[0];
+            const _jid = _m?.key?.remoteJid || '';
+            const _isDM = !_jid.endsWith('@g.us') && _jid !== 'status@broadcast';
+            if (_isDM) {
+                const _txt = _m?.message?.conversation || _m?.message?.extendedTextMessage?.text || '(no text)';
+                console.log(`[DM-DEBUG] type=${type} fromMe=${_m?.key?.fromMe} jid=${_jid} text=${_txt}`);
+            }
+        }
+        // --- END TEMPORARY DM DEBUG ---
+
         // 'notify' = incoming messages from others.
         // 'append' = messages sent FROM this device/account (fromMe).
         // Allow 'append' only when it's a real fromMe command — this lets the owner
