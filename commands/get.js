@@ -40,7 +40,9 @@ async function getCommand(sock, chatId, message) {
                 'User-Agent': 'Daratech-Bot/1.0',
                 'Accept': '*/*',
             },
-            timeout: 20000,
+            timeout: 120000,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
         });
 
         const contentType = (res.headers['content-type'] || '').toLowerCase();
