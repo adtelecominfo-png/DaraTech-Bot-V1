@@ -343,11 +343,21 @@ async function dirCommand(sock, chatId, message, userMessage) {
         return searchDirCommand(sock, chatId, message, q);
     }
 
-    const absPath = safePath(arg);
+    let absPath = safePath(arg);
     if (!absPath) {
         return sock.sendMessage(chatId, {
             text: '❌ Invalid path — cannot navigate outside bot directory.',
         }, { quoted: message });
+    }
+
+    // Case-insensitive fallback: if exact path not found, scan parent dir
+    if (!fs.existsSync(absPath)) {
+        const parent = path.dirname(absPath);
+        const target = path.basename(absPath).toLowerCase();
+        if (fs.existsSync(parent)) {
+            const match = fs.readdirSync(parent).find(f => f.toLowerCase() === target);
+            if (match) absPath = path.join(parent, match);
+        }
     }
 
     if (!fs.existsSync(absPath)) {
