@@ -1,4 +1,5 @@
 # ── Runtime / secrets ───────────────────────────────────────────────
+data/sudo.json
 .env
 data/savedoc_config.json
 session/
