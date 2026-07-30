@@ -2,32 +2,62 @@ const settings = require('../settings');
 const { addSudo, removeSudo, getSudoList } = require('../lib/index');
 const isOwnerOrSudo = require('../lib/isOwner');
 
+/**
+ * Normalise a raw number string to a full WhatsApp JID.
+ * Handles local-format numbers (leading 0) by deriving the country code
+ * from the bot owner's number (which is always in international format).
+ *
+ * e.g. owner = "2348100785677", input = "08100785677"
+ *   → country code = "234", local = "8100785677" → "2348100785677@s.whatsapp.net"
+ */
+function normalizeToJid(rawNumber) {
+    const digits = rawNumber.replace(/\D/g, '');
+    if (!digits) return null;
+
+    if (!digits.startsWith('0')) {
+        // Already international format
+        return digits + '@s.whatsapp.net';
+    }
+
+    // Local format — derive country code from owner's number
+    const ownerDigits = (settings.ownerNumber || '').replace(/\D/g, '');
+    if (ownerDigits.length > 10) {
+        // Country code is everything before the last 10 local digits
+        const countryCode = ownerDigits.slice(0, ownerDigits.length - 10);
+        const localWithoutZero = digits.slice(1); // strip leading 0
+        return countryCode + localWithoutZero + '@s.whatsapp.net';
+    }
+
+    // Fallback: just strip the leading 0
+    return digits.slice(1) + '@s.whatsapp.net';
+}
+
 function extractMentionedJid(message) {
     // Check for mentioned JID in quoted message first (when replying)
     const quotedMsg = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    
+
     // Check quoted message for mentions
     if (quotedMsg?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
         return quotedMsg.extendedTextMessage.contextInfo.mentionedJid[0];
     }
-    
+
     // Check for mentions in the current message
     const currentMentions = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
     if (currentMentions.length > 0) {
         return currentMentions[0];
     }
-    
+
     // Check if the quoted message has a participant (sender JID)
     const quotedParticipant = message.message?.extendedTextMessage?.contextInfo?.participant;
     if (quotedParticipant) {
         return quotedParticipant;
     }
-    
-    // Fallback to text extraction
+
+    // Fallback to text extraction — normalize to international format
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-    const match = text.match(/\b(\d{7,15})\b/);
-    if (match) return match[1] + '@s.whatsapp.net';
-    
+    const match = text.match(/\b(0?\d{7,14})\b/);
+    if (match) return normalizeToJid(match[1]);
+
     return null;
 }
 
@@ -40,7 +70,7 @@ async function sudoCommand(sock, chatId, message) {
     const sub = (args[0] || '').toLowerCase();
 
     if (!sub || !['add', 'del', 'remove', 'list'].includes(sub)) {
-        await sock.sendMessage(chatId, { text: 'Usage:\n.sudo add <@user|number>\n.sudo del <@user|number>\n.sudo list' }, {quoted: message});
+        await sock.sendMessage(chatId, { text: 'Usage:\n$sudo add <@user|number>\n$sudo del <@user|number>\n$sudo list' }, {quoted: message});
         return;
     }
 
