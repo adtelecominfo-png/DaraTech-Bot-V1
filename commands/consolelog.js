@@ -49,8 +49,11 @@ async function consolelogCommand(sock, chatId, senderId, message, userMessage) {
         `┃ Last *${lines.length}* entr${lines.length === 1 ? 'y' : 'ies'}\n` +
         `┃\n`;
 
+    // Break URLs so WhatsApp doesn't render link previews
+    const breakUrls = s => s.replace(/https?:\/\//g, match => match.replace('://', '​://'));
+
     const body = lines
-        .map((l, i) => `┃ *${String(i + 1).padStart(2, '0')}* ${l}`)
+        .map((l, i) => `┃ *${String(i + 1).padStart(2, '0')}* ${breakUrls(l)}`)
         .join('\n');
 
     const footer = `\n┃\n╰━━━━━━━━━━━━━━━━━━━━━\n\n_Daratech_ ⚡`;
