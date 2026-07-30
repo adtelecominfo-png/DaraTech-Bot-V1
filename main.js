@@ -559,7 +559,7 @@ if (checkAFK(senderId)) {
             adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$reportnum', '$bots'];
+        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$consolelog', '$reportnum', '$bots'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
