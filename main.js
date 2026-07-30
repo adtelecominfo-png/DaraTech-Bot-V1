@@ -597,7 +597,7 @@ if (checkAFK(senderId)) {
         // Check owner status for owner commands (lazy — only fetches group metadata if needed)
         if (isOwnerCommand) {
             if (!await getSenderIsOwnerOrSudo()) {
-                await sock.sendMessage(chatId, { text: `❌ This command is only available for the owner or sudo!\n\n_[debug] jid: ${senderId}_` }, { quoted: message });
+                await sock.sendMessage(chatId, { text: '❌ This command is only available for the owner or sudo!' }, { quoted: message });
                 return;
             }
         }
