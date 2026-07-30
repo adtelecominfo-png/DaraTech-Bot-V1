@@ -1,16 +1,16 @@
-const settings = require('../settings');
 const { addSudo, removeSudo, getSudoList } = require('../lib/index');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { resolveOwnerNumber } = require('../lib/isOwner');
 
 /**
  * Normalise a raw number string to a full WhatsApp JID.
- * Handles local-format numbers (leading 0) by deriving the country code
- * from the bot owner's number (which is always in international format).
+ * Derives the country code from the live sock owner number so it works
+ * even when OWNER_NUMBER env var is not set.
  *
  * e.g. owner = "2348100785677", input = "08100785677"
  *   → country code = "234", local = "8100785677" → "2348100785677@s.whatsapp.net"
  */
-function normalizeToJid(rawNumber) {
+function normalizeToJid(rawNumber, sock) {
     const digits = rawNumber.replace(/\D/g, '');
     if (!digits) return null;
 
@@ -19,20 +19,20 @@ function normalizeToJid(rawNumber) {
         return digits + '@s.whatsapp.net';
     }
 
-    // Local format — derive country code from owner's number
-    const ownerDigits = (settings.ownerNumber || '').replace(/\D/g, '');
+    // Local format (leading 0) — derive country code from owner's live number
+    const ownerDigits = resolveOwnerNumber(sock).replace(/\D/g, '');
     if (ownerDigits.length > 10) {
-        // Country code is everything before the last 10 local digits
+        // Country code = everything before the last 10 local digits
         const countryCode = ownerDigits.slice(0, ownerDigits.length - 10);
         const localWithoutZero = digits.slice(1); // strip leading 0
         return countryCode + localWithoutZero + '@s.whatsapp.net';
     }
 
-    // Fallback: just strip the leading 0
-    return digits.slice(1) + '@s.whatsapp.net';
+    // Last resort: cannot determine country code — return null so caller can warn
+    return null;
 }
 
-function extractMentionedJid(message) {
+function extractMentionedJid(message, sock) {
     // Check for mentioned JID in quoted message first (when replying)
     const quotedMsg = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 
@@ -53,10 +53,10 @@ function extractMentionedJid(message) {
         return quotedParticipant;
     }
 
-    // Fallback to text extraction — normalize to international format
+    // Fallback to text extraction — normalize to international format using live sock
     const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const match = text.match(/\b(0?\d{7,14})\b/);
-    if (match) return normalizeToJid(match[1]);
+    if (match) return normalizeToJid(match[1], sock);
 
     return null;
 }
@@ -91,9 +91,9 @@ async function sudoCommand(sock, chatId, message) {
     }
 
     if (sub === 'add' || sub === 'del' || sub === 'remove') {
-        const targetJid = extractMentionedJid(message);
+        const targetJid = extractMentionedJid(message, sock);
         if (!targetJid) {
-            await sock.sendMessage(chatId, { text: 'Please mention a user, reply to a user, or provide a number.' }, {quoted: message});
+            await sock.sendMessage(chatId, { text: '❌ Could not resolve number — use international format (e.g. 2348100785677) or @mention the user.' }, {quoted: message});
             return;
         }
 
@@ -104,8 +104,9 @@ async function sudoCommand(sock, chatId, message) {
         }
 
         if (sub === 'del' || sub === 'remove') {
-            const ownerJid = settings.ownerNumber + '@s.whatsapp.net';
-            if (targetJid === ownerJid) {
+            const ownerNum = resolveOwnerNumber(sock);
+            const ownerJid = ownerNum ? `${ownerNum}@s.whatsapp.net` : null;
+            if (ownerJid && targetJid === ownerJid) {
                 await sock.sendMessage(chatId, { text: 'Owner cannot be removed.' }, {quoted: message});
                 return;
             }
