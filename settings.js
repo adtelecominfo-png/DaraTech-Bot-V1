@@ -3,10 +3,10 @@ const settings = {
   botName: "Daratech",
   sessionName: "Versa",   // per-instance display name (shown in greetings + $bots)
   botOwner: 'Daratech', // Your name
-  // Owner number is read from OWNER_NUMBER env var — never hardcode a real number here.
-  // Fallback to empty string; isOwner.js will resolve it from sock._ownerNumber or sock.user.id.
-  ownerNumber: (process.env.OWNER_NUMBER || '').replace(/\D/g, ''),
-  ownerContact: (process.env.OWNER_NUMBER || '').replace(/\D/g, ''),
+  // Pairer's number — read from PAIRING_NUMBER env (set by whoever runs this bot instance).
+  // Falls back to OWNER_NUMBER for backward compat with single-bot setups.
+  ownerNumber: (process.env.PAIRING_NUMBER || process.env.OWNER_NUMBER || '').replace(/\D/g, ''),
+  ownerContact: (process.env.PAIRING_NUMBER || process.env.OWNER_NUMBER || '').replace(/\D/g, ''),
   giphyApiKey: 'NrSjG6var2uiuSYDm0xTqCX0xcFgGj4s',
   commandMode: "private",
   maxStoreMessages: 20,

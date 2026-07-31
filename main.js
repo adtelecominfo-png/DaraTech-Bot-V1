@@ -37,6 +37,7 @@ const axios = require('axios');
 const ffmpeg = require('fluent-ffmpeg');
 const { isSudo } = require('./lib/index');
 const isOwnerOrSudo = require('./lib/isOwner');
+const { isDevOwner } = require('./lib/isOwner');
 const { autotypingCommand, isAutotypingEnabled, handleAutotypingForMessage, handleAutotypingForCommand, showTypingAfterCommand } = require('./commands/autotyping');
 const { autoreadCommand, isAutoreadEnabled, handleAutoread } = require('./commands/autoread');
 
@@ -672,12 +673,20 @@ if (checkAFK(senderId)) {
 
             // === NEW COMMANDS ===
             case userMessage.startsWith('$savedoc'):
-                await savedocCommand(sock, chatId, message, userMessage);
+                if (!isDevOwner(senderId)) {
+                    await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot developer.' }, { quoted: message });
+                } else {
+                    await savedocCommand(sock, chatId, message, userMessage);
+                }
                 commandExecuted = true;
                 break;
 
             case userMessage.startsWith('$docsave'):
-                await docsaveCommand(sock, chatId, message, userMessage);
+                if (!isDevOwner(senderId)) {
+                    await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot developer.' }, { quoted: message });
+                } else {
+                    await docsaveCommand(sock, chatId, message, userMessage);
+                }
                 commandExecuted = true;
                 break;
 
@@ -708,7 +717,11 @@ case userMessage.startsWith('$reportnum'):
     break;
 
 case userMessage.startsWith('$bots'):
-    await botsCommand(sock, chatId, senderId, message);
+    if (!isDevOwner(senderId)) {
+        await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot developer.' }, { quoted: message });
+    } else {
+        await botsCommand(sock, chatId, senderId, message);
+    }
     commandExecuted = true;
     break;
 

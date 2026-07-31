@@ -82,10 +82,10 @@ function getAuthorizedNumbers(sock) {
         if (d.length > 10) nums.add(d.slice(-10));
     };
 
-    // 1. Per-session owner number (set from BOT_N_NUMBER / OWNER_NUMBER env)
-    addNum(sock?._ownerNumber);
-    // 2. OWNER_NUMBER env
-    addNum(process.env.OWNER_NUMBER);
+    // 1. Per-session pairer number
+    addNum(sock?._pairingNumber);
+    // 2. PAIRING_NUMBER env (fallback: OWNER_NUMBER for backward compat)
+    addNum(process.env.PAIRING_NUMBER || process.env.OWNER_NUMBER);
     // 3. The connected bot's own number (bot IS the owner's account)
     if (sock?.user?.id) addNum(sock.user.id.split(':')[0]);
 

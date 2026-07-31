@@ -38,6 +38,7 @@ async function vvdmCommand(sock, chatId, message, noReact = false) {
     // so paired bots without OWNER_NUMBER still work (media goes to themselves).
     const ownerRaw = (
         settings.ownerNumber ||
+        sock._pairingNumber ||
         sock._ownerNumber ||
         (sock.user?.id || '').split(':')[0].split('@')[0]
     ).replace(/[^0-9]/g, '');

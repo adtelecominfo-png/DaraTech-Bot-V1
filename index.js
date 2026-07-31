@@ -94,7 +94,10 @@ setInterval(() => {
     }
 }, 30_000);
 
-let phoneNumber = (process.env.OWNER_NUMBER || '').replace(/\D/g, '')
+// PAIRING_NUMBER = the number of whoever is pairing/running this bot instance.
+// OWNER_NUMBER   = the developer's private number (never used for pairing).
+// Backward compat: if PAIRING_NUMBER not set, fall back to OWNER_NUMBER.
+let phoneNumber = (process.env.PAIRING_NUMBER || process.env.OWNER_NUMBER || '').replace(/\D/g, '')
 let owner = JSON.parse(fs.readFileSync('./data/owner.json'))
 
 global.botname = "Daratech"
@@ -242,9 +245,10 @@ async function startSession(config = {}) {
         })
 
         // Tag socket with session identity so main.js / isOwner / commands can read them
-        XeonBotInc._sessionId    = sessionId;
-        XeonBotInc._sessionName  = sessionName;
-        XeonBotInc._ownerNumber  = sessionOwnerNum; // digits-only, may be empty string
+        XeonBotInc._sessionId      = sessionId;
+        XeonBotInc._sessionName    = sessionName;
+        XeonBotInc._pairingNumber  = sessionOwnerNum; // pairer's number — digits-only
+        XeonBotInc._ownerNumber    = (process.env.OWNER_NUMBER || '').replace(/\D/g, ''); // developer's number
 
         // Save credentials when they update.
         // Only sync SESSION_ID to $env after a real successful connection —
