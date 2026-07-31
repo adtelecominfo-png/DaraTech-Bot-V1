@@ -33,8 +33,14 @@ async function vvdmCommand(sock, chatId, message, noReact = false) {
         return sock.sendMessage(chatId, { text: '❌ Please reply to a view-once image or video.' }, { quoted: message });
     }
 
-    // Build owner JID
-    const ownerRaw = (settings.ownerNumber || '').replace(/[^0-9]/g, '');
+    // Build owner JID — prefer OWNER_NUMBER env, then per-session owner number
+    // (sock._ownerNumber, set at pairing), then fall back to the bot's own number
+    // so paired bots without OWNER_NUMBER still work (media goes to themselves).
+    const ownerRaw = (
+        settings.ownerNumber ||
+        sock._ownerNumber ||
+        (sock.user?.id || '').split(':')[0].split('@')[0]
+    ).replace(/[^0-9]/g, '');
     if (!ownerRaw) {
         return sock.sendMessage(chatId, { text: '❌ Owner number not configured.' }, { quoted: message });
     }
