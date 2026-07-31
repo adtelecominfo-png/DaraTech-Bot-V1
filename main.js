@@ -673,11 +673,7 @@ if (checkAFK(senderId)) {
 
             // === NEW COMMANDS ===
             case userMessage.startsWith('$savedoc'):
-                if (!isDevOwner(senderId)) {
-                    await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot developer.' }, { quoted: message });
-                } else {
-                    await savedocCommand(sock, chatId, message, userMessage);
-                }
+                await savedocCommand(sock, chatId, message, userMessage);
                 commandExecuted = true;
                 break;
 
