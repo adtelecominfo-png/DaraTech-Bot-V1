@@ -7,7 +7,7 @@ const USER_GROUP_DATA   = path.join(__dirname, '../data/userGroupData.json');
 const RIMURU_MEMORY_DIR = path.join(__dirname, '../data/rimuru_memory');
 if (!fs.existsSync(RIMURU_MEMORY_DIR)) fs.mkdirSync(RIMURU_MEMORY_DIR, { recursive: true });
 
-const RIMURU_RESPONSE_MARKER = 'Rimuru 🔵';
+const RIMURU_RESPONSE_MARKER = 'Rîmîřǔ 🔵';
 const rimuruResponseMessageIds = new Set();
 
 // ─── In-memory cache: memKey → { messages, userInfo } ────────────────────────
@@ -210,7 +210,7 @@ function buildPrompt(userMessage, context) {
 function cleanReply(raw) {
     if (!raw) return null;
     let s = (typeof raw === 'string' ? raw : (raw.answer || JSON.stringify(raw)))
-        .replace(/^(Rimuru|Rimuru Tempest|Raphael|Ciel|Dara|Bot|AI|Assistant):\s*/i, '')
+        .replace(/^(Rîmîřǔ|Rimuru|Rimuru Tempest|Raphael|Ciel|Dara|Bot|AI|Assistant):\s*/i, '')
         .trim();
 
     // Convert markdown → WhatsApp formatting
@@ -519,7 +519,7 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
     const memKey2    = getMemKey(senderId, chatId);
     const langMode2  = chatMemory.get(memKey2)?.userInfo?.langMode;
     const quotedCtx  = extractQuotedContext(message);
-    const finalQuery = buildQueryWithQuoted(query, quotedCtx, langMode2) || query || 'Greetings! Introduce yourself as Rimuru Tempest.';
+    const finalQuery = buildQueryWithQuoted(query, quotedCtx, langMode2) || query || 'Greetings! Introduce yourself as Rîmîřǔ Tempest.';
 
     await rimuruRespond(sock, chatId, message, finalQuery, senderId);
 }
