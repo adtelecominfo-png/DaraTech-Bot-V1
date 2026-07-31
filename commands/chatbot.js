@@ -227,6 +227,9 @@ function cleanReply(raw) {
         .replace(/^\s*\d+\.\s+/gm, m => m)     // numbered lists: leave as-is
         .trim();
 
+    // Replace every "Rimuru" (any case) in the AI output with the display name
+    s = s.replace(/\bRimuru\b/g, 'Rîmîřǔ').replace(/\brimuru\b/g, 'rîmîřǔ').replace(/\bRIMURU\b/g, 'RÎMÎŘǓ');
+
     return (s.length >= 5 && s.length <= 4000) ? s : null;
 }
 
@@ -446,7 +449,7 @@ async function rimuruRespond(sock, chatId, message, userText, senderId, mentions
 async function handleChatbotCommand(sock, chatId, message, match) {
     if (!match) {
         return sock.sendMessage(chatId, {
-            text: `🔵 *RIMURU TEMPEST SETUP*\n\n*$chatbot on* — Summon Rimuru in this group\n*$chatbot off* — Send him back to Tempest\n*$chatbot status* — Check if he's around\n\n💡 *Tip:* Mention *Rimuru* anywhere in a message and he'll respond — no command needed.`,
+            text: `🔵 *RÎMÎŘǓ TEMPEST SETUP*\n\n*$chatbot on* — Summon Rîmîřǔ in this group\n*$chatbot off* — Send him back to Tempest\n*$chatbot status* — Check if he's around\n\n💡 *Tip:* Mention *Rimuru* anywhere in a message and he'll respond — no command needed.`,
             quoted: message,
         });
     }
@@ -456,9 +459,9 @@ async function handleChatbotCommand(sock, chatId, message, match) {
     const isGroup = chatId.endsWith('@g.us');
 
     if (!isGroup) {
-        if (match === 'on')     { data.chatbot[chatId] = true;  saveUserGroupData(data); return sock.sendMessage(chatId, { text: '✅ Rimuru Tempest enabled for this chat 🔵', quoted: message }); }
-        if (match === 'off')    { delete data.chatbot[chatId];   saveUserGroupData(data); return sock.sendMessage(chatId, { text: '✅ Rimuru Tempest has returned to Tempest.', quoted: message }); }
-        if (match === 'status') return sock.sendMessage(chatId, { text: `🔵 Rimuru status: ${data.chatbot[chatId] ? '✅ active' : '❌ inactive'}`, quoted: message });
+        if (match === 'on')     { data.chatbot[chatId] = true;  saveUserGroupData(data); return sock.sendMessage(chatId, { text: '✅ Rîmîřǔ Tempest enabled for this chat 🔵', quoted: message }); }
+        if (match === 'off')    { delete data.chatbot[chatId];   saveUserGroupData(data); return sock.sendMessage(chatId, { text: '✅ Rîmîřǔ Tempest has returned to Tempest.', quoted: message }); }
+        if (match === 'status') return sock.sendMessage(chatId, { text: `🔵 Rîmîřǔ status: ${data.chatbot[chatId] ? '✅ active' : '❌ inactive'}`, quoted: message });
         return;
     }
 
@@ -472,17 +475,17 @@ async function handleChatbotCommand(sock, chatId, message, match) {
     if (!isAdmin) return sock.sendMessage(chatId, { text: '❌ Only group admins can use this command.', quoted: message });
 
     if (match === 'on') {
-        if (data.chatbot[chatId]) return sock.sendMessage(chatId, { text: '🔵 Rimuru Tempest is already ruling this domain.', quoted: message });
+        if (data.chatbot[chatId]) return sock.sendMessage(chatId, { text: '🔵 Rîmîřǔ Tempest is already ruling this domain.', quoted: message });
         data.chatbot[chatId] = true; saveUserGroupData(data);
-        return sock.sendMessage(chatId, { text: `✅ *Rimuru Tempest has arrived!*\n\nMention *Rimuru* in any message and he'll respond. 🔵\n*Great Sage: All systems online. Ciel standing by.*`, quoted: message });
+        return sock.sendMessage(chatId, { text: `✅ *Rîmîřǔ Tempest has arrived!*\n\nMention *Rimuru* in any message and he'll respond. 🔵\n*Great Sage: All systems online. Ciel standing by.*`, quoted: message });
     }
     if (match === 'off') {
-        if (!data.chatbot[chatId]) return sock.sendMessage(chatId, { text: '🔵 Rimuru Tempest is already gone.', quoted: message });
+        if (!data.chatbot[chatId]) return sock.sendMessage(chatId, { text: '🔵 Rîmîřǔ Tempest is already gone.', quoted: message });
         delete data.chatbot[chatId]; saveUserGroupData(data);
-        return sock.sendMessage(chatId, { text: '✅ Rimuru has returned to the Jura Tempest Federation. Use *$chatbot on* to summon him back.', quoted: message });
+        return sock.sendMessage(chatId, { text: '✅ Rîmîřǔ has returned to the Jura Tempest Federation. Use *$chatbot on* to summon him back.', quoted: message });
     }
     if (match === 'status') {
-        return sock.sendMessage(chatId, { text: `🔵 Rimuru status: ${data.chatbot[chatId] ? '✅ active — ruling this domain' : '❌ inactive — returned to Tempest'}`, quoted: message });
+        return sock.sendMessage(chatId, { text: `🔵 Rîmîřǔ status: ${data.chatbot[chatId] ? '✅ active — ruling this domain' : '❌ inactive — returned to Tempest'}`, quoted: message });
     }
     return sock.sendMessage(chatId, { text: '❌ Usage: $chatbot [on/off/status]', quoted: message });
 }

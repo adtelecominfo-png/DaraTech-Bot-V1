@@ -540,9 +540,11 @@ if (checkAFK(senderId)) {
             }
 
             // Rimuru name trigger — DMs and groups, no $ needed
-            // Matches "Rimuru" in Latin + phonetic transliterations in common scripts
+            // Matches "Rimuru" in Latin + phonetic transliterations in common scripts.
+            // Skip fromMe: the bot's own messages (activation, responses) must never
+            // trigger themselves and cause a loop.
             const RIMURU_TRIGGER = /rimuru|римуру|ريمورو|리무루|リムル|里姆路|ริมุรุ|रिमुरु|ριμουρου|რიმურუ|ሪሙሩ/i;
-            if (RIMURU_TRIGGER.test(userMessage)) {
+            if (!message.key.fromMe && RIMURU_TRIGGER.test(userMessage)) {
                 await handleRimuruNameTrigger(sock, chatId, message, userMessage, senderId);
             }
             return;
