@@ -387,17 +387,27 @@ function buildQueryWithQuoted(query, quoted, langMode) {
     if (!quoted) return query || null;
     const { text: qText, type: qType } = quoted;
 
-    if (langMode?.type === 'swap' && qText) {
+    // If the quoted text is Rimuru's own previous response, don't feed it back
+    // into the prompt — it's already in the conversation history, and injecting
+    // it again causes the AI to echo / repeat the previous reply.
+    const isOwnResponse = qText && qText.startsWith(RIMURU_RESPONSE_MARKER);
+    const effectiveText = isOwnResponse ? '' : qText;
+    const effectiveType = isOwnResponse ? '' : qType;
+
+    if (langMode?.type === 'swap' && effectiveText) {
         return `[Translator mode] The following is a message from the person I am translating with. ` +
                `Using active swap rules, translate it into MY language. ` +
                `Reply with ONLY the translated text.\n` +
-               `Message to translate: "${qText}"`;
+               `Message to translate: "${effectiveText}"`;
     }
 
-    if (query && qText)  return `${query}\n\n(replying to: "${qText}")`;
-    if (query)           return `${query}\n\n(replying to a ${qType || 'message'})`;
-    if (qText)           return qText;
-    return `What can you tell me about this ${qType || 'message'}?`;
+    if (query && effectiveText) return `${query}\n\n(replying to: "${effectiveText}")`;
+    if (query)                  return query;
+    if (effectiveText)          return effectiveText;
+    if (effectiveType)          return `What can you tell me about this ${effectiveType}?`;
+    // Quoted was Rimuru's own response and user sent no additional text —
+    // return null so the caller can decide whether to respond at all.
+    return null;
 }
 
 // ─── Direct Instant Response ──────────────────────────────────────────────────
