@@ -25,7 +25,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@hapi/boom": "^10.0.1",
     "@types/node": "^18.0.6",
-    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "@whiskeysockets/baileys": "7.0.0-rc14",
     "awesome-phonenumber": "^5.9.0",
     "@distube/ytdl-core": "^4.16.10",
     "axios": "^1.8.4",
@@ -43,7 +43,6 @@
     "jimp": "^1.6.0",
     "jsdom": "^22.1.0",
     "libphonenumber-js": "^1.11.18",
-    "libsignal": "^2.0.1",
     "link-preview-js": "^3.0.5",
     "moment-timezone": "^0.5.43",
     "mumaker": "^2.0.0",
@@ -74,7 +73,8 @@
     "ytdl-core": "^4.11.5"
   },
   "overrides": {
-    "jimp": "^1.6.0"
+    "jimp": "^1.6.0",
+    "jsonpath-plus": "^10.0.0"
   },
   "engines": {
     "node": ">=18.0.0"

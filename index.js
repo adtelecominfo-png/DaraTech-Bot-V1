@@ -32,7 +32,6 @@ const {
     generateForwardMessageContent,
     prepareWAMessageMedia,
     generateWAMessageFromContent,
-    generateMessageID,
     downloadContentFromMessage,
     jidDecode,
     proto,
@@ -45,7 +44,17 @@ const NodeCache = require("node-cache")
 const pino = require("pino")
 const readline = require("readline")
 const { parsePhoneNumber } = require("libphonenumber-js")
-const { PHONENUMBER_MCC } = require('@whiskeysockets/baileys/lib/Utils/generics')
+// PHONENUMBER_MCC — internal Baileys path changes between rc versions; use a safe fallback
+let PHONENUMBER_MCC;
+try {
+    ({ PHONENUMBER_MCC } = require('@whiskeysockets/baileys/lib/Utils/generics'));
+} catch {
+    try {
+        ({ PHONENUMBER_MCC } = require('@whiskeysockets/baileys/lib/Utils'));
+    } catch {
+        PHONENUMBER_MCC = {}; // graceful no-op if path changed in this rc version
+    }
+}
 const { rmSync, existsSync } = require('fs')
 const { join } = require('path')
 
