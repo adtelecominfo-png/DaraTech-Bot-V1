@@ -327,20 +327,20 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
                     'mediaKey:', subMsg?.mediaKey ? 'present' : 'MISSING',
                     'fileEncSha256:', subMsg?.fileEncSha256 ? 'present' : 'MISSING');
 
-        // Apply proto.Message.fromObject() ONLY to the inner media message so that
-        // binary fields (mediaKey, fileSha256, fileEncSha256) are correctly typed
-        // as proto bytes when generateWAMessageFromContent encodes the nested proto.
-        // The outer groupStatusMessageV2 wrapper stays as a plain object.
+        // proto.Message.fromObject() must wrap the ENTIRE groupStatusMessageV2 payload.
+        // relayMessage serialises via protobufjs which needs type metadata to correctly
+        // encode nested binary fields (mediaKey, fileSha256, fileEncSha256).
+        // Wrapping only the inner message or using a plain object loses that type info.
         let finalMediaMessage = {};
         if (isImage) finalMediaMessage = { imageMessage:  preparedMedia.imageMessage  };
         if (isVideo) finalMediaMessage = { videoMessage:  preparedMedia.videoMessage  };
         if (isAudio) finalMediaMessage = { audioMessage:  preparedMedia.audioMessage  };
 
-        const innerProto = proto.Message.fromObject(finalMediaMessage);
-
-        await relayGroupStatus(sock, chatId, {
-            groupStatusMessageV2: { message: innerProto },
+        const fullPayload = proto.Message.fromObject({
+            groupStatusMessageV2: { message: finalMediaMessage },
         });
+
+        await relayGroupStatus(sock, chatId, fullPayload);
 
         await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
         return sock.sendMessage(chatId, {
