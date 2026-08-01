@@ -22,6 +22,7 @@ const {
     generateWAMessageFromContent,
     downloadContentFromMessage,
     downloadMediaMessage,
+    proto,
 } = require('@whiskeysockets/baileys');
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -168,37 +169,75 @@ function toVoiceNote(buffer) {
     });
 }
 
+// ── Generate JPEG thumbnail + dimensions from an image buffer (Jimp v0 API) ──
+async function makeThumb(buf) {
+    try {
+        const Jimp = require('jimp');
+        const img  = await Jimp.read(buf);
+        const w    = img.getWidth();
+        const h    = img.getHeight();
+        const thumb = await img
+            .scaleToFit(100, 100)
+            .quality(60)
+            .getBufferAsync(Jimp.MIME_JPEG);
+        return { thumb, width: w, height: h };
+    } catch (_) {
+        return { thumb: null, width: 0, height: 0 };
+    }
+}
+
 // ── Core group-status sender ──────────────────────────────────────────────────
 async function postGroupStatus(sock, groupId, content) {
     const bgColor = content._bgColor || DEFAULT_COLOR;
     delete content._bgColor;
 
+    const isText  = typeof content.text === 'string';
+    const isImage = !isText && (content.image != null);
+
+    // For images: pre-compute thumbnail + dimensions so generateWAMessageContent
+    // doesn't skip them (rc14 sometimes skips thumb generation in status context).
+    if (isImage) {
+        const imgBuf = Buffer.isBuffer(content.image)
+            ? content.image
+            : Buffer.from(content.image);
+        const { thumb, width, height } = await makeThumb(imgBuf);
+        if (thumb)   content.jpegThumbnail = thumb;
+        if (width)   content.width  = width;
+        if (height)  content.height = height;
+    }
+
     // backgroundColor is only valid for TEXT statuses — rc14 rejects it on
     // image/video because the proto field doesn't exist on media messages.
-    const isText = typeof content.text === 'string';
     const uploadOpts = { upload: sock.waUploadToServer };
     if (isText && bgColor) uploadOpts.backgroundColor = bgColor;
 
-    // `inside` is a Baileys proto Message object.  For media types it contains
-    // nested proto sub-objects (imageMessage, videoMessage, …) whose Buffer
-    // fields (mediaKey, fileSha256, fileEncSha256) carry the encryption data
-    // WhatsApp needs to decrypt the status on-device.
-    //
-    // IMPORTANT: do NOT spread `inside` into a plain JS object ( { ...inside } ).
-    // Spreading strips the proto type information from nested objects, causing
-    // generateWAMessageFromContent to silently mis-serialize the Buffer fields
-    // → WhatsApp receives the status but can't decrypt the media → nothing shows.
-    // Pass `inside` directly so proto serialisation stays intact.
+    // generateWAMessageContent uploads media (for image/video/audio) and
+    // returns a proto.Message object with the correct sub-message populated.
     const inside = await generateWAMessageContent(content, uploadOpts);
 
     const secret = crypto.randomBytes(32);
+    const ctxInfo = { messageSecret: secret };
+
+    // Build the outer WAMessage.  groupStatusMessageV2.message must be a
+    // proto.Message — use proto.Message.fromObject() so that every nested
+    // sub-object (imageMessage, videoMessage, …) is a correctly-typed proto
+    // instance.  Plain-object spreading loses the type info on Buffer fields
+    // (mediaKey, fileSha256, fileEncSha256) which causes the WhatsApp client
+    // to silently fail decryption and show nothing.
+    //
+    // The inner messageContextInfo (messageSecret) is required: clients use
+    // it to authenticate the status frame when decrypting the media.
+    const innerMsg = proto.Message.fromObject({
+        ...inside,
+        messageContextInfo: ctxInfo,
+    });
 
     const msg = generateWAMessageFromContent(
         groupId,
         {
-            messageContextInfo: { messageSecret: secret },
+            messageContextInfo: ctxInfo,
             groupStatusMessageV2: {
-                message: inside,   // ← pass proto object directly, never spread
+                message: innerMsg,
             },
         },
         { userJid: sock.user?.id }
