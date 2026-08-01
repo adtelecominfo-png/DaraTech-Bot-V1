@@ -17,7 +17,7 @@
 
 const axios = require('axios');
 
-const MANGA_BASE = 'https://runflix-api-v-3263--trumpmax.replit.app/api/v3/manga';
+const MANGA_BASE = 'https://runflix-api-v-3305--trumpmax344.replit.app/api/v3/manga';
 
 // Cloudflare codes that mean the origin (Replit) is sleeping / starting up
 const SLEEP_CODES = new Set([520, 521, 522, 523, 524]);
