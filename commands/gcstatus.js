@@ -22,6 +22,7 @@ const {
     prepareWAMessageMedia,
     generateWAMessageFromContent,
     downloadMediaMessage,
+    proto,
 } = require('@whiskeysockets/baileys');
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -312,17 +313,33 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
             };
         }
 
+        if (!sock.waUploadToServer) throw new Error('sock.waUploadToServer is not available');
+
         const preparedMedia = await prepareWAMessageMedia(mediaOptions, {
             upload: sock.waUploadToServer,
         });
 
+        console.log('[gcstatus] preparedMedia keys:', Object.keys(preparedMedia));
+        const subMsg = isImage ? preparedMedia.imageMessage
+                     : isVideo ? preparedMedia.videoMessage
+                     : preparedMedia.audioMessage;
+        console.log('[gcstatus] subMsg url:', subMsg?.url, 'directPath:', subMsg?.directPath,
+                    'mediaKey:', subMsg?.mediaKey ? 'present' : 'MISSING',
+                    'fileEncSha256:', subMsg?.fileEncSha256 ? 'present' : 'MISSING');
+
+        // Apply proto.Message.fromObject() ONLY to the inner media message so that
+        // binary fields (mediaKey, fileSha256, fileEncSha256) are correctly typed
+        // as proto bytes when generateWAMessageFromContent encodes the nested proto.
+        // The outer groupStatusMessageV2 wrapper stays as a plain object.
         let finalMediaMessage = {};
         if (isImage) finalMediaMessage = { imageMessage:  preparedMedia.imageMessage  };
         if (isVideo) finalMediaMessage = { videoMessage:  preparedMedia.videoMessage  };
         if (isAudio) finalMediaMessage = { audioMessage:  preparedMedia.audioMessage  };
 
+        const innerProto = proto.Message.fromObject(finalMediaMessage);
+
         await relayGroupStatus(sock, chatId, {
-            groupStatusMessageV2: { message: finalMediaMessage },
+            groupStatusMessageV2: { message: innerProto },
         });
 
         await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
