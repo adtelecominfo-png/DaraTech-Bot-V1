@@ -1,6 +1,20 @@
 const fs = require('fs');
 const path = require('path');
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const { downloadContentFromMessage, downloadMediaMessage } = require('@whiskeysockets/baileys');
+
+async function dlBuffer(mediaObj, mediaType, sock) {
+    try {
+        const fakeMsg = { message: { [`${mediaType}Message`]: mediaObj } };
+        const buf = await downloadMediaMessage(fakeMsg, 'buffer', {}, {
+            reuploadRequest: sock?.updateMediaMessage,
+        });
+        if (buf && buf.length) return buf;
+    } catch (_) {}
+    const stream = await downloadContentFromMessage(mediaObj, mediaType);
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    return Buffer.concat(chunks);
+}
 
 async function ensureGroupAndAdmin(sock, chatId, senderId) {
     const isGroup = chatId.endsWith('@g.us');
@@ -68,9 +82,7 @@ async function setGroupPhoto(sock, chatId, senderId, message) {
         const tmpDir = path.join(process.cwd(), 'tmp');
         if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
 
-        const stream = await downloadContentFromMessage(imageMessage, 'image');
-        let buffer = Buffer.from([]);
-        for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
+        const buffer = await dlBuffer(imageMessage, 'image', sock);
 
         const imgPath = path.join(tmpDir, `gpp_${Date.now()}.jpg`);
         fs.writeFileSync(imgPath, buffer);

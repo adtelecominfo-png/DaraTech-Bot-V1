@@ -1,7 +1,24 @@
 const fs = require('fs');
 const path = require('path');
 const { tmpdir } = require('os');
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const { downloadContentFromMessage, downloadMediaMessage } = require('@whiskeysockets/baileys');
+
+// rc14 helper: try downloadMediaMessage first (handles re-upload of expired URLs),
+// fall back to stream-based downloadContentFromMessage for fresh media.
+async function dlBuffer(mediaObj, mediaType, sock) {
+    try {
+        const fakeMsg = { message: { [`${mediaType}Message`]: mediaObj } };
+        const buf = await downloadMediaMessage(fakeMsg, 'buffer', {}, {
+            reuploadRequest: sock?.updateMediaMessage,
+        });
+        if (buf && buf.length) return buf;
+    } catch (_) {}
+    // Legacy path
+    const stream = await downloadContentFromMessage(mediaObj, mediaType);
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    return Buffer.concat(chunks);
+}
 const { writeFile } = require('fs/promises');
 
 const messageStore = new Map();
@@ -130,14 +147,14 @@ async function storeMessage(sock, message) {
             if (viewOnceContainer.imageMessage) {
                 mediaType = 'image';
                 content = viewOnceContainer.imageMessage.caption || '';
-                const buffer = await downloadContentFromMessage(viewOnceContainer.imageMessage, 'image');
+                const buffer = await dlBuffer(viewOnceContainer.imageMessage, 'image', sock);
                 mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.jpg`);
                 await writeFile(mediaPath, buffer);
                 isViewOnce = true;
             } else if (viewOnceContainer.videoMessage) {
                 mediaType = 'video';
                 content = viewOnceContainer.videoMessage.caption || '';
-                const buffer = await downloadContentFromMessage(viewOnceContainer.videoMessage, 'video');
+                const buffer = await dlBuffer(viewOnceContainer.videoMessage, 'video', sock);
                 mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.mp4`);
                 await writeFile(mediaPath, buffer);
                 isViewOnce = true;
@@ -149,25 +166,25 @@ async function storeMessage(sock, message) {
         } else if (message.message?.imageMessage) {
             mediaType = 'image';
             content = message.message.imageMessage.caption || '';
-            const buffer = await downloadContentFromMessage(message.message.imageMessage, 'image');
+            const buffer = await dlBuffer(message.message.imageMessage, 'image', sock);
             mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.jpg`);
             await writeFile(mediaPath, buffer);
         } else if (message.message?.stickerMessage) {
             mediaType = 'sticker';
-            const buffer = await downloadContentFromMessage(message.message.stickerMessage, 'sticker');
+            const buffer = await dlBuffer(message.message.stickerMessage, 'sticker', sock);
             mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.webp`);
             await writeFile(mediaPath, buffer);
         } else if (message.message?.videoMessage) {
             mediaType = 'video';
             content = message.message.videoMessage.caption || '';
-            const buffer = await downloadContentFromMessage(message.message.videoMessage, 'video');
+            const buffer = await dlBuffer(message.message.videoMessage, 'video', sock);
             mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.mp4`);
             await writeFile(mediaPath, buffer);
         } else if (message.message?.audioMessage) {
             mediaType = 'audio';
             const mime = message.message.audioMessage.mimetype || '';
             const ext = mime.includes('mpeg') ? 'mp3' : (mime.includes('ogg') ? 'ogg' : 'mp3');
-            const buffer = await downloadContentFromMessage(message.message.audioMessage, 'audio');
+            const buffer = await dlBuffer(message.message.audioMessage, 'audio', sock);
             mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.${ext}`);
             await writeFile(mediaPath, buffer);
         }

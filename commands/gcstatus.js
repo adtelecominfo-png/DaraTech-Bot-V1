@@ -21,6 +21,7 @@ const {
     generateWAMessageContent,
     generateWAMessageFromContent,
     downloadContentFromMessage,
+    downloadMediaMessage,
 } = require('@whiskeysockets/baileys');
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -104,7 +105,10 @@ async function checkAuth(sock, chatId, senderId, message) {
 }
 
 // ── Download quoted media buffer ──────────────────────────────────────────────
-async function downloadQuotedMedia(quotedMsg, mtype) {
+// In Baileys rc14 the preferred API is downloadMediaMessage (handles re-upload
+// of expired media via reuploadRequest). We build a minimal fake WAMessage so
+// both APIs remain compatible regardless of Baileys version.
+async function downloadQuotedMedia(quotedMsg, mtype, sock) {
     const typeMap = {
         imageMessage:   'image',
         videoMessage:   'video',
@@ -117,6 +121,19 @@ async function downloadQuotedMedia(quotedMsg, mtype) {
     const mediaObj = quotedMsg[mtype];
     if (!mediaObj) return null;
 
+    // Try downloadMediaMessage first (rc14 preferred path)
+    try {
+        const fakeMsg = { message: { [mtype]: mediaObj } };
+        const buf = await downloadMediaMessage(
+            fakeMsg,
+            'buffer',
+            {},
+            { reuploadRequest: sock?.updateMediaMessage }
+        );
+        if (buf && buf.length) return buf;
+    } catch (_) { /* fall through to legacy path */ }
+
+    // Fallback: stream-based downloadContentFromMessage (still works for fresh media)
     const stream = await downloadContentFromMessage(mediaObj, dlType);
     const chunks = [];
     for await (const chunk of stream) chunks.push(chunk);
@@ -156,10 +173,14 @@ async function postGroupStatus(sock, groupId, content) {
     const bgColor = content._bgColor || DEFAULT_COLOR;
     delete content._bgColor;
 
-    const inside = await generateWAMessageContent(content, {
-        upload: sock.waUploadToServer,
-        backgroundColor: bgColor,
-    });
+    // rc14 fix: backgroundColor is only valid for TEXT statuses.
+    // Passing it for image/video causes generateWAMessageContent to fail
+    // because the proto field doesn't exist on media messages.
+    const isText = typeof content.text === 'string';
+    const uploadOpts = { upload: sock.waUploadToServer };
+    if (isText && bgColor) uploadOpts.backgroundColor = bgColor;
+
+    const inside = await generateWAMessageContent(content, uploadOpts);
 
     const secret = crypto.randomBytes(32);
 
@@ -286,14 +307,16 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
 
         let buf;
         try {
-            buf = await downloadQuotedMedia(quotedMsg, mtype);
+            buf = await downloadQuotedMedia(quotedMsg, mtype, sock);
         } catch (err) {
             return sock.sendMessage(chatId, { text: `❌ Failed to download image.\n\n_${err.message}_` }, { quoted: message });
         }
         if (!buf) return sock.sendMessage(chatId, { text: '❌ Could not read image data.' }, { quoted: message });
 
+        // rc14: explicit mimetype required so Rust bridge picks correct encoder
+        const imgMime = mtype === 'stickerMessage' ? 'image/webp' : (quotedMsg[mtype]?.mimetype || 'image/jpeg');
         try {
-            await postGroupStatus(sock, chatId, { image: buf, caption: text || '' });
+            await postGroupStatus(sock, chatId, { image: buf, mimetype: imgMime, caption: text || '' });
             return sock.sendMessage(chatId, { text: `✅ *Image group status posted!*\n\n_Daratech_ ⚡` }, { quoted: message });
         } catch (err) {
             console.error('[gcstatus/image]', err.message);
@@ -309,14 +332,16 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
 
         let buf;
         try {
-            buf = await downloadQuotedMedia(quotedMsg, mtype);
+            buf = await downloadQuotedMedia(quotedMsg, mtype, sock);
         } catch (err) {
             return sock.sendMessage(chatId, { text: `❌ Failed to download video.\n\n_${err.message}_` }, { quoted: message });
         }
         if (!buf) return sock.sendMessage(chatId, { text: '❌ Could not read video data.' }, { quoted: message });
 
+        // rc14: explicit mimetype required
+        const vidMime = quotedMsg[mtype]?.mimetype || 'video/mp4';
         try {
-            await postGroupStatus(sock, chatId, { video: buf, caption: text || '' });
+            await postGroupStatus(sock, chatId, { video: buf, mimetype: vidMime, caption: text || '' });
             return sock.sendMessage(chatId, { text: `✅ *Video group status posted!*\n\n_Daratech_ ⚡` }, { quoted: message });
         } catch (err) {
             console.error('[gcstatus/video]', err.message);
@@ -332,7 +357,7 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
 
         let buf;
         try {
-            buf = await downloadQuotedMedia(quotedMsg, mtype);
+            buf = await downloadQuotedMedia(quotedMsg, mtype, sock);
         } catch (err) {
             return sock.sendMessage(chatId, { text: `❌ Failed to download audio.\n\n_${err.message}_` }, { quoted: message });
         }
