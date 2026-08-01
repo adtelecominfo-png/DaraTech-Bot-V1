@@ -173,13 +173,22 @@ async function postGroupStatus(sock, groupId, content) {
     const bgColor = content._bgColor || DEFAULT_COLOR;
     delete content._bgColor;
 
-    // rc14 fix: backgroundColor is only valid for TEXT statuses.
-    // Passing it for image/video causes generateWAMessageContent to fail
-    // because the proto field doesn't exist on media messages.
+    // backgroundColor is only valid for TEXT statuses — rc14 rejects it on
+    // image/video because the proto field doesn't exist on media messages.
     const isText = typeof content.text === 'string';
     const uploadOpts = { upload: sock.waUploadToServer };
     if (isText && bgColor) uploadOpts.backgroundColor = bgColor;
 
+    // `inside` is a Baileys proto Message object.  For media types it contains
+    // nested proto sub-objects (imageMessage, videoMessage, …) whose Buffer
+    // fields (mediaKey, fileSha256, fileEncSha256) carry the encryption data
+    // WhatsApp needs to decrypt the status on-device.
+    //
+    // IMPORTANT: do NOT spread `inside` into a plain JS object ( { ...inside } ).
+    // Spreading strips the proto type information from nested objects, causing
+    // generateWAMessageFromContent to silently mis-serialize the Buffer fields
+    // → WhatsApp receives the status but can't decrypt the media → nothing shows.
+    // Pass `inside` directly so proto serialisation stays intact.
     const inside = await generateWAMessageContent(content, uploadOpts);
 
     const secret = crypto.randomBytes(32);
@@ -189,13 +198,10 @@ async function postGroupStatus(sock, groupId, content) {
         {
             messageContextInfo: { messageSecret: secret },
             groupStatusMessageV2: {
-                message: {
-                    ...inside,
-                    messageContextInfo: { messageSecret: secret },
-                },
+                message: inside,   // ← pass proto object directly, never spread
             },
         },
-        {}
+        { userJid: sock.user?.id }
     );
 
     await sock.relayMessage(groupId, msg.message, { messageId: msg.key.id });
