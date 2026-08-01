@@ -2,14 +2,19 @@
 /**
  * gcstatus.js — Post text / image / video / audio as a WhatsApp Group Status
  *
- * $gcstatus <text>              — post a text status (uses saved color or default purple)
- * $gcstatus (reply to image)   — post image as group status
- * $gcstatus (reply to video)   — post video as group status
- * $gcstatus (reply to audio)   — post audio as group status
- * $gcstatus color <name>       — save a custom background color for text statuses in this group
- * $gcstatus color reset        — reset color back to default purple
+ * $gcstatus <text>                    — text status (saved or random color)
+ * $gcstatus <text>,<color>            — text status with inline color
+ * $gcstatus (reply to image)          — image status
+ * $gcstatus (reply to video)          — video status
+ * $gcstatus (reply to audio)          — audio status
+ * $gcstatus color <name>              — save background color for this group
+ * $gcstatus color random              — enable random color for this group
+ * $gcstatus color reset               — reset to default purple
  *
  * Admin-only, group-only.
+ *
+ * Core sending uses prepareWAMessageMedia (not generateWAMessageContent) —
+ * this is the correct Baileys path for groupStatusMessageV2 media.
  */
 
 const crypto = require('crypto');
@@ -18,7 +23,7 @@ const path   = require('path');
 const { PassThrough } = require('stream');
 
 const {
-    generateWAMessageContent,
+    prepareWAMessageMedia,
     generateWAMessageFromContent,
     downloadContentFromMessage,
     downloadMediaMessage,
@@ -26,8 +31,7 @@ const {
 } = require('@whiskeysockets/baileys');
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const DEFAULT_COLOR = '#9C27B0'; // purple
-const CONFIG_PATH   = path.join(__dirname, '../data/gcstatus.json');
+const CONFIG_PATH = path.join(__dirname, '../data/gcstatus.json');
 
 function loadColors() {
     try {
@@ -38,53 +42,71 @@ function loadColors() {
 function saveColors(cfg) {
     try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2)); } catch {}
 }
-function getColor(groupId) {
-    return loadColors()[groupId] || DEFAULT_COLOR;
+function getGroupColor(groupId) {
+    return loadColors()[groupId] ?? null;  // null → random; 'purple' → stored name
 }
-function setColor(groupId, color) {
+function setGroupColor(groupId, value) {
     const cfg = loadColors();
-    cfg[groupId] = color;
+    cfg[groupId] = value;
     saveColors(cfg);
 }
-function resetColor(groupId) {
+function resetGroupColor(groupId) {
     const cfg = loadColors();
     delete cfg[groupId];
     saveColors(cfg);
 }
 
-// ── Color name → hex map ──────────────────────────────────────────────────────
+// ── Color name → ARGB integer map ────────────────────────────────────────────
+// ARGB format: 0xFF<RR><GG><BB>  (alpha always 0xFF = fully opaque)
 const COLOR_MAP = {
-    purple:    '#9C27B0',
-    violet:    '#7B1FA2',
-    pink:      '#E91E63',
-    hotpink:   '#FF4081',
-    red:       '#F44336',
-    orange:    '#FF5722',
-    amber:     '#FF8F00',
-    yellow:    '#FFC107',
-    lime:      '#8BC34A',
-    green:     '#4CAF50',
-    teal:      '#009688',
-    cyan:      '#00BCD4',
-    blue:      '#2196F3',
-    navy:      '#1565C0',
-    indigo:    '#3F51B5',
-    black:     '#212121',
-    dark:      '#263238',
-    grey:      '#607D8B',
-    white:     '#FAFAFA',
-    brown:     '#795548',
-    gold:      '#F9A825',
-    maroon:    '#880E4F',
+    purple:   0xFF9C27B0,
+    violet:   0xFF7B1FA2,
+    pink:     0xFFE91E63,
+    hotpink:  0xFFFF4081,
+    red:      0xFFF44336,
+    orange:   0xFFFF5722,
+    amber:    0xFFFF8F00,
+    yellow:   0xFFFFC107,
+    lime:     0xFF8BC34A,
+    green:    0xFF4CAF50,
+    teal:     0xFF009688,
+    cyan:     0xFF00BCD4,
+    blue:     0xFF2196F3,
+    navy:     0xFF1565C0,
+    indigo:   0xFF3F51B5,
+    black:    0xFF212121,
+    dark:     0xFF263238,
+    grey:     0xFF607D8B,
+    white:    0xFFFAFAFA,
+    brown:    0xFF795548,
+    gold:     0xFFF9A825,
+    maroon:   0xFF880E4F,
 };
 
 const COLOR_NAMES = Object.keys(COLOR_MAP).join(', ');
+const DEFAULT_ARGB = COLOR_MAP.purple;
 
-function resolveColor(input) {
-    const lower = input.toLowerCase();
-    if (COLOR_MAP[lower]) return COLOR_MAP[lower];
-    if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(input)) return input;
+/** Resolve a color name string → ARGB integer, or null if unknown. */
+function resolveArgb(name) {
+    const lower = (name || '').toLowerCase().trim();
+    if (COLOR_MAP[lower] !== undefined) return COLOR_MAP[lower];
+    // bare hex like #9C27B0 or 9C27B0
+    const hex = lower.replace('#', '');
+    if (/^[0-9a-f]{6}$/.test(hex)) return (0xFF000000 + parseInt(hex, 16)) >>> 0;
     return null;
+}
+
+/** Pick the ARGB color for a group, falling back to random or default. */
+function pickArgb(groupId, inlineColor) {
+    if (inlineColor !== null && inlineColor !== undefined) return inlineColor;
+
+    const saved = getGroupColor(groupId);
+    if (saved === 'random' || saved === null) {
+        // random vivid color
+        const randomHex = Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
+        return (0xFF000000 + parseInt(randomHex, 16)) >>> 0;
+    }
+    return resolveArgb(saved) ?? DEFAULT_ARGB;
 }
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
@@ -106,9 +128,6 @@ async function checkAuth(sock, chatId, senderId, message) {
 }
 
 // ── Download quoted media buffer ──────────────────────────────────────────────
-// In Baileys rc14 the preferred API is downloadMediaMessage (handles re-upload
-// of expired media via reuploadRequest). We build a minimal fake WAMessage so
-// both APIs remain compatible regardless of Baileys version.
 async function downloadQuotedMedia(quotedMsg, mtype, sock) {
     const typeMap = {
         imageMessage:   'image',
@@ -122,19 +141,15 @@ async function downloadQuotedMedia(quotedMsg, mtype, sock) {
     const mediaObj = quotedMsg[mtype];
     if (!mediaObj) return null;
 
-    // Try downloadMediaMessage first (rc14 preferred path)
     try {
         const fakeMsg = { message: { [mtype]: mediaObj } };
         const buf = await downloadMediaMessage(
-            fakeMsg,
-            'buffer',
-            {},
+            fakeMsg, 'buffer', {},
             { reuploadRequest: sock?.updateMediaMessage }
         );
         if (buf && buf.length) return buf;
-    } catch (_) { /* fall through to legacy path */ }
+    } catch (_) {}
 
-    // Fallback: stream-based downloadContentFromMessage (still works for fresh media)
     const stream = await downloadContentFromMessage(mediaObj, dlType);
     const chunks = [];
     for await (const chunk of stream) chunks.push(chunk);
@@ -149,9 +164,7 @@ function toVoiceNote(buffer) {
             const input  = new PassThrough();
             const output = new PassThrough();
             const chunks = [];
-
             input.end(buffer);
-
             ffmpeg(input)
                 .noVideo()
                 .audioCodec('libopus')
@@ -161,7 +174,6 @@ function toVoiceNote(buffer) {
                 .on('error', () => resolve(buffer))
                 .on('end',   () => resolve(Buffer.concat(chunks)))
                 .pipe(output);
-
             output.on('data', c => chunks.push(c));
         } catch {
             resolve(buffer);
@@ -169,77 +181,75 @@ function toVoiceNote(buffer) {
     });
 }
 
-// ── Generate JPEG thumbnail + dimensions from an image buffer (Jimp v0 API) ──
-async function makeThumb(buf) {
-    try {
-        const Jimp = require('jimp');
-        const img  = await Jimp.read(buf);
-        const w    = img.getWidth();
-        const h    = img.getHeight();
-        const thumb = await img
-            .scaleToFit(100, 100)
-            .quality(60)
-            .getBufferAsync(Jimp.MIME_JPEG);
-        return { thumb, width: w, height: h };
-    } catch (_) {
-        return { thumb: null, width: 0, height: 0 };
-    }
-}
-
 // ── Core group-status sender ──────────────────────────────────────────────────
+// Uses prepareWAMessageMedia (not generateWAMessageContent) — this is the
+// correct Baileys path for groupStatusMessageV2 with media.  The reference
+// implementation confirms: upload via prepareWAMessageMedia, extract the
+// sub-message (imageMessage / videoMessage / audioMessage), wrap in
+// groupStatusMessageV2.message, then proto.Message.fromObject() the payload.
+// No messageContextInfo / messageSecret is needed.
+// Do NOT pass explicit mimetype / jpegThumbnail / dimensions to
+// prepareWAMessageMedia — Baileys computes those internally from the buffer,
+// and supplying them externally can corrupt the upload or cause silent discard.
 async function postGroupStatus(sock, groupId, content) {
-    const bgColor = content._bgColor || DEFAULT_COLOR;
-    delete content._bgColor;
+    let messagePayload;
 
-    const isText  = typeof content.text === 'string';
-    const isImage = !isText && (content.image != null);
+    if (content.image || content.video || content.audio) {
+        // ── MEDIA path ────────────────────────────────────────────────────────
+        let mediaOptions = {};
 
-    // For images: pre-compute thumbnail + dimensions so generateWAMessageContent
-    // doesn't skip them (rc14 sometimes skips thumb generation in status context).
-    if (isImage) {
-        const imgBuf = Buffer.isBuffer(content.image)
-            ? content.image
-            : Buffer.from(content.image);
-        const { thumb, width, height } = await makeThumb(imgBuf);
-        if (thumb)   content.jpegThumbnail = thumb;
-        if (width)   content.width  = width;
-        if (height)  content.height = height;
+        if (content.image) {
+            mediaOptions = {
+                image:   Buffer.isBuffer(content.image) ? content.image : Buffer.from(content.image),
+                caption: content.caption || '',
+            };
+        } else if (content.video) {
+            mediaOptions = {
+                video:   content.video,
+                caption: content.caption || '',
+            };
+        } else if (content.audio) {
+            mediaOptions = {
+                audio:    content.audio,
+                mimetype: content.mimetype || 'audio/ogg; codecs=opus',
+                ptt:      content.ptt ?? true,
+            };
+            if (content.seconds)  mediaOptions.seconds  = content.seconds;
+            if (content.waveform) mediaOptions.waveform = content.waveform;
+        }
+
+        const prepared = await prepareWAMessageMedia(
+            mediaOptions,
+            { upload: sock.waUploadToServer }
+        );
+
+        let mediaMessage = {};
+        if (content.image)      mediaMessage = { imageMessage:  prepared.imageMessage  };
+        else if (content.video) mediaMessage = { videoMessage:  prepared.videoMessage  };
+        else if (content.audio) mediaMessage = { audioMessage:  prepared.audioMessage  };
+
+        messagePayload = {
+            groupStatusMessageV2: { message: mediaMessage },
+        };
+
+    } else {
+        // ── TEXT path ─────────────────────────────────────────────────────────
+        messagePayload = {
+            groupStatusMessageV2: {
+                message: {
+                    extendedTextMessage: {
+                        text:            content.text,
+                        backgroundArgb:  content.bgArgb ?? DEFAULT_ARGB,
+                        font:            2,
+                    },
+                },
+            },
+        };
     }
-
-    // backgroundColor is only valid for TEXT statuses — rc14 rejects it on
-    // image/video because the proto field doesn't exist on media messages.
-    const uploadOpts = { upload: sock.waUploadToServer };
-    if (isText && bgColor) uploadOpts.backgroundColor = bgColor;
-
-    // generateWAMessageContent uploads media (for image/video/audio) and
-    // returns a proto.Message object with the correct sub-message populated.
-    const inside = await generateWAMessageContent(content, uploadOpts);
-
-    const secret = crypto.randomBytes(32);
-    const ctxInfo = { messageSecret: secret };
-
-    // Build the outer WAMessage.  groupStatusMessageV2.message must be a
-    // proto.Message — use proto.Message.fromObject() so that every nested
-    // sub-object (imageMessage, videoMessage, …) is a correctly-typed proto
-    // instance.  Plain-object spreading loses the type info on Buffer fields
-    // (mediaKey, fileSha256, fileEncSha256) which causes the WhatsApp client
-    // to silently fail decryption and show nothing.
-    //
-    // The inner messageContextInfo (messageSecret) is required: clients use
-    // it to authenticate the status frame when decrypting the media.
-    const innerMsg = proto.Message.fromObject({
-        ...inside,
-        messageContextInfo: ctxInfo,
-    });
 
     const msg = generateWAMessageFromContent(
         groupId,
-        {
-            messageContextInfo: ctxInfo,
-            groupStatusMessageV2: {
-                message: innerMsg,
-            },
-        },
+        proto.Message.fromObject(messagePayload),
         { userJid: sock.user?.id }
     );
 
@@ -255,85 +265,106 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
     const args = raw.split(/\s+/).slice(1);
     const text = args.join(' ').trim();
 
-    // ── $gcstatus color <name> | reset ────────────────────────────────────────
+    // ── $gcstatus color <name|random|reset> ──────────────────────────────────
     if (args[0]?.toLowerCase() === 'color') {
         const val = args[1]?.toLowerCase();
 
         if (!val) {
-            const cur = getColor(chatId);
-            const curName = Object.keys(COLOR_MAP).find(n => COLOR_MAP[n] === cur) || cur;
+            const saved = getGroupColor(chatId);
+            const displayName = saved === 'random' ? 'random 🎲' : (saved || 'purple (default)');
             return sock.sendMessage(chatId, {
-                text: `╭━━━「 🎨 *GC STATUS COLOR* 」━━━\n` +
-                      `┃\n` +
-                      `┃ Current: *${curName}*\n` +
-                      `┃ (${cur === DEFAULT_COLOR ? 'default' : 'custom'})\n` +
-                      `┃\n` +
-                      `┃ ▸ *$gcstatus color <name>*  — set color\n` +
-                      `┃ ▸ *$gcstatus color reset*   — restore default\n` +
-                      `┃\n` +
-                      `┃ *Available colors:*\n` +
-                      `┃ ${COLOR_NAMES}\n` +
-                      `┃\n` +
-                      `╰━━━━━━━━━━━━━━━━━━━━━\n\n_Daratech_ ⚡`
+                text:
+                    `╭━━━「 🎨 *GC STATUS COLOR* 」━━━\n` +
+                    `┃\n` +
+                    `┃ Current: *${displayName}*\n` +
+                    `┃\n` +
+                    `┃ ▸ *$gcstatus color <name>*   — set color\n` +
+                    `┃ ▸ *$gcstatus color random*   — random each time\n` +
+                    `┃ ▸ *$gcstatus color reset*    — restore default\n` +
+                    `┃\n` +
+                    `┃ *Colors:* ${COLOR_NAMES}\n` +
+                    `┃\n` +
+                    `╰━━━━━━━━━━━━━━━━━━━━━\n\n_Daratech_ ⚡`
             }, { quoted: message });
         }
 
         if (val === 'reset') {
-            resetColor(chatId);
+            resetGroupColor(chatId);
             return sock.sendMessage(chatId, {
                 text: `🎨 *GC Status color reset* to default *purple*.\n\n_Daratech_ ⚡`
             }, { quoted: message });
         }
 
-        const resolved = resolveColor(args[1]);
-        if (!resolved) {
+        if (val === 'random') {
+            setGroupColor(chatId, 'random');
             return sock.sendMessage(chatId, {
-                text: `❌ Unknown color *"${val}"*.\n\nAvailable colors:\n${COLOR_NAMES}\n\n_Daratech_ ⚡`
+                text: `🎲 *GC Status color set to random!*\n\nA new color will be picked each time you post a text status.\n\n_Daratech_ ⚡`
             }, { quoted: message });
         }
 
-        setColor(chatId, resolved);
+        if (!resolveArgb(val)) {
+            return sock.sendMessage(chatId, {
+                text: `❌ Unknown color *"${val}"*.\n\nAvailable:\n${COLOR_NAMES}\n\nor use *random*.\n\n_Daratech_ ⚡`
+            }, { quoted: message });
+        }
+
+        setGroupColor(chatId, val);
         return sock.sendMessage(chatId, {
-            text: `✅ *GC Status color set to ${val}!*\n\nAll future text statuses in this group will use this color.\n\n_Daratech_ ⚡`
+            text: `✅ *GC Status color set to ${val}!*\n\nFuture text statuses in this group will use this color.\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 
     // ── Detect quoted message ─────────────────────────────────────────────────
-    const ctxInfo    = message.message?.extendedTextMessage?.contextInfo;
-    const quotedMsg  = ctxInfo?.quotedMessage;
-    const mtype      = quotedMsg ? Object.keys(quotedMsg)[0] : null;
+    const ctxInfo   = message.message?.extendedTextMessage?.contextInfo;
+    const quotedMsg = ctxInfo?.quotedMessage;
+    const mtype     = quotedMsg ? Object.keys(quotedMsg)[0] : null;
 
     // ── No quoted message → TEXT status ──────────────────────────────────────
     if (!quotedMsg) {
         if (!text) {
             return sock.sendMessage(chatId, {
-                text: `╭━━━「 📢 *GROUP STATUS* 」━━━\n` +
-                      `┃\n` +
-                      `┃ Post content as a group status update.\n` +
-                      `┃\n` +
-                      `┃ *TEXT STATUS:*\n` +
-                      `┃ ▸ $gcstatus <your message>\n` +
-                      `┃\n` +
-                      `┃ *MEDIA STATUS:*\n` +
-                      `┃ ▸ Reply to an image/video/audio\n` +
-                      `┃   with *$gcstatus [optional caption]*\n` +
-                      `┃\n` +
-                      `┃ *CUSTOM COLOR (text only):*\n` +
-                      `┃ ▸ $gcstatus color red\n` +
-                      `┃ ▸ $gcstatus color blue\n` +
-                      `┃ ▸ $gcstatus color reset\n` +
-                      `┃\n` +
-                      `┃ Default color: 🟣 Purple\n` +
-                      `╰━━━━━━━━━━━━━━━━━━━━━\n\n_Daratech_ ⚡`
+                text:
+                    `╭━━━「 📢 *GROUP STATUS* 」━━━\n` +
+                    `┃\n` +
+                    `┃ Post content as a group status update.\n` +
+                    `┃\n` +
+                    `┃ *TEXT STATUS:*\n` +
+                    `┃ ▸ $gcstatus <message>\n` +
+                    `┃ ▸ $gcstatus <message>,<color>\n` +
+                    `┃\n` +
+                    `┃ *MEDIA STATUS:*\n` +
+                    `┃ ▸ Reply to an image/video/audio\n` +
+                    `┃   with *$gcstatus [optional caption]*\n` +
+                    `┃\n` +
+                    `┃ *COLOR CONTROL:*\n` +
+                    `┃ ▸ $gcstatus color red\n` +
+                    `┃ ▸ $gcstatus color random\n` +
+                    `┃ ▸ $gcstatus color reset\n` +
+                    `┃\n` +
+                    `┃ *Colors:* ${COLOR_NAMES}\n` +
+                    `╰━━━━━━━━━━━━━━━━━━━━━\n\n_Daratech_ ⚡`
             }, { quoted: message });
+        }
+
+        // Support inline color: "$gcstatus Hello World,blue"
+        let statusText   = text;
+        let inlineArgb   = null;
+        if (text.includes(',')) {
+            const comma = text.lastIndexOf(',');
+            const maybeColor = text.slice(comma + 1).trim();
+            const resolved   = resolveArgb(maybeColor);
+            if (resolved !== null) {
+                statusText  = text.slice(0, comma).trim();
+                inlineArgb  = resolved;
+            }
         }
 
         await sock.sendMessage(chatId, { text: '📢 _Posting text group status…_' }, { quoted: message });
 
         try {
             await postGroupStatus(sock, chatId, {
-                text,
-                _bgColor: getColor(chatId),
+                text:    statusText,
+                bgArgb:  pickArgb(chatId, inlineArgb),
             });
             return sock.sendMessage(chatId, {
                 text: `✅ *Text group status posted!*\n\n_Daratech_ ⚡`
@@ -358,10 +389,13 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
         }
         if (!buf) return sock.sendMessage(chatId, { text: '❌ Could not read image data.' }, { quoted: message });
 
-        // rc14: explicit mimetype required so Rust bridge picks correct encoder
         const imgMime = mtype === 'stickerMessage' ? 'image/webp' : (quotedMsg[mtype]?.mimetype || 'image/jpeg');
         try {
-            await postGroupStatus(sock, chatId, { image: buf, mimetype: imgMime, caption: text || '' });
+            await postGroupStatus(sock, chatId, {
+                image:   buf,
+                mimetype: imgMime,
+                caption:  text || '',
+            });
             return sock.sendMessage(chatId, { text: `✅ *Image group status posted!*\n\n_Daratech_ ⚡` }, { quoted: message });
         } catch (err) {
             console.error('[gcstatus/image]', err.message);
@@ -383,10 +417,13 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
         }
         if (!buf) return sock.sendMessage(chatId, { text: '❌ Could not read video data.' }, { quoted: message });
 
-        // rc14: explicit mimetype required
         const vidMime = quotedMsg[mtype]?.mimetype || 'video/mp4';
         try {
-            await postGroupStatus(sock, chatId, { video: buf, mimetype: vidMime, caption: text || '' });
+            await postGroupStatus(sock, chatId, {
+                video:    buf,
+                mimetype: vidMime,
+                caption:  text || '',
+            });
             return sock.sendMessage(chatId, { text: `✅ *Video group status posted!*\n\n_Daratech_ ⚡` }, { quoted: message });
         } catch (err) {
             console.error('[gcstatus/video]', err.message);
@@ -408,11 +445,16 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
         }
         if (!buf) return sock.sendMessage(chatId, { text: '❌ Could not read audio data.' }, { quoted: message });
 
-        const vn = await toVoiceNote(buf);
+        const audioMsg = quotedMsg.audioMessage || {};
+        const vn       = await toVoiceNote(buf);
 
         try {
             await postGroupStatus(sock, chatId, {
-                audio: vn, mimetype: 'audio/ogg; codecs=opus', ptt: true,
+                audio:    vn,
+                mimetype: 'audio/ogg; codecs=opus',
+                ptt:      true,
+                seconds:  audioMsg.seconds,
+                waveform: audioMsg.waveform,
             });
             return sock.sendMessage(chatId, { text: `✅ *Audio group status posted!*\n\n_Daratech_ ⚡` }, { quoted: message });
         } catch (err) {
