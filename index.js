@@ -542,18 +542,30 @@ async function startSession(config = {}) {
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut
             const statusCode = lastDisconnect?.error?.output?.statusCode
+            // loggedOut = 401, badSession = 500
+            const isLoggedOut  = statusCode === DisconnectReason.loggedOut || statusCode === 401;
+            const isBadSession = statusCode === 500;
+            const shouldReconnect = !isLoggedOut;
 
-            console.log(chalk.red(`[${sessionName}] Connection closed due to ${lastDisconnect?.error}, reconnecting ${shouldReconnect}`))
+            console.log(chalk.red(`[${sessionName}] Connection closed — statusCode=${statusCode}, reconnecting=${shouldReconnect}`))
             sessionRegistry.setOffline(sessionId, sessionName);
 
-            if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+            if (isLoggedOut || isBadSession) {
+                // Bad/corrupt session: wipe files so next start requests fresh pairing
                 try {
                     rmSync(sessionDir, { recursive: true, force: true })
-                    console.log(chalk.yellow(`[${sessionName}] Session folder deleted. Please re-authenticate.`))
+                    console.log(chalk.yellow(`[${sessionName}] Session files wiped (${isBadSession ? 'bad/corrupt session' : 'logged out'}).`))
                 } catch (error) {
                     console.error(`[${sessionName}] Error deleting session:`, error)
+                }
+                if (isBadSession) {
+                    console.log(chalk.yellow(`[${sessionName}] Bad session detected — restarting for fresh pairing.`))
+                    // Reset phone number so the pairing prompt fires again
+                    global.phoneNumber = (process.env.PAIRING_NUMBER || process.env.OWNER_NUMBER || '').replace(/\D/g, '');
+                    await delay(3000)
+                    startSession(config)
+                    return;
                 }
                 console.log(chalk.red(`[${sessionName}] Session logged out. Please re-authenticate.`))
             }

@@ -678,7 +678,7 @@ if (checkAFK(senderId)) {
                 break;
 
             case userMessage.startsWith('$docsave'):
-                if (!isDevOwner(senderId)) {
+                if (!isDevOwner(senderId, sock)) {
                     await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot developer.' }, { quoted: message });
                 } else {
                     await docsaveCommand(sock, chatId, message, userMessage);
@@ -713,7 +713,7 @@ case userMessage.startsWith('$reportnum'):
     break;
 
 case userMessage.startsWith('$bots'):
-    if (!isDevOwner(senderId)) {
+    if (!isDevOwner(senderId, sock)) {
         await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot developer.' }, { quoted: message });
     } else {
         await botsCommand(sock, chatId, senderId, message);
