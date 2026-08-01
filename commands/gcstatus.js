@@ -319,13 +319,15 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
             upload: sock.waUploadToServer,
         });
 
-        console.log('[gcstatus] preparedMedia keys:', Object.keys(preparedMedia));
         const subMsg = isImage ? preparedMedia.imageMessage
                      : isVideo ? preparedMedia.videoMessage
                      : preparedMedia.audioMessage;
-        console.log('[gcstatus] subMsg url:', subMsg?.url, 'directPath:', subMsg?.directPath,
-                    'mediaKey:', subMsg?.mediaKey ? 'present' : 'MISSING',
-                    'fileEncSha256:', subMsg?.fileEncSha256 ? 'present' : 'MISSING');
+        console.log('[gcstatus] upload ok — url:', !!subMsg?.url,
+            'mediaKey:', subMsg?.mediaKey ? 'present' : 'MISSING',
+            'fileEncSha256:', subMsg?.fileEncSha256 ? 'present' : 'MISSING',
+            'height:', subMsg?.height, 'width:', subMsg?.width,
+            'thumb:', subMsg?.jpegThumbnail ? `${subMsg.jpegThumbnail.length}b` : 'MISSING',
+            'mimetype:', subMsg?.mimetype);
 
         // proto.Message.fromObject() must wrap the ENTIRE groupStatusMessageV2 payload.
         // relayMessage serialises via protobufjs which needs type metadata to correctly
