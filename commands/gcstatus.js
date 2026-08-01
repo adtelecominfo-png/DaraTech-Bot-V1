@@ -117,16 +117,16 @@ async function checkAuth(sock, chatId, senderId, message) {
 }
 
 // ── Core relay helper ─────────────────────────────────────────────────────────
-// IMPORTANT: do NOT wrap payload in proto.Message.fromObject() — that mangles
-// the binary fields (mediaKey, fileSha256, fileEncSha256) inside the
-// groupStatusMessageV2 envelope, causing media to silently fail on clients.
 async function relayGroupStatus(sock, groupId, payload) {
     const generated = generateWAMessageFromContent(
         groupId,
         payload,
         { userJid: sock.user.id }
     );
-    await sock.relayMessage(groupId, generated.message, { messageId: generated.key.id });
+    await sock.relayMessage(groupId, generated.message, {
+        messageId: generated.key.id,
+        additionalAttributes: { category: 'status' },
+    });
     return generated;
 }
 
@@ -329,20 +329,14 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
             'thumb:', subMsg?.jpegThumbnail ? `${subMsg.jpegThumbnail.length}b` : 'MISSING',
             'mimetype:', subMsg?.mimetype);
 
-        // proto.Message.fromObject() must wrap the ENTIRE groupStatusMessageV2 payload.
-        // relayMessage serialises via protobufjs which needs type metadata to correctly
-        // encode nested binary fields (mediaKey, fileSha256, fileEncSha256).
-        // Wrapping only the inner message or using a plain object loses that type info.
         let finalMediaMessage = {};
         if (isImage) finalMediaMessage = { imageMessage:  preparedMedia.imageMessage  };
         if (isVideo) finalMediaMessage = { videoMessage:  preparedMedia.videoMessage  };
         if (isAudio) finalMediaMessage = { audioMessage:  preparedMedia.audioMessage  };
 
-        const fullPayload = proto.Message.fromObject({
+        await relayGroupStatus(sock, chatId, {
             groupStatusMessageV2: { message: finalMediaMessage },
         });
-
-        await relayGroupStatus(sock, chatId, fullPayload);
 
         await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
         return sock.sendMessage(chatId, {
