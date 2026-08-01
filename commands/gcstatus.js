@@ -12,22 +12,16 @@
  * $gcstatus color reset               — reset to default purple
  *
  * Admin-only, group-only.
- *
- * Core sending uses prepareWAMessageMedia (not generateWAMessageContent) —
- * this is the correct Baileys path for groupStatusMessageV2 media.
  */
 
-const crypto = require('crypto');
-const fs     = require('fs');
-const path   = require('path');
-const { PassThrough } = require('stream');
+const fs   = require('fs');
+const path = require('path');
+const pino = require('pino');
 
 const {
     prepareWAMessageMedia,
     generateWAMessageFromContent,
-    downloadContentFromMessage,
     downloadMediaMessage,
-    proto,
 } = require('@whiskeysockets/baileys');
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -43,7 +37,7 @@ function saveColors(cfg) {
     try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2)); } catch {}
 }
 function getGroupColor(groupId) {
-    return loadColors()[groupId] ?? null;  // null → random; 'purple' → stored name
+    return loadColors()[groupId] ?? null;
 }
 function setGroupColor(groupId, value) {
     const cfg = loadColors();
@@ -57,7 +51,6 @@ function resetGroupColor(groupId) {
 }
 
 // ── Color name → ARGB integer map ────────────────────────────────────────────
-// ARGB format: 0xFF<RR><GG><BB>  (alpha always 0xFF = fully opaque)
 const COLOR_MAP = {
     purple:   0xFF9C27B0,
     violet:   0xFF7B1FA2,
@@ -83,26 +76,21 @@ const COLOR_MAP = {
     maroon:   0xFF880E4F,
 };
 
-const COLOR_NAMES = Object.keys(COLOR_MAP).join(', ');
+const COLOR_NAMES  = Object.keys(COLOR_MAP).join(', ');
 const DEFAULT_ARGB = COLOR_MAP.purple;
 
-/** Resolve a color name string → ARGB integer, or null if unknown. */
 function resolveArgb(name) {
     const lower = (name || '').toLowerCase().trim();
     if (COLOR_MAP[lower] !== undefined) return COLOR_MAP[lower];
-    // bare hex like #9C27B0 or 9C27B0
     const hex = lower.replace('#', '');
     if (/^[0-9a-f]{6}$/.test(hex)) return (0xFF000000 + parseInt(hex, 16)) >>> 0;
     return null;
 }
 
-/** Pick the ARGB color for a group, falling back to random or default. */
 function pickArgb(groupId, inlineColor) {
     if (inlineColor !== null && inlineColor !== undefined) return inlineColor;
-
     const saved = getGroupColor(groupId);
     if (saved === 'random' || saved === null) {
-        // random vivid color
         const randomHex = Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
         return (0xFF000000 + parseInt(randomHex, 16)) >>> 0;
     }
@@ -127,134 +115,18 @@ async function checkAuth(sock, chatId, senderId, message) {
     return false;
 }
 
-// ── Download quoted media buffer ──────────────────────────────────────────────
-async function downloadQuotedMedia(quotedMsg, mtype, sock) {
-    const typeMap = {
-        imageMessage:   'image',
-        videoMessage:   'video',
-        audioMessage:   'audio',
-        stickerMessage: 'sticker',
-    };
-    const dlType = typeMap[mtype];
-    if (!dlType) return null;
-
-    const mediaObj = quotedMsg[mtype];
-    if (!mediaObj) return null;
-
-    try {
-        const fakeMsg = { message: { [mtype]: mediaObj } };
-        const buf = await downloadMediaMessage(
-            fakeMsg, 'buffer', {},
-            { reuploadRequest: sock?.updateMediaMessage }
-        );
-        if (buf && buf.length) return buf;
-    } catch (_) {}
-
-    const stream = await downloadContentFromMessage(mediaObj, dlType);
-    const chunks = [];
-    for await (const chunk of stream) chunks.push(chunk);
-    return Buffer.concat(chunks);
-}
-
-// ── Convert audio to OGG/Opus voice note ─────────────────────────────────────
-function toVoiceNote(buffer) {
-    return new Promise((resolve) => {
-        try {
-            const ffmpeg = require('fluent-ffmpeg');
-            const input  = new PassThrough();
-            const output = new PassThrough();
-            const chunks = [];
-            input.end(buffer);
-            ffmpeg(input)
-                .noVideo()
-                .audioCodec('libopus')
-                .format('ogg')
-                .audioChannels(1)
-                .audioFrequency(48000)
-                .on('error', () => resolve(buffer))
-                .on('end',   () => resolve(Buffer.concat(chunks)))
-                .pipe(output);
-            output.on('data', c => chunks.push(c));
-        } catch {
-            resolve(buffer);
-        }
-    });
-}
-
-// ── Core group-status sender ──────────────────────────────────────────────────
-// Uses prepareWAMessageMedia (not generateWAMessageContent) — this is the
-// correct Baileys path for groupStatusMessageV2 with media.  The reference
-// implementation confirms: upload via prepareWAMessageMedia, extract the
-// sub-message (imageMessage / videoMessage / audioMessage), wrap in
-// groupStatusMessageV2.message, then proto.Message.fromObject() the payload.
-// No messageContextInfo / messageSecret is needed.
-// Do NOT pass explicit mimetype / jpegThumbnail / dimensions to
-// prepareWAMessageMedia — Baileys computes those internally from the buffer,
-// and supplying them externally can corrupt the upload or cause silent discard.
-async function postGroupStatus(sock, groupId, content) {
-    let messagePayload;
-
-    if (content.image || content.video || content.audio) {
-        // ── MEDIA path ────────────────────────────────────────────────────────
-        let mediaOptions = {};
-
-        if (content.image) {
-            mediaOptions = {
-                image:   Buffer.isBuffer(content.image) ? content.image : Buffer.from(content.image),
-                caption: content.caption || '',
-            };
-        } else if (content.video) {
-            mediaOptions = {
-                video:   content.video,
-                caption: content.caption || '',
-            };
-        } else if (content.audio) {
-            mediaOptions = {
-                audio:    content.audio,
-                mimetype: content.mimetype || 'audio/ogg; codecs=opus',
-                ptt:      content.ptt ?? true,
-            };
-            if (content.seconds)  mediaOptions.seconds  = content.seconds;
-            if (content.waveform) mediaOptions.waveform = content.waveform;
-        }
-
-        const prepared = await prepareWAMessageMedia(
-            mediaOptions,
-            { upload: sock.waUploadToServer }
-        );
-
-        let mediaMessage = {};
-        if (content.image)      mediaMessage = { imageMessage:  prepared.imageMessage  };
-        else if (content.video) mediaMessage = { videoMessage:  prepared.videoMessage  };
-        else if (content.audio) mediaMessage = { audioMessage:  prepared.audioMessage  };
-
-        messagePayload = {
-            groupStatusMessageV2: { message: mediaMessage },
-        };
-
-    } else {
-        // ── TEXT path ─────────────────────────────────────────────────────────
-        messagePayload = {
-            groupStatusMessageV2: {
-                message: {
-                    extendedTextMessage: {
-                        text:            content.text,
-                        backgroundArgb:  content.bgArgb ?? DEFAULT_ARGB,
-                        font:            2,
-                    },
-                },
-            },
-        };
-    }
-
-    const msg = generateWAMessageFromContent(
+// ── Core relay helper ─────────────────────────────────────────────────────────
+// IMPORTANT: do NOT wrap payload in proto.Message.fromObject() — that mangles
+// the binary fields (mediaKey, fileSha256, fileEncSha256) inside the
+// groupStatusMessageV2 envelope, causing media to silently fail on clients.
+async function relayGroupStatus(sock, groupId, payload) {
+    const generated = generateWAMessageFromContent(
         groupId,
-        proto.Message.fromObject(messagePayload),
-        { userJid: sock.user?.id }
+        payload,
+        { userJid: sock.user.id }
     );
-
-    await sock.relayMessage(groupId, msg.message, { messageId: msg.key.id });
-    return msg;
+    await sock.relayMessage(groupId, generated.message, { messageId: generated.key.id });
+    return generated;
 }
 
 // ── Main command handler ──────────────────────────────────────────────────────
@@ -270,7 +142,7 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
         const val = args[1]?.toLowerCase();
 
         if (!val) {
-            const saved = getGroupColor(chatId);
+            const saved       = getGroupColor(chatId);
             const displayName = saved === 'random' ? 'random 🎲' : (saved || 'purple (default)');
             return sock.sendMessage(chatId, {
                 text:
@@ -316,8 +188,22 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
 
     // ── Detect quoted message ─────────────────────────────────────────────────
     const ctxInfo   = message.message?.extendedTextMessage?.contextInfo;
-    const quotedMsg = ctxInfo?.quotedMessage;
+    const quotedMsg = ctxInfo?.quotedMessage || null;
     const mtype     = quotedMsg ? Object.keys(quotedMsg)[0] : null;
+
+    // Build a proper targetMessage with the real key so downloadMediaMessage works
+    const targetMessage = quotedMsg
+        ? {
+            key: {
+                remoteJid:   chatId,
+                id:          ctxInfo.stanzaId,
+                participant: ctxInfo.participant,
+            },
+            message: quotedMsg,
+        }
+        : message;
+
+    const content = targetMessage.message || {};
 
     // ── No quoted message → TEXT status ──────────────────────────────────────
     if (!quotedMsg) {
@@ -347,127 +233,110 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
         }
 
         // Support inline color: "$gcstatus Hello World,blue"
-        let statusText   = text;
-        let inlineArgb   = null;
+        let statusText = text;
+        let inlineArgb = null;
         if (text.includes(',')) {
-            const comma = text.lastIndexOf(',');
+            const comma      = text.lastIndexOf(',');
             const maybeColor = text.slice(comma + 1).trim();
             const resolved   = resolveArgb(maybeColor);
             if (resolved !== null) {
-                statusText  = text.slice(0, comma).trim();
-                inlineArgb  = resolved;
+                statusText = text.slice(0, comma).trim();
+                inlineArgb = resolved;
             }
         }
 
-        await sock.sendMessage(chatId, { text: '📢 _Posting text group status…_' }, { quoted: message });
+        await sock.sendMessage(chatId, { react: { text: '⏳', key: message.key } });
 
         try {
-            await postGroupStatus(sock, chatId, {
-                text:    statusText,
-                bgArgb:  pickArgb(chatId, inlineArgb),
+            await relayGroupStatus(sock, chatId, {
+                groupStatusMessageV2: {
+                    message: {
+                        extendedTextMessage: {
+                            text:           statusText,
+                            backgroundArgb: pickArgb(chatId, inlineArgb),
+                            font:           2,
+                        },
+                    },
+                },
             });
+            await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
             return sock.sendMessage(chatId, {
                 text: `✅ *Text group status posted!*\n\n_Daratech_ ⚡`
             }, { quoted: message });
         } catch (err) {
-            console.error('[gcstatus/text]', err.message);
+            console.error('[gcstatus/text]', err);
+            await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
             return sock.sendMessage(chatId, {
                 text: `❌ Failed to post text status.\n\n_${err.message}_\n\n_Daratech_ ⚡`
             }, { quoted: message });
         }
     }
 
-    // ── IMAGE / STICKER ───────────────────────────────────────────────────────
-    if (mtype === 'imageMessage' || mtype === 'stickerMessage') {
-        await sock.sendMessage(chatId, { text: '📢 _Posting image group status…_' }, { quoted: message });
+    // ── MEDIA: IMAGE / STICKER / VIDEO / AUDIO ────────────────────────────────
+    const isImage = !!(mtype === 'imageMessage' || mtype === 'stickerMessage');
+    const isVideo = mtype === 'videoMessage';
+    const isAudio = mtype === 'audioMessage';
 
-        let buf;
-        try {
-            buf = await downloadQuotedMedia(quotedMsg, mtype, sock);
-        } catch (err) {
-            return sock.sendMessage(chatId, { text: `❌ Failed to download image.\n\n_${err.message}_` }, { quoted: message });
-        }
-        if (!buf) return sock.sendMessage(chatId, { text: '❌ Could not read image data.' }, { quoted: message });
-
-        const imgMime = mtype === 'stickerMessage' ? 'image/webp' : (quotedMsg[mtype]?.mimetype || 'image/jpeg');
-        try {
-            await postGroupStatus(sock, chatId, {
-                image:   buf,
-                mimetype: imgMime,
-                caption:  text || '',
-            });
-            return sock.sendMessage(chatId, { text: `✅ *Image group status posted!*\n\n_Daratech_ ⚡` }, { quoted: message });
-        } catch (err) {
-            console.error('[gcstatus/image]', err.message);
-            return sock.sendMessage(chatId, {
-                text: `❌ Failed to post image status.\n\n_${err.message}_\n\n_Daratech_ ⚡`
-            }, { quoted: message });
-        }
+    if (!isImage && !isVideo && !isAudio) {
+        return sock.sendMessage(chatId, {
+            text: '❌ Unsupported media type. Reply to an *image*, *video*, or *audio* message.\n\n_Daratech_ ⚡'
+        }, { quoted: message });
     }
 
-    // ── VIDEO ─────────────────────────────────────────────────────────────────
-    if (mtype === 'videoMessage') {
-        await sock.sendMessage(chatId, { text: '📢 _Posting video group status…_' }, { quoted: message });
+    await sock.sendMessage(chatId, { react: { text: '⏳', key: message.key } });
 
-        let buf;
-        try {
-            buf = await downloadQuotedMedia(quotedMsg, mtype, sock);
-        } catch (err) {
-            return sock.sendMessage(chatId, { text: `❌ Failed to download video.\n\n_${err.message}_` }, { quoted: message });
-        }
-        if (!buf) return sock.sendMessage(chatId, { text: '❌ Could not read video data.' }, { quoted: message });
+    try {
+        // Download using the real key so re-upload works correctly
+        const mediaBuffer = await downloadMediaMessage(
+            targetMessage,
+            'buffer',
+            {},
+            {
+                logger:          pino({ level: 'silent' }),
+                reuploadRequest: sock.updateMediaMessage,
+            }
+        );
 
-        const vidMime = quotedMsg[mtype]?.mimetype || 'video/mp4';
-        try {
-            await postGroupStatus(sock, chatId, {
-                video:    buf,
-                mimetype: vidMime,
-                caption:  text || '',
-            });
-            return sock.sendMessage(chatId, { text: `✅ *Video group status posted!*\n\n_Daratech_ ⚡` }, { quoted: message });
-        } catch (err) {
-            console.error('[gcstatus/video]', err.message);
-            return sock.sendMessage(chatId, {
-                text: `❌ Failed to post video status.\n\n_${err.message}_\n\n_Daratech_ ⚡`
-            }, { quoted: message });
+        if (!mediaBuffer || !mediaBuffer.length) throw new Error('Empty media buffer');
+
+        let mediaOptions = {};
+        if (isImage) {
+            mediaOptions = { image: mediaBuffer, caption: text || '' };
+        } else if (isVideo) {
+            mediaOptions = { video: mediaBuffer, caption: text || '' };
+        } else if (isAudio) {
+            mediaOptions = {
+                audio:    mediaBuffer,
+                mimetype: content.audioMessage?.mimetype || 'audio/mp4',
+                ptt:      false,
+            };
         }
+
+        const preparedMedia = await prepareWAMessageMedia(mediaOptions, {
+            upload: sock.waUploadToServer,
+        });
+
+        let finalMediaMessage = {};
+        if (isImage) finalMediaMessage = { imageMessage:  preparedMedia.imageMessage  };
+        if (isVideo) finalMediaMessage = { videoMessage:  preparedMedia.videoMessage  };
+        if (isAudio) finalMediaMessage = { audioMessage:  preparedMedia.audioMessage  };
+
+        await relayGroupStatus(sock, chatId, {
+            groupStatusMessageV2: { message: finalMediaMessage },
+        });
+
+        await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
+        return sock.sendMessage(chatId, {
+            text: `✅ *${isImage ? 'Image' : isVideo ? 'Video' : 'Audio'} group status posted!*\n\n_Daratech_ ⚡`
+        }, { quoted: message });
+
+    } catch (err) {
+        console.error('[gcstatus/media]', err);
+        await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
+        return sock.sendMessage(chatId, {
+            text: `❌ Failed to post media status.\n\n_${err.message}_\n\n_Daratech_ ⚡`
+        }, { quoted: message });
     }
-
-    // ── AUDIO ─────────────────────────────────────────────────────────────────
-    if (mtype === 'audioMessage') {
-        await sock.sendMessage(chatId, { text: '📢 _Posting audio group status…_' }, { quoted: message });
-
-        let buf;
-        try {
-            buf = await downloadQuotedMedia(quotedMsg, mtype, sock);
-        } catch (err) {
-            return sock.sendMessage(chatId, { text: `❌ Failed to download audio.\n\n_${err.message}_` }, { quoted: message });
-        }
-        if (!buf) return sock.sendMessage(chatId, { text: '❌ Could not read audio data.' }, { quoted: message });
-
-        const audioMsg = quotedMsg.audioMessage || {};
-        const vn       = await toVoiceNote(buf);
-
-        try {
-            await postGroupStatus(sock, chatId, {
-                audio:    vn,
-                mimetype: 'audio/ogg; codecs=opus',
-                ptt:      true,
-                seconds:  audioMsg.seconds,
-                waveform: audioMsg.waveform,
-            });
-            return sock.sendMessage(chatId, { text: `✅ *Audio group status posted!*\n\n_Daratech_ ⚡` }, { quoted: message });
-        } catch (err) {
-            console.error('[gcstatus/audio]', err.message);
-            return sock.sendMessage(chatId, {
-                text: `❌ Failed to post audio status.\n\n_${err.message}_\n\n_Daratech_ ⚡`
-            }, { quoted: message });
-        }
-    }
-
-    return sock.sendMessage(chatId, {
-        text: '❌ Unsupported media type. Reply to an *image*, *video*, or *audio* message.\n\n_Daratech_ ⚡'
-    }, { quoted: message });
 }
 
 module.exports = gcstatusCommand;
