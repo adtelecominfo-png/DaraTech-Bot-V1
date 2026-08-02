@@ -248,23 +248,18 @@ function parsePick(pick) {
 }
 
 // ─── Size limits ──────────────────────────────────────────────────────────────
-const VIDEO_LIMIT = 64  * 1024 * 1024; // 64 MB  — WA video message ceiling
-const DOC_LIMIT   = 2   * 1024 * 1024 * 1024; // 2 GB  — WA document ceiling
+const DOC_LIMIT = 2 * 1024 * 1024 * 1024; // 2 GB — WA document ceiling
 
 /**
  * downloadBuffer — fetch a URL into a Buffer.
- * Returns null (don't attempt) if the file is already known to exceed VIDEO_LIMIT,
- * or if the download itself fails (caller falls back to link).
+ * No size cap — server has no fetch limits. Always downloads.
+ * Returns null only if the download itself fails (caller falls back to link).
  */
-async function downloadBuffer(url, sizeHint) {
-    // Skip downloading if the known file size is already over the video ceiling
-    const knownSize = parseInt(sizeHint) || 0;
-    if (knownSize > VIDEO_LIMIT) return null;
-
+async function downloadBuffer(url) {
     try {
         const resp = await axios.get(url, {
             responseType: 'arraybuffer',
-            timeout: 120000,        // 2 min — large files need time
+            timeout: 600000,          // 10 min — large 1080p files need time
             maxContentLength: Infinity,
             maxBodyLength:    Infinity,
             headers: {
@@ -311,13 +306,13 @@ function parseSources(data) {
 
 /**
  * sendAsDocument — core sender.
- * Tier 1: send as video  (inline player, buffer ≤ 64 MB)
+ * Tier 1: send as video  (inline player — always tried first)
  * Tier 2: send as document/file  (buffer if available, else URL directly)
  * Tier 3: plain-text link fallback
  *
  * @param epLabel  e.g. "S01E03" — used in caption; pass null for movies
  */
-async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLabel, linksText, sizeHint) {
+async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLabel, linksText) {
     const caption = [
         `🎬 *${title || 'Movie'}*`,
         epLabel ? `📺 *Episode:* ${epLabel}` : '',
@@ -328,15 +323,17 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
 
     const fileName = buildFileName(title, epLabel, quality);
 
-    // Download to buffer (capped at 64 MB) — CDN URLs are short-lived signed
-    // tokens; passing them directly to WA often results in 403 after expiry.
-    const dlResult  = await downloadBuffer(dlUrl, sizeHint);
-    const buf       = dlResult?.buf || null;
-    const mimeType  = (dlResult?.contentType?.startsWith('video/') ? dlResult.contentType : 'video/mp4');
-    const size      = buf?.length || parseInt(sizeHint) || 0;
+    // Always download the full buffer — server has no fetch limits.
+    // CDN URLs are short-lived signed tokens; passing them directly to WA
+    // often results in 403 after expiry, so we always buffer first.
+    const dlResult = await downloadBuffer(dlUrl);
+    const buf      = dlResult?.buf || null;
+    const mimeType = (dlResult?.contentType?.startsWith('video/') ? dlResult.contentType : 'video/mp4');
 
-    // ── Tier 1: send as video (inline player, ≤ 64 MB) ──────────────────────────
-    if (buf && size <= VIDEO_LIMIT) {
+    // ── Tier 1: send as video (inline player) ────────────────────────────────────
+    // Always attempt video first regardless of size — WhatsApp will accept it
+    // if the file is within its server-side limit.
+    if (buf) {
         try {
             await sock.sendMessage(chatId, {
                 video: buf, mimetype: mimeType, caption,
@@ -349,8 +346,6 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
     }
 
     // ── Tier 2: send as document/file ────────────────────────────────────────────
-    // Use the downloaded buffer if we have it; otherwise pass the URL directly
-    // and let WA's servers fetch it (works when the CDN link is still fresh).
     try {
         const docMedia = buf
             ? { document: buf }
@@ -422,7 +417,7 @@ async function sendVideoOrLinks(sock, chatId, message, data, title, poster, epLa
     // Strip epLabel from display title to avoid duplication in caption
     const baseTitle = epLabel ? (title || '').replace(epLabel, '').trim() : (title || '');
 
-    return sendAsDocument(sock, chatId, message, dlUrl, baseTitle || title, quality, epLabel || null, linksText.trim(), target.size);
+    return sendAsDocument(sock, chatId, message, dlUrl, baseTitle || title, quality, epLabel || null, linksText.trim());
 }
 
 // ─── Shared resolution picker & send helpers ──────────────────────────────────
