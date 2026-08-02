@@ -1,20 +1,39 @@
 'use strict';
 /**
- * pending.js — View & accept pending group join requests
+ * pending.js — View & accept/reject pending group join requests
  *
- * $pending              — list all pending join requests (numbered)
- * $accept all           — approve every pending request
- * $accept [n]           — approve request #n from the $pending list
+ * $pending                         — list all pending join requests (numbered)
+ * $accept all / $reject all        — approve/reject every pending request
+ * $accept 1,2,5 / $reject 1 2 5    — approve/reject specific numbered requests
  *
- * Admin-only, group-only.  Bot must be admin.
+ * Admin-only, group-only. Bot must be admin.
  */
 
 const isAdmin = require('../lib/isAdmin');
 
-// Per-group cache of the last fetched pending JID list so $accept [n] can
-// reference positions without re-fetching.  Invalidated on every $pending
-// or $accept call.
 const pendingCache = new Map();
+
+// Helper to parse inputs like "1, 2, 5" or "1 2 5" into validated 0-based index arrays
+function parseIndices(arg, totalLength) {
+    const rawTokens = arg.split(/[\s,]+/).filter(Boolean);
+    const validIndices = [];
+    const invalidTokens = [];
+
+    for (const token of rawTokens) {
+        const num = parseInt(token, 10);
+        if (!isNaN(num) && num >= 1 && num <= totalLength) {
+            // Store unique indices
+            const index = num - 1;
+            if (!validIndices.includes(index)) {
+                validIndices.push(index);
+            }
+        } else {
+            invalidTokens.push(token);
+        }
+    }
+
+    return { validIndices, invalidTokens };
+}
 
 // ── $pending ──────────────────────────────────────────────────────────────────
 async function pendingCommand(sock, chatId, message) {
@@ -45,7 +64,6 @@ async function pendingCommand(sock, chatId, message) {
         return sock.sendMessage(chatId, { text: '✅ No pending join requests.' }, { quoted: message });
     }
 
-    // Normalise — Baileys may return objects { jid, requestMethod } or plain strings
     const jids = requests.map(r => (typeof r === 'string' ? r : r.jid || r.id || r));
     pendingCache.set(chatId, jids);
 
@@ -60,7 +78,7 @@ async function pendingCommand(sock, chatId, message) {
             ``,
             lines.join('\n'),
             ``,
-            `_Use *$accept all* or *$accept [n]* to approve._`,
+            `_Use *$accept all*, *$reject all*, or *$accept 1,2,5* to manage._`,
             ``,
             `_Daratech_ ⚡`,
         ].join('\n'),
@@ -88,11 +106,10 @@ async function acceptCommand(sock, chatId, message, userMessage) {
 
     if (!arg) {
         return sock.sendMessage(chatId, {
-            text: `❌ Usage:\n• *$accept all* — approve all pending requests\n• *$accept 1* — approve request #1\n\n_Run *$pending* first to see the numbered list._`,
+            text: `❌ Usage:\n• *$accept all* — approve all pending requests\n• *$accept 1,2,5* — approve multiple requests\n\n_Run *$pending* first to see the numbered list._`,
         }, { quoted: message });
     }
 
-    // Always fetch a fresh list so we act on live data
     let requests = [];
     try {
         requests = await sock.groupRequestParticipantsList(chatId) || [];
@@ -109,7 +126,6 @@ async function acceptCommand(sock, chatId, message, userMessage) {
     const jids = requests.map(r => (typeof r === 'string' ? r : r.jid || r.id || r));
     pendingCache.set(chatId, jids);
 
-    // ── Accept all ────────────────────────────────────────────────────────────
     if (arg === 'all') {
         try {
             await sock.groupRequestParticipantsUpdate(chatId, jids, 'approve');
@@ -129,30 +145,36 @@ async function acceptCommand(sock, chatId, message, userMessage) {
         }
     }
 
-    // ── Accept by number ──────────────────────────────────────────────────────
-    const n = parseInt(arg, 10);
-    if (isNaN(n) || n < 1 || n > jids.length) {
+    const { validIndices, invalidTokens } = parseIndices(arg, jids.length);
+
+    if (validIndices.length === 0) {
         return sock.sendMessage(chatId, {
-            text: `❌ *${arg}* is not a valid number.\n\nThere are *${jids.length}* pending request(s) — pick a number between *1* and *${jids.length}*.\n\nRun *$pending* to see the list.`,
+            text: `❌ Invalid input.\n\nThere are *${jids.length}* pending request(s). Please choose numbers between *1* and *${jids.length}* (e.g. *$accept 1,3,4*).\n\nRun *$pending* to view the list.`,
         }, { quoted: message });
     }
 
-    const targetJid = jids[n - 1];
+    const targetJids = validIndices.map(i => jids[i]);
+
     try {
-        await sock.groupRequestParticipantsUpdate(chatId, [targetJid], 'approve');
+        await sock.groupRequestParticipantsUpdate(chatId, targetJids, 'approve');
+
+        const successLines = validIndices.map(i => `• Request #${i + 1}: @${jids[i].split('@')[0]}`);
+        const invalidNote  = invalidTokens.length > 0 ? `\n\n⚠️ Skipped invalid numbers: *${invalidTokens.join(', ')}*` : '';
+
         return sock.sendMessage(chatId, {
             text: [
-                `✅ *Request #${n} accepted!*`,
+                `✅ *Accepted ${targetJids.length} request(s)!*`,
                 ``,
-                `@${targetJid.split('@')[0]} has been approved to join.`,
+                successLines.join('\n'),
+                invalidNote,
                 ``,
                 `_Daratech_ ⚡`,
             ].join('\n'),
-            mentions: [targetJid],
+            mentions: targetJids,
         }, { quoted: message });
     } catch (err) {
-        console.error('[accept:n]', err.message);
-        return sock.sendMessage(chatId, { text: `❌ Failed to accept request #${n}: ${err.message}` }, { quoted: message });
+        console.error('[accept:multi]', err.message);
+        return sock.sendMessage(chatId, { text: `❌ Failed to accept selected request(s): ${err.message}` }, { quoted: message });
     }
 }
 
@@ -176,11 +198,10 @@ async function rejectCommand(sock, chatId, message, userMessage) {
 
     if (!arg) {
         return sock.sendMessage(chatId, {
-            text: `❌ Usage:\n• *$reject all* — decline all pending requests\n• *$reject 1* — decline request #1\n\n_Run *$pending* first to see the numbered list._`,
+            text: `❌ Usage:\n• *$reject all* — decline all pending requests\n• *$reject 1,2,5* — decline multiple requests\n\n_Run *$pending* first to see the numbered list._`,
         }, { quoted: message });
     }
 
-    // Always fetch a fresh list
     let requests = [];
     try {
         requests = await sock.groupRequestParticipantsList(chatId) || [];
@@ -197,7 +218,6 @@ async function rejectCommand(sock, chatId, message, userMessage) {
     const jids = requests.map(r => (typeof r === 'string' ? r : r.jid || r.id || r));
     pendingCache.set(chatId, jids);
 
-    // ── Reject all ────────────────────────────────────────────────────────────
     if (arg === 'all') {
         try {
             await sock.groupRequestParticipantsUpdate(chatId, jids, 'reject');
@@ -217,30 +237,36 @@ async function rejectCommand(sock, chatId, message, userMessage) {
         }
     }
 
-    // ── Reject by number ──────────────────────────────────────────────────────
-    const n = parseInt(arg, 10);
-    if (isNaN(n) || n < 1 || n > jids.length) {
+    const { validIndices, invalidTokens } = parseIndices(arg, jids.length);
+
+    if (validIndices.length === 0) {
         return sock.sendMessage(chatId, {
-            text: `❌ *${arg}* is not a valid number.\n\nThere are *${jids.length}* pending request(s) — pick a number between *1* and *${jids.length}*.\n\nRun *$pending* to see the list.`,
+            text: `❌ Invalid input.\n\nThere are *${jids.length}* pending request(s). Please choose numbers between *1* and *${jids.length}* (e.g. *$reject 1,3,4*).\n\nRun *$pending* to view the list.`,
         }, { quoted: message });
     }
 
-    const targetJid = jids[n - 1];
+    const targetJids = validIndices.map(i => jids[i]);
+
     try {
-        await sock.groupRequestParticipantsUpdate(chatId, [targetJid], 'reject');
+        await sock.groupRequestParticipantsUpdate(chatId, targetJids, 'reject');
+
+        const successLines = validIndices.map(i => `• Request #${i + 1}: @${jids[i].split('@')[0]}`);
+        const invalidNote  = invalidTokens.length > 0 ? `\n\n⚠️ Skipped invalid numbers: *${invalidTokens.join(', ')}*` : '';
+
         return sock.sendMessage(chatId, {
             text: [
-                `🚫 *Request #${n} rejected.*`,
+                `🚫 *Rejected ${targetJids.length} request(s).*`,
                 ``,
-                `@${targetJid.split('@')[0]}'s join request has been declined.`,
+                successLines.join('\n'),
+                invalidNote,
                 ``,
                 `_Daratech_ ⚡`,
             ].join('\n'),
-            mentions: [targetJid],
+            mentions: targetJids,
         }, { quoted: message });
     } catch (err) {
-        console.error('[reject:n]', err.message);
-        return sock.sendMessage(chatId, { text: `❌ Failed to reject request #${n}: ${err.message}` }, { quoted: message });
+        console.error('[reject:multi]', err.message);
+        return sock.sendMessage(chatId, { text: `❌ Failed to reject selected request(s): ${err.message}` }, { quoted: message });
     }
 }
 
