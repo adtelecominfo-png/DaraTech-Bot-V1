@@ -318,8 +318,9 @@ function parseSources(data) {
  *   Tier 4 → plain-text link
  *
  * Large files (> 100 MB):
- *   Tier 1 → document via URL (WhatsApp servers fetch it — no bot RAM used)
- *   Tier 2 → plain-text link
+ *   Tier 1 → video via URL (inline player, WhatsApp servers fetch it — no bot RAM used)
+ *   Tier 2 → document via URL (fallback, still no bot RAM used)
+ *   Tier 3 → plain-text link
  *
  * linksText is only sent in the final plain-text fallback — NOT after a
  * successful file/video send to avoid duplicate messages.
@@ -342,6 +343,19 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
     // ── LARGE FILE path (> 100 MB) ────────────────────────────────────────────
     // Pass URL directly — WhatsApp's servers fetch the file, bot uses zero RAM.
     if (isLarge) {
+        // Tier 1: video via URL (inline player, no bot-side buffering)
+        try {
+            await sock.sendMessage(chatId, {
+                video: { url: dlUrl },
+                mimetype: 'video/mp4',
+                caption,
+            }, { quoted: message });
+            return; // success — no extra links message
+        } catch (err) {
+            console.warn('[movie:send] large-file URL video failed, trying document:', err.message);
+        }
+
+        // Tier 2: document via URL (fallback — WhatsApp servers still fetch it, zero RAM)
         try {
             await sock.sendMessage(chatId, {
                 document: { url: dlUrl },
@@ -353,7 +367,8 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
         } catch (err) {
             console.warn('[movie:send] large-file URL document failed:', err.message);
         }
-        // Tier 4: plain-text link only if all else failed
+
+        // Tier 3: plain-text link only if all else failed
         await sock.sendMessage(chatId, {
             text: linksText || `🔗 *Direct link:*\n${dlUrl}`
         }, { quoted: message });
