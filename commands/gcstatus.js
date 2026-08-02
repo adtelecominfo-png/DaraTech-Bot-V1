@@ -243,4 +243,3 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
 }
 
 module.exports = gcstatusCommand;
-```
