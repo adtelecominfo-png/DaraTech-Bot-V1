@@ -18,6 +18,7 @@
 const axios = require('axios');
 const fs     = require('fs');
 const path   = require('path');
+const os     = require('os');
 
 const MOVIE_BASE   = 'https://runflix-api-v-3305--trumpmax344.replit.app/api/v3';
 const CACHE_FILE   = path.join(__dirname, '../data/lastSearches.json');
@@ -281,6 +282,39 @@ async function downloadBuffer(url) {
     }
 }
 
+/**
+ * downloadToTempFile — streams a URL straight to disk (never fully in RAM).
+ * Used for large videos so Baileys can process a *local* file to build the
+ * streaming sidecar / thumbnail it needs for inline playback — something it
+ * can't reliably do when only given a bare remote URL.
+ * Returns the temp file path, or null on failure. Caller must delete it.
+ */
+async function downloadToTempFile(url, subjectId) {
+    const tmpPath = path.join(os.tmpdir(), `movie_${subjectId}_${Date.now()}.mp4`);
+    try {
+        const resp = await axios.get(url, {
+            responseType: 'stream',
+            timeout: 300000, // 5 min
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+            },
+        });
+        await new Promise((resolve, reject) => {
+            const writer = fs.createWriteStream(tmpPath);
+            resp.data.pipe(writer);
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+            resp.data.on('error', reject);
+        });
+        return tmpPath;
+    } catch (err) {
+        console.warn('[movie:downloadToTempFile] failed:', err.message);
+        try { fs.unlinkSync(tmpPath); } catch { /* not created */ }
+        return null;
+    }
+}
+
 // ─── Filename builder ──────────────────────────────────────────────────────────
 /**
  * buildFileName — constructs a clean document filename.
@@ -318,8 +352,10 @@ function parseSources(data) {
  *   Tier 4 → plain-text link
  *
  * Large files (> 100 MB):
- *   Tier 1 → video via URL (inline player, WhatsApp servers fetch it — no bot RAM used)
- *   Tier 2 → document via URL (fallback, still no bot RAM used)
+ *   Tier 1 → video, streamed to a temp file on disk first (needed so Baileys
+ *            can build the streaming sidecar/thumbnail — a bare remote URL
+ *            sends but won't play). Disk streaming keeps RAM flat.
+ *   Tier 2 → document via URL (fallback, no bot RAM used)
  *   Tier 3 → plain-text link
  *
  * linksText is only sent in the final plain-text fallback — NOT after a
@@ -341,18 +377,25 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
     const isLarge   = knownSize > BUFFER_THRESHOLD; // > 100 MB
 
     // ── LARGE FILE path (> 100 MB) ────────────────────────────────────────────
-    // Pass URL directly — WhatsApp's servers fetch the file, bot uses zero RAM.
     if (isLarge) {
-        // Tier 1: video via URL (inline player, no bot-side buffering)
-        try {
-            await sock.sendMessage(chatId, {
-                video: { url: dlUrl },
-                mimetype: 'video/mp4',
-                caption,
-            }, { quoted: message });
-            return; // success — no extra links message
-        } catch (err) {
-            console.warn('[movie:send] large-file URL video failed, trying document:', err.message);
+        // Tier 1: stream to a temp file on disk, then send as video from the
+        // local path. Baileys needs a local file (not a bare remote URL) to
+        // build the streaming sidecar/thumbnail — without it the video
+        // "sends" but never actually plays. Disk streaming keeps RAM flat.
+        const tmpPath = await downloadToTempFile(dlUrl, epLabel ? `${title}_${epLabel}` : title);
+        if (tmpPath) {
+            try {
+                await sock.sendMessage(chatId, {
+                    video: { url: tmpPath },
+                    mimetype: 'video/mp4',
+                    caption,
+                }, { quoted: message });
+                return; // success — no extra links message
+            } catch (err) {
+                console.warn('[movie:send] large-file local video failed, trying document:', err.message);
+            } finally {
+                fs.unlink(tmpPath, () => {}); // best-effort cleanup, non-blocking
+            }
         }
 
         // Tier 2: document via URL (fallback — WhatsApp servers still fetch it, zero RAM)
