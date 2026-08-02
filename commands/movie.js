@@ -248,18 +248,22 @@ function parsePick(pick) {
 }
 
 // ─── Size limits ──────────────────────────────────────────────────────────────
-const DOC_LIMIT = 2 * 1024 * 1024 * 1024; // 2 GB — WA document ceiling
+// Files above BUFFER_THRESHOLD are sent via URL (no bot-side buffering) to
+// avoid OOM crashes on memory-limited servers.  WhatsApp's own servers fetch
+// the URL directly, so the bot never holds the full file in RAM.
+const BUFFER_THRESHOLD = 100 * 1024 * 1024; // 100 MB
+const DOC_LIMIT        = 2   * 1024 * 1024 * 1024; // 2 GB — WA document ceiling
 
 /**
  * downloadBuffer — fetch a URL into a Buffer.
- * No size cap — server has no fetch limits. Always downloads.
- * Returns null only if the download itself fails (caller falls back to link).
+ * Only called for files ≤ BUFFER_THRESHOLD to prevent OOM.
+ * Returns null if download fails (caller falls back to URL path).
  */
 async function downloadBuffer(url) {
     try {
         const resp = await axios.get(url, {
             responseType: 'arraybuffer',
-            timeout: 600000,          // 10 min — large 1080p files need time
+            timeout: 300000,          // 5 min
             maxContentLength: Infinity,
             maxBodyLength:    Infinity,
             headers: {
@@ -306,13 +310,23 @@ function parseSources(data) {
 
 /**
  * sendAsDocument — core sender.
- * Tier 1: send as video  (inline player — always tried first)
- * Tier 2: send as document/file  (buffer if available, else URL directly)
- * Tier 3: plain-text link fallback
  *
- * @param epLabel  e.g. "S01E03" — used in caption; pass null for movies
+ * Small files (≤ 100 MB):
+ *   Tier 1 → video (inline player, buffered)
+ *   Tier 2 → document (buffered)
+ *   Tier 3 → document via URL (no buffer)
+ *   Tier 4 → plain-text link
+ *
+ * Large files (> 100 MB):
+ *   Tier 1 → document via URL (WhatsApp servers fetch it — no bot RAM used)
+ *   Tier 2 → plain-text link
+ *
+ * linksText is only sent in the final plain-text fallback — NOT after a
+ * successful file/video send to avoid duplicate messages.
+ *
+ * @param sizeHint  known file size in bytes from API (optional)
  */
-async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLabel, linksText) {
+async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLabel, linksText, sizeHint) {
     const caption = [
         `🎬 *${title || 'Movie'}*`,
         epLabel ? `📺 *Episode:* ${epLabel}` : '',
@@ -321,55 +335,74 @@ async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLa
         `_Downloaded by Daratech_`,
     ].filter(l => l !== undefined).join('\n').replace(/\n\n\n+/g, '\n\n');
 
-    const fileName = buildFileName(title, epLabel, quality);
+    const fileName  = buildFileName(title, epLabel, quality);
+    const knownSize = parseInt(sizeHint) || 0;
+    const isLarge   = knownSize > BUFFER_THRESHOLD; // > 100 MB
 
-    // Always download the full buffer — server has no fetch limits.
-    // CDN URLs are short-lived signed tokens; passing them directly to WA
-    // often results in 403 after expiry, so we always buffer first.
+    // ── LARGE FILE path (> 100 MB) ────────────────────────────────────────────
+    // Pass URL directly — WhatsApp's servers fetch the file, bot uses zero RAM.
+    if (isLarge) {
+        try {
+            await sock.sendMessage(chatId, {
+                document: { url: dlUrl },
+                mimetype: 'video/mp4',
+                fileName,
+                caption,
+            }, { quoted: message });
+            return; // success — no extra links message
+        } catch (err) {
+            console.warn('[movie:send] large-file URL document failed:', err.message);
+        }
+        // Tier 4: plain-text link only if all else failed
+        await sock.sendMessage(chatId, {
+            text: linksText || `🔗 *Direct link:*\n${dlUrl}`
+        }, { quoted: message });
+        return;
+    }
+
+    // ── SMALL FILE path (≤ 100 MB) ────────────────────────────────────────────
     const dlResult = await downloadBuffer(dlUrl);
     const buf      = dlResult?.buf || null;
     const mimeType = (dlResult?.contentType?.startsWith('video/') ? dlResult.contentType : 'video/mp4');
 
-    // ── Tier 1: send as video (inline player) ────────────────────────────────────
-    // Always attempt video first regardless of size — WhatsApp will accept it
-    // if the file is within its server-side limit.
+    // Tier 1: video (inline player)
     if (buf) {
         try {
             await sock.sendMessage(chatId, {
                 video: buf, mimetype: mimeType, caption,
             }, { quoted: message });
-            if (linksText) await sock.sendMessage(chatId, { text: linksText }, { quoted: message });
-            return;
+            return; // success — no extra links message
         } catch (videoErr) {
             console.warn('[movie:send] video send failed, trying document:', videoErr.message);
         }
     }
 
-    // ── Tier 2: send as document/file ────────────────────────────────────────────
-    try {
-        const docMedia = buf
-            ? { document: buf }
-            : { document: { url: dlUrl } };
-
-        await sock.sendMessage(chatId, {
-            ...docMedia,
-            mimetype: mimeType,
-            fileName,
-            caption,
-        }, { quoted: message });
-        if (linksText) await sock.sendMessage(chatId, { text: linksText }, { quoted: message });
-        return;
-    } catch (docErr) {
-        console.warn('[movie:send] document send failed, falling back to link:', docErr.message);
+    // Tier 2: document (buffered)
+    if (buf) {
+        try {
+            await sock.sendMessage(chatId, {
+                document: buf, mimetype: mimeType, fileName, caption,
+            }, { quoted: message });
+            return; // success — no extra links message
+        } catch (docErr) {
+            console.warn('[movie:send] buffered document failed, trying URL:', docErr.message);
+        }
     }
 
-    // ── Tier 3: plain-text link fallback ─────────────────────────────────────────
-    const fallback = [
-        `⚠️ Couldn't send the file directly — here are the download links:`,
-        '',
-        linksText || `🔗 *Direct link:*\n${dlUrl}`,
-    ].join('\n').replace(/\n\n\n+/g, '\n\n');
-    await sock.sendMessage(chatId, { text: fallback }, { quoted: message });
+    // Tier 3: document via URL (no buffer — CDN link still fresh at this point)
+    try {
+        await sock.sendMessage(chatId, {
+            document: { url: dlUrl }, mimetype: 'video/mp4', fileName, caption,
+        }, { quoted: message });
+        return; // success — no extra links message
+    } catch (urlErr) {
+        console.warn('[movie:send] URL document failed, falling back to link:', urlErr.message);
+    }
+
+    // Tier 4: plain-text link
+    await sock.sendMessage(chatId, {
+        text: linksText || `🔗 *Direct link:*\n${dlUrl}`
+    }, { quoted: message });
 }
 
 /**
@@ -417,7 +450,7 @@ async function sendVideoOrLinks(sock, chatId, message, data, title, poster, epLa
     // Strip epLabel from display title to avoid duplication in caption
     const baseTitle = epLabel ? (title || '').replace(epLabel, '').trim() : (title || '');
 
-    return sendAsDocument(sock, chatId, message, dlUrl, baseTitle || title, quality, epLabel || null, linksText.trim());
+    return sendAsDocument(sock, chatId, message, dlUrl, baseTitle || title, quality, epLabel || null, linksText.trim(), target.size);
 }
 
 // ─── Shared resolution picker & send helpers ──────────────────────────────────
