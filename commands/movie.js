@@ -260,24 +260,55 @@ const DOC_LIMIT        = 2   * 1024 * 1024 * 1024; // 2 GB — WA document ceili
  * Only called for files ≤ BUFFER_THRESHOLD to prevent OOM.
  * Returns null if download fails (caller falls back to URL path).
  */
+// Shared headers for CDN downloads. Many video CDNs sit behind hotlink/anti-bot
+// protection that rejects "bare" requests with 428 (Precondition Required) or
+// 403 unless a Referer/Origin is present — so we send one that matches the
+// API's own origin, since that's the "expected" caller as far as the CDN is
+// concerned.
+const CDN_ORIGIN = new URL(MOVIE_BASE).origin;
+function cdnHeaders() {
+    return {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Referer': CDN_ORIGIN + '/',
+        'Origin':  CDN_ORIGIN,
+    };
+}
+
+// Statuses worth a short retry — 428/429 are precondition/rate-limit style
+// blocks that are frequently transient, and 502/503/504 are upstream hiccups.
+const RETRYABLE_STATUSES = new Set([428, 429, 502, 503, 504]);
+
+async function withCdnRetry(fn, attempts = 3) {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            return await fn();
+        } catch (err) {
+            lastErr = err;
+            const status = err.response?.status;
+            if (!RETRYABLE_STATUSES.has(status) || i === attempts - 1) throw err;
+            await new Promise(r => setTimeout(r, 1000 * (i + 1))); // 1s, 2s backoff
+        }
+    }
+    throw lastErr;
+}
+
 async function downloadBuffer(url) {
     try {
-        const resp = await axios.get(url, {
+        const resp = await withCdnRetry(() => axios.get(url, {
             responseType: 'arraybuffer',
             timeout: 300000,          // 5 min
             maxContentLength: Infinity,
             maxBodyLength:    Infinity,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-            },
-        });
+            headers: cdnHeaders(),
+        }));
         return {
             buf: Buffer.from(resp.data),
             contentType: (resp.headers['content-type'] || 'video/mp4').split(';')[0].trim().toLowerCase(),
         };
     } catch (err) {
-        console.warn('[movie:downloadBuffer] failed:', err.message);
+        console.warn('[movie:downloadBuffer] failed:', err.response?.status ? `HTTP ${err.response.status}` : err.message);
         return null;
     }
 }
@@ -292,14 +323,11 @@ async function downloadBuffer(url) {
 async function downloadToTempFile(url, subjectId) {
     const tmpPath = path.join(os.tmpdir(), `movie_${subjectId}_${Date.now()}.mp4`);
     try {
-        const resp = await axios.get(url, {
+        const resp = await withCdnRetry(() => axios.get(url, {
             responseType: 'stream',
             timeout: 300000, // 5 min
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-            },
-        });
+            headers: cdnHeaders(),
+        }));
         await new Promise((resolve, reject) => {
             const writer = fs.createWriteStream(tmpPath);
             resp.data.pipe(writer);
@@ -309,7 +337,8 @@ async function downloadToTempFile(url, subjectId) {
         });
         return tmpPath;
     } catch (err) {
-        console.warn('[movie:downloadToTempFile] failed:', err.message);
+        const status = err.response?.status;
+        console.warn('[movie:downloadToTempFile] failed:', status ? `HTTP ${status}` : err.message);
         try { fs.unlinkSync(tmpPath); } catch { /* not created */ }
         return null;
     }
@@ -486,6 +515,13 @@ async function sendVideoOrLinks(sock, chatId, message, data, title, poster, epLa
     const target  = validSources[0];
     const dlUrl   = target.download_url || target.url;
     const quality = target.quality || '';
+
+    // Let the user know the fetch is underway — this can take a while for
+    // large files, so show what's downloading before we go quiet.
+    const notifyLabel = epLabel ? `${title || 'Movie'} (${epLabel})` : (title || 'Movie');
+    await sock.sendMessage(chatId, {
+        text: `📥 Downloading *${notifyLabel}* — ${quality || 'Unknown'}…\n_Please wait…_`
+    }, { quoted: message });
 
     // Always build a links block — used as fallback when video can't be sent
     const titleLabel = epLabel ? `${title || 'Movie'} ${epLabel}` : (title || 'Movie');
@@ -1469,9 +1505,9 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             }
 
             if (sent > 0) {
-                await react(sock, message, '✅');
+                await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
             } else {
-                await react(sock, message, '❌');
+                await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
             }
             return;
         }
