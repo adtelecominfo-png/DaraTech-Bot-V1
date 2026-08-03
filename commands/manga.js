@@ -17,66 +17,37 @@
 
 const axios = require('axios');
 
-const MANGA_BASE = 'https://runflix-api-v-3305--trumpmax344.replit.app/api/v3/manga';
-
-// Cloudflare codes that mean the origin (Replit) is sleeping / starting up
-const SLEEP_CODES = new Set([520, 521, 522, 523, 524]);
+// Same API + key as the movie command — just different /manga routes
+const MANGA_BASE = 'https://apimovie.runflix.name.ng/v1/manga';
+const MANGA_KEY  = process.env.APIMOVIE_KEY || 'dara_f15c322ef56b466994a37d2b';
 
 /**
- * mangaFetch — fetch from the Replit-hosted manga API.
- * @param {string} path          - API path, e.g. '/search/boruto'
- * @param {object} [opts]
- * @param {Function} [opts.onSleep] - called once when a sleep code is detected,
- *                                    so the caller can notify the user to wait.
+ * mangaFetch — fetch from the DaraTech Manga API (apimovie.runflix.name.ng/v1/manga).
+ * @param {string} path     - API path, e.g. '/search?q=boruto'
+ * @param {object} [_opts]  - kept for call-site compatibility; no longer used
  */
-async function mangaFetch(path, { onSleep } = {}) {
-    const url = `${MANGA_BASE}${path}`;
-    let lastErr;
-    let wakeNotified = false;
-
-    // Up to 4 retries — Replit repls can take 20-30 s to wake from sleep
-    const MAX_ATTEMPTS = 5;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        try {
-            const { data } = await axios.get(url, {
-                headers: {
-                    'Accept':          'application/json, text/plain, */*',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                },
-                timeout: 30000,
-                maxRedirects: 5,
-            });
-            return data;
-        } catch (err) {
-            lastErr = err;
-            const status = err.response?.status;
-            const isSleeping = SLEEP_CODES.has(status);
-            const isRetryable = isSleeping || !status || status >= 500 || err.code === 'ECONNABORTED';
-
-            if (!isRetryable) break; // 4xx — no point retrying
-
-            if (isSleeping && !wakeNotified) {
-                wakeNotified = true;
-                try { onSleep && await onSleep(); } catch { /* non-fatal */ }
-            }
-
-            if (attempt < MAX_ATTEMPTS - 1) {
-                // Sleep codes need a long wait (repl cold-start); other 5xx use short wait
-                const delay = isSleeping ? 10000 : 2000 * (attempt + 1);
-                await new Promise(r => setTimeout(r, delay));
-            }
+async function mangaFetch(path, _opts = {}) {
+    const sep = path.includes('?') ? '&' : '?';
+    const url = `${MANGA_BASE}${path}${sep}apikey=${MANGA_KEY}`;
+    try {
+        const { data } = await axios.get(url, {
+            headers: {
+                'Accept':          'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            },
+            timeout: 20000,
+            maxRedirects: 5,
+        });
+        if (data && data.success === false) {
+            throw new Error(data.error || 'API returned success:false');
         }
+        return data;
+    } catch (err) {
+        const status = err.response?.status;
+        const msg = err.response?.data?.error || err.response?.data?.message || err.message || `HTTP ${status || 'timeout'}`;
+        throw new Error(msg);
     }
-    const status = lastErr.response?.status;
-    if (SLEEP_CODES.has(status)) {
-        throw new Error('Manga service is still waking up — please try again in a moment.');
-    }
-    if (status === 503 || status === 502) {
-        throw new Error('Manga service is temporarily unavailable. Please try again shortly.');
-    }
-    const msg = lastErr.response?.data?.message || lastErr.message || `HTTP ${status || 'timeout'}`;
-    throw new Error(msg);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -206,9 +177,7 @@ async function handleDetails(sock, chatId, message, slug) {
 // only displays the top 10 — so every chapter is reachable by number.
 
 async function resolveChapterSlug(mangaSlug, chapterNum) {
-    const data = await mangaFetch(`/details/${encodeURIComponent(mangaSlug)}`, {
-        onSleep: () => sock.sendMessage(chatId, { text: '😴 Manga service is waking up, please wait a moment…' }, { quoted: message })
-    });
+    const data = await mangaFetch(`/details/${encodeURIComponent(mangaSlug)}`);
     const m = data?.result || data?.results || data?.data || data;
     const chapters = Array.isArray(m?.chapters) ? m.chapters : [];
     if (!chapters.length) throw new Error(`No chapters found for \`${mangaSlug}\`. Check the manga slug.`);
@@ -356,7 +325,7 @@ async function handleRead(sock, chatId, message, chapterSlug) {
 async function handleDownload(sock, chatId, message, chapterSlug) {
     await sock.sendMessage(chatId, { text: `💾 Preparing ZIP for chapter: \`${chapterSlug}\`…\n_Max 30 pages. This may take a moment._` }, { quoted: message });
 
-    const url = `${MANGA_BASE}/chapter/${encodeURIComponent(chapterSlug)}/download`;
+    const url = `${MANGA_BASE}/chapter/${encodeURIComponent(chapterSlug)}/download?apikey=${MANGA_KEY}`;
     try {
         const response = await axios.get(url, {
             responseType: 'arraybuffer',
@@ -405,7 +374,7 @@ async function handleRangeDownload(sock, chatId, message, slug, from, to) {
         text: `💾 Preparing ZIP for *${slug}* chapters ${fromN}–${toN}…\n_This may take a moment._`
     }, { quoted: message });
 
-    const url = `${MANGA_BASE}/download/${encodeURIComponent(slug)}?from=${fromN}&to=${toN}`;
+    const url = `${MANGA_BASE}/download/${encodeURIComponent(slug)}?from=${fromN}&to=${toN}&apikey=${MANGA_KEY}`;
     try {
         const response = await axios.get(url, {
             responseType: 'arraybuffer',
