@@ -358,6 +358,17 @@ function buildFileName(title, epLabel, quality) {
     return parts.filter(Boolean).join('.') + '.mp4';
 }
 
+// Same dot-separated naming convention as buildFileName, but for .srt subtitles
+// (e.g. "Game.of.Thrones.S08E02.English.Daratech.srt").
+function buildSubFileName(title, epLabel, lang) {
+    const safe  = str => (str || '').replace(/[^\w\s.-]/g, '').trim().replace(/\s+/g, '.');
+    const parts = [safe(title) || 'Subtitle'];
+    if (epLabel) parts.push(epLabel.replace(/\s+/g, ''));
+    parts.push(safe(lang) || 'Sub');
+    parts.push('Daratech');
+    return parts.filter(Boolean).join('.') + '.srt';
+}
+
 /**
  * parseSources — normalise both movie & anime source shapes into a flat array.
  *   Movie:  data.results[]  + data.subtitles[]  + data.audioTracks[]
@@ -1392,21 +1403,24 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
         }
 
         // ── SUBTITLE DOWNLOAD ────────────────────────────────────────────────
-        // $moviesub <id> [language]
-        // Uses /captions/{subjectId}/{streamId} to get signed .srt URLs,
-        // then downloads and sends each matching subtitle as a document file.
+        // $moviesub <id>              — list available subtitles (no download)
+        // $moviesub <id> <number>     — download subtitle #<number> from that list
+        // $moviesub <id> english      — filter the list by language (still list-only)
+        // Uses /captions/{subjectId}/{streamId} to get signed .srt URLs.
         if (subcommand === 'subtitle') {
             let subjectId = args[0] || '';
-            const langFilter = args.slice(1).join(' ').trim().toLowerCase();
+            const rest      = args.slice(1).join(' ').trim();
+            const subNum    = /^\d+$/.test(rest) ? parseInt(rest, 10) : null;
+            const langFilter = subNum ? '' : rest.toLowerCase();
 
             if (!subjectId) {
                 return sock.sendMessage(chatId, {
                     text:
                         '❌ Provide a movie ID.\n\n' +
                         '*Usage:*\n' +
-                        '  `$moviesub <id>`           — list & download all subs\n' +
-                        '  `$moviesub <id> english`   — English only\n' +
-                        '  `$moviesub <id> french`    — French only\n\n' +
+                        '  `$moviesub <id>`            — list available subtitles\n' +
+                        '  `$moviesub <id> <number>`   — download subtitle #<number>\n' +
+                        '  `$moviesub <id> english`    — download by language\n\n' +
                         '💡 Get the ID from `$movie <title>`'
                 }, { quoted: message });
             }
@@ -1433,10 +1447,14 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
             await sock.sendMessage(chatId, { react: { text: '📜', key: message.key } });
             await sock.sendMessage(chatId, { text: '📜 Fetching subtitle list…' }, { quoted: message });
 
-            // Step 1: get sources to find the streamId
-            const srcData  = await apiFetch(`/sources/${encodeURIComponent(subjectId)}`);
+            // Step 1: get sources (for streamId) + info (for the title) in parallel
+            const [srcData, infoData] = await Promise.all([
+                apiFetch(`/sources/${encodeURIComponent(subjectId)}`),
+                apiFetch(`/info/${encodeURIComponent(subjectId)}`).catch(() => null)
+            ]);
             const sources  = Array.isArray(srcData.results) ? srcData.results : (srcData.results?.sources || []);
             const streamId = sources[0]?.id;
+            const title    = infoData?.results?.title || '';
 
             if (!streamId) {
                 return sock.sendMessage(chatId, {
@@ -1454,62 +1472,99 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
                 }, { quoted: message });
             }
 
-            // Filter by language if requested
-            const targets = langFilter
-                ? captions.filter(c =>
-                    (c.language || '').toLowerCase().includes(langFilter) ||
-                    (c.languageCode || '').toLowerCase().includes(langFilter)
-                  )
-                : captions;
-
-            if (!targets.length) {
-                const available = captions.map(c => c.language || c.languageCode).join(', ');
-                return sock.sendMessage(chatId, {
-                    text: `⚠️ No subtitle matching "*${langFilter}*".\n\nAvailable: ${available}`
-                }, { quoted: message });
-            }
-
-            // Show what we're sending
-            const listLines = targets.map((c, i) => `  ${i + 1}. ${c.language || c.languageCode}`).join('\n');
-            await sock.sendMessage(chatId, {
-                text: `📜 *Downloading ${targets.length} subtitle(s):*\n${listLines}\n\n_Please wait…_`
-            }, { quoted: message });
-
-            // Step 3: download each .srt and send as document
-            let sent = 0;
-            for (const cap of targets) {
+            // Helper: download one caption and send it as a document
+            const sendCaption = async (cap) => {
                 const lang     = cap.language || cap.languageCode || 'Unknown';
                 const srtUrl   = cap.url;
-                const fileName = `subtitle_${lang.replace(/\s+/g, '_')}_${subjectId}.srt`;
+                const fileName = buildSubFileName(title, '', lang);
+
+                const resp = await axios.get(srtUrl, {
+                    responseType: 'arraybuffer',
+                    timeout: 30000,
+                    maxRedirects: 5,
+                });
+                const buf = Buffer.from(resp.data);
+
+                await sock.sendMessage(chatId, {
+                    document: buf,
+                    mimetype:  'text/plain',
+                    fileName,
+                    caption:   `📜 *${lang}* subtitle\n_${fileName}_\n\n_Daratech_ ⚡`,
+                }, { quoted: message });
+            };
+
+            // ── DOWNLOAD MODE: a specific subtitle number was given ──────────
+            if (subNum) {
+                const cap = captions[subNum - 1];
+                if (!cap) {
+                    const listLines = captions.map((c, i) => `  ${i + 1}. ${c.language || c.languageCode}`).join('\n');
+                    return sock.sendMessage(chatId, {
+                        text: `❌ No subtitle #${subNum}.\n\n*Available:*\n${listLines}\n\n💬 *$moviesub ${subjectId} <number>* — download one`
+                    }, { quoted: message });
+                }
+
+                const lang = cap.language || cap.languageCode || 'Unknown';
+                await sock.sendMessage(chatId, {
+                    text: `📜 Downloading *${lang}* subtitle…\n_Please wait…_`
+                }, { quoted: message });
 
                 try {
-                    const resp = await axios.get(srtUrl, {
-                        responseType: 'arraybuffer',
-                        timeout: 30000,
-                        maxRedirects: 5,
-                    });
-                    const buf = Buffer.from(resp.data);
-
-                    await sock.sendMessage(chatId, {
-                        document: buf,
-                        mimetype:  'text/plain',
-                        fileName,
-                        caption:   `📜 *${lang}* subtitle\n_${fileName}_\n\n_Daratech_ ⚡`,
-                    }, { quoted: message });
-                    sent++;
+                    await sendCaption(cap);
+                    await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
                 } catch (dlErr) {
                     await sock.sendMessage(chatId, {
                         text: `⚠️ Failed to download *${lang}* subtitle: ${dlErr.message}`
                     }, { quoted: message });
+                    await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
                 }
+                return;
             }
 
-            if (sent > 0) {
-                await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
-            } else {
-                await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
+            // ── DOWNLOAD MODE: a language was given (e.g. "english") ─────────
+            if (langFilter) {
+                const targets = captions.filter(c =>
+                    (c.language || '').toLowerCase().includes(langFilter) ||
+                    (c.languageCode || '').toLowerCase().includes(langFilter)
+                );
+
+                if (!targets.length) {
+                    const available = captions.map(c => c.language || c.languageCode).join(', ');
+                    return sock.sendMessage(chatId, {
+                        text: `⚠️ No subtitle matching "*${langFilter}*".\n\nAvailable: ${available}`
+                    }, { quoted: message });
+                }
+
+                const listLines = targets.map(c => `  ${c.language || c.languageCode}`).join('\n');
+                await sock.sendMessage(chatId, {
+                    text: `📜 *Downloading ${targets.length} subtitle(s):*\n${listLines}\n\n_Please wait…_`
+                }, { quoted: message });
+
+                let sent = 0;
+                for (const cap of targets) {
+                    const lang = cap.language || cap.languageCode || 'Unknown';
+                    try {
+                        await sendCaption(cap);
+                        sent++;
+                    } catch (dlErr) {
+                        await sock.sendMessage(chatId, {
+                            text: `⚠️ Failed to download *${lang}* subtitle: ${dlErr.message}`
+                        }, { quoted: message });
+                    }
+                }
+
+                await sock.sendMessage(chatId, { react: { text: sent > 0 ? '✅' : '❌', key: message.key } });
+                return;
             }
-            return;
+
+            // ── LIST MODE (default): show numbered subtitles, don't download ──
+            const listLines = captions
+                .map((c, i) => `  ${i + 1}. ${c.language || c.languageCode}`)
+                .join('\n');
+
+            await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
+            return sock.sendMessage(chatId, {
+                text: `📜 *Available Subtitles:*\n${listLines}\n\n💬 *$moviesub ${subjectId} <number>* — download by number\n💬 *$moviesub ${subjectId} english* — download by language`
+            }, { quoted: message });
         }
 
         // ── HOMEPAGE / FEATURED ──────────────────────────────────────────────
