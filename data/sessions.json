@@ -1,12 +1,1 @@
-{
-  "sessions": [
-    {
-      "id": "default",
-      "name": "Daratech",
-      "sessionDir": "session",
-      "envSessionVar": "SESSION_ID",
-      "enabled": true,
-      "ownerNumber": ""
-    }
-  ]
-}
+{}

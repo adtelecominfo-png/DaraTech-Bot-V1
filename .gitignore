@@ -38,4 +38,6 @@ baileys_store.json
 bin/
 data/clean_store.json
 data/lastSearches.json
+data/rimuru_memory/
+data/savedocs/
 
