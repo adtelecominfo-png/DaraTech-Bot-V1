@@ -2,11 +2,17 @@
 /**
  * antigroupmention.js — Block status mentions of the group
  *
- * When someone tags this group in their WhatsApp Status, WhatsApp delivers a
- * statusMentionMessage (or wraps it inside ephemeralMessage / viewOnceMessage,
- * or puts the group JID in extendedTextMessage.contextInfo.groupMentions).
- * This feature detects all those variants and either deletes the notification
- * and/or kicks the person.
+ * When someone tags this group in their WhatsApp Status, WhatsApp delivers the
+ * message to the group with one or more of these signals:
+ *
+ *   • message.isMentionedInStatus = true   (the PRIMARY flag — always present)
+ *   • message.messageStubType = 210        (WAMessageStubType.STATUS_MENTION)
+ *   • message.message.groupStatusMentionMessage (nested proto message)
+ *   • message.message.groupMentionedMessage
+ *   • message.message.statusMentionMessage
+ *
+ * The sender (status poster) is in message.key.participant.
+ * message.messageStubParameters[0] is also the sender JID for stub messages.
  *
  * $antigroupmention on           — enable protection (default action: delete)
  * $antigroupmention off          — disable protection
@@ -21,8 +27,9 @@
 const fs   = require('fs');
 const path = require('path');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { WAMessageStubType } = require('@whiskeysockets/baileys');
 
-const DATA_DIR   = path.join(__dirname, '../data');
+const DATA_DIR    = path.join(__dirname, '../data');
 const CONFIG_PATH = path.join(DATA_DIR, 'antimedia.json');
 
 // ── Config helpers ─────────────────────────────────────────────────────────────
@@ -122,7 +129,6 @@ async function antigroupmentionCommand(sock, chatId, senderId, message) {
                 text: `❌ Invalid action.\n\nUse:\n▸ *$antigroupmention set delete*\n▸ *$antigroupmention set kick*\n\n_Daratech_ ⚡`
             }, { quoted: message });
         }
-        // Auto-enable when setting an action (matches reference logic)
         setGroupFlags(chatId, { antigroupmentionAction: newAction, antigroupmention: true });
         return sock.sendMessage(chatId, {
             text: `✅ *Anti Status Mention action set to ${newAction} and enabled!*\n\n_Daratech_ ⚡`
@@ -132,134 +138,133 @@ async function antigroupmentionCommand(sock, chatId, senderId, message) {
     return sock.sendMessage(chatId, { text: `❓ Unknown option. Use *$antigroupmention* to see usage.\n\n_Daratech_ ⚡` }, { quoted: message });
 }
 
-// ── Detection helpers ──────────────────────────────────────────────────────────
+// ── Detection ─────────────────────────────────────────────────────────────────
 
 /**
- * Unwrap nested message wrappers that Baileys uses:
- *   ephemeralMessage → message
- *   viewOnceMessage  → message
- *   documentWithCaptionMessage → message
- * Returns the innermost message object.
+ * Determines if this message is a WhatsApp group-status-mention notification.
+ *
+ * WhatsApp signals this event in multiple ways:
+ *   1. message.isMentionedInStatus = true           (PRIMARY flag on WebMessageInfo)
+ *   2. messageStubType === 210 / STATUS_MENTION     (stub notification shape)
+ *   3. message.message.groupStatusMentionMessage    (proto message shape)
+ *   4. message.message.groupMentionedMessage        (older proto shape)
+ *   5. message.message.statusMentionMessage         (alternate shape)
  */
-function unwrapMessage(msg) {
-    if (!msg) return null;
-    return (
-        msg.ephemeralMessage?.message     ||
-        msg.viewOnceMessage?.message      ||
-        msg.viewOnceMessageV2?.message    ||
-        msg.documentWithCaptionMessage?.message ||
-        msg
-    );
-}
+function isGroupStatusMention(message) {
+    // 1. Primary flag — the most reliable indicator
+    if (message.isMentionedInStatus === true) return true;
 
-/**
- * Returns true if this message is a WhatsApp Status group-mention notification.
- *
- * Baileys can deliver it in several shapes depending on the WA/Baileys version:
- *
- *  A. message.message is NULL (stub message) — the "This group was mentioned"
- *     notification arrives with no message body at all; only messageStubType
- *     and/or messageStubParameters are set.  We treat ANY stub in a group as a
- *     potential status mention (the caller already checks the feature is enabled,
- *     and non-admin senders are the only ones who can trigger it).
- *
- *  B. message.message.groupMentionedMessage — the explicit type the GROUP
- *     receives when tagged in a status (distinct from statusMentionMessage which
- *     is on the status creator's side).
- *
- *  C. message.message.statusMentionMessage — older/alternate delivery shape.
- *
- *  D. Wrapped inside ephemeralMessage / viewOnceMessage / etc.
- *
- *  E. extendedTextMessage / imageMessage / … contextInfo.groupMentions[]
- *     containing this group's JID.
- */
-function isStatusMention(message, chatId) {
-    // Shape A — stub message (message.message is null/undefined)
-    // These are system notifications; "group was mentioned" arrives this way
-    // in many Baileys versions.
-    if (!message.message) {
-        // Only flag it if the stub parameters mention this group or if
-        // there are no parameters at all (bare stub in a group chat)
-        const params = message.messageStubParameters || [];
-        if (params.length === 0) return true;             // bare stub
-        const groupNum = chatId.split('@')[0];
-        if (params.some(p => p.includes(groupNum) || p.includes('@g.us'))) return true;
-        return false;
+    // 2. Stub type 210
+    const stubType = message.messageStubType;
+    if (
+        stubType === 210 ||
+        stubType === 'STATUS_MENTION' ||
+        (WAMessageStubType && stubType === WAMessageStubType.STATUS_MENTION)
+    ) return true;
+
+    // 3-5. Nested message proto types
+    const msg = message.message;
+    if (!msg) return false;
+
+    if (msg.groupStatusMentionMessage) return true;
+    if (msg.groupMentionedMessage)     return true;
+    if (msg.statusMentionMessage)      return true;
+
+    // Check one level deep (ephemeral / viewOnce wrappers)
+    const inner =
+        msg.ephemeralMessage?.message         ||
+        msg.viewOnceMessage?.message          ||
+        msg.viewOnceMessageV2?.message        ||
+        msg.documentWithCaptionMessage?.message;
+
+    if (inner) {
+        if (inner.groupStatusMentionMessage) return true;
+        if (inner.groupMentionedMessage)     return true;
+        if (inner.statusMentionMessage)      return true;
     }
-
-    const outer = message.message;
-
-    // Shape B — groupMentionedMessage (what the GROUP receives)
-    if (outer.groupMentionedMessage) return true;
-
-    // Shape C — statusMentionMessage (alternate shape)
-    if (outer.statusMentionMessage) return true;
-
-    // Shape D — wrapped inside ephemeral/viewOnce/etc.
-    const inner = unwrapMessage(outer);
-    if (inner && inner !== outer) {
-        if (inner.groupMentionedMessage) return true;
-        if (inner.statusMentionMessage)  return true;
-    }
-
-    // Shape E — groupMentions in contextInfo on any message layer
-    const matchesGroup = (gm) => {
-        const jid = typeof gm === 'string' ? gm : (gm.groupJid || gm.jid || '');
-        return jid === chatId || jid.split('@')[0] === chatId.split('@')[0];
-    };
-    const checkGroupMentions = (msgObj) => {
-        if (!msgObj) return false;
-        const ctx = msgObj.extendedTextMessage?.contextInfo ||
-                    msgObj.imageMessage?.contextInfo         ||
-                    msgObj.videoMessage?.contextInfo         ||
-                    msgObj.stickerMessage?.contextInfo       ||
-                    msgObj.documentMessage?.contextInfo;
-        return !!(ctx?.groupMentions?.some(matchesGroup));
-    };
-    if (checkGroupMentions(outer)) return true;
-    if (inner && inner !== outer && checkGroupMentions(inner)) return true;
 
     return false;
 }
 
-// ── Detection hook (called for every incoming message) ────────────────────────
+/**
+ * Extracts the actual user JID of who posted the status.
+ * For group messages and stub messages, this lives in different places.
+ */
+function extractSenderJid(message) {
+    // For group messages: key.participant is the member's JID
+    const kp = message.key?.participant;
+    if (kp && !kp.endsWith('@g.us')) return kp;
+
+    // For stub messages: params[0] is the member's JID or phone number
+    const params = message.messageStubParameters || [];
+    if (params.length > 0) {
+        const p = params[0];
+        if (typeof p === 'string' && p.length > 0) {
+            if (!p.endsWith('@g.us')) {
+                return p.includes('@') ? p : `${p}@s.whatsapp.net`;
+            }
+        }
+    }
+
+    // Fallback: check message.participant (some Baileys builds set this)
+    const mp = message.participant;
+    if (mp && !mp.endsWith('@g.us')) return mp;
+
+    return null;
+}
+
+// ── Detection hook (called for every incoming message in main.js) ─────────────
 async function handleAntigroupmentionMessage(sock, message) {
     try {
-        const chatId = message.key.remoteJid;
+        const chatId = message.key?.remoteJid;
         if (!chatId?.endsWith('@g.us')) return;
-        if (message.key.fromMe) return;
 
         const cfg = getGroupConfig(chatId);
         if (!cfg.antigroupmention) return;
 
-        if (!isStatusMention(message, chatId)) return;
+        if (!isGroupStatusMention(message)) return;
 
-        const senderId = message.key.participant || message.key.remoteJid;
+        const senderId = extractSenderJid(message);
+        if (!senderId) {
+            console.log('[antigroupmention] Could not extract sender JID — skipping');
+            return;
+        }
 
-        // Skip admins and owner
+        const botNum = sock.user?.id?.split(':')[0]?.split('@')[0] || '';
+        const senderNum = senderId.split(':')[0].split('@')[0];
+
+        // Never act on the bot itself
+        if (botNum && senderNum === botNum) return;
+
+        // Skip group admins and bot owner/sudo
         try {
             const meta = await sock.groupMetadata(chatId);
-            const sender = meta.participants.find(p => p.id === senderId);
-            if (sender?.admin) return;
-            if (await isOwnerOrSudo(senderId, sock, chatId)) return;
+            const member = meta.participants.find(p => p.id.split(':')[0].split('@')[0] === senderNum);
+            if (member?.admin) return;
         } catch { return; }
+
+        if (await isOwnerOrSudo(senderId, sock, chatId)) return;
+
+        console.log(`[antigroupmention] ✅ Triggered — sender: ${senderId}, group: ${chatId}`);
 
         const action = cfg.antigroupmentionAction || 'delete';
 
-        // Always delete the status-mention notification from the group
+        // ── Delete the status-mention notification ──────────────────────────
         try {
             await sock.sendMessage(chatId, {
                 delete: {
                     remoteJid: chatId,
-                    fromMe: false,
-                    id: message.key.id,
+                    fromMe:    false,
+                    id:        message.key.id,
                     participant: senderId,
                 },
             });
-        } catch {}
+        } catch (delErr) {
+            console.error('[antigroupmention/delete]', delErr.message);
+        }
 
-        const tag = `@${senderId.split('@')[0]}`;
+        // ── Kick or warn ────────────────────────────────────────────────────
+        const tag = `@${senderNum}`;
 
         if (action === 'kick') {
             try {
@@ -268,13 +273,16 @@ async function handleAntigroupmentionMessage(sock, message) {
                     text: `🚫 *Anti Status Mention*\n\n${tag} was kicked for tagging this group in their WhatsApp Status.\n\n_Daratech_ ⚡`,
                     mentions: [senderId],
                 });
-            } catch {}
+            } catch (kickErr) {
+                console.error('[antigroupmention/kick]', kickErr.message);
+            }
         } else {
             await sock.sendMessage(chatId, {
                 text: `⚠️ *Anti Status Mention*\n\n${tag}, tagging this group in your WhatsApp Status is not allowed here.\n\n_Daratech_ ⚡`,
                 mentions: [senderId],
             });
         }
+
     } catch (err) {
         console.error('[antigroupmention/detect]', err.message);
     }

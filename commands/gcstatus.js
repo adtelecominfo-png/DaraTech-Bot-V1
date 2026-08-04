@@ -18,6 +18,7 @@ const path = require('path');
 const pino = require('pino');
 const {
  prepareWAMessageMedia,
+ generateWAMessage,
  generateWAMessageFromContent,
  downloadMediaMessage,
  proto,
@@ -212,33 +213,53 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
 
  await sock.sendMessage(chatId, { react: { text: '⏳', key: message.key } });
  try {
- const mediaBuffer = await downloadMediaMessage(
- targetMessage,
- 'buffer',
- {},
- { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage }
- );
- if (!mediaBuffer || !mediaBuffer.length) throw new Error('Empty media buffer');
+  const mediaBuffer = await downloadMediaMessage(
+   targetMessage,
+   'buffer',
+   {},
+   { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage }
+  );
+  if (!mediaBuffer || !mediaBuffer.length) throw new Error('Empty media buffer');
 
- let mediaOptions = {};
- if (isImage) mediaOptions = { image: mediaBuffer, caption: text || '' };
- else if (isVideo) mediaOptions = { video: mediaBuffer, caption: text || '' };
+  if (!sock.waUploadToServer) throw new Error('sock.waUploadToServer is not available');
 
- if (!sock.waUploadToServer) throw new Error('sock.waUploadToServer is not available');
- const preparedMedia = await prepareWAMessageMedia(mediaOptions, { upload: sock.waUploadToServer });
+  // Step 1: Use generateWAMessage for the full pipeline:
+  //   thumbnail generation, dimension extraction, upload to WA servers,
+  //   and correct proto construction with all required fields.
+  const mediaContent = isImage
+   ? { image: mediaBuffer, caption: text || '' }
+   : { video: mediaBuffer, caption: text || '', gifPlayback: false };
 
- const finalMediaMessage = isImage
- ? { imageMessage: preparedMedia.imageMessage }
-: { videoMessage: preparedMedia.videoMessage };
+  const generatedMedia = await generateWAMessage(chatId, mediaContent, {
+   userJid: sock.user.id,
+   upload: sock.waUploadToServer,
+  });
 
- await relayGroupStatus(sock, chatId, { groupStatusMessageV2: { message: finalMediaMessage } });
- await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
- return sock.sendMessage(chatId, { text: `✅ *${isImage ? 'Image': 'Video'} group status posted!*\n\n_Daratech_ ⚡` }, { quoted: message });
+  // Step 2: Extract the properly-built imageMessage / videoMessage.
+  //   generatedMedia.message has all fields: url, directPath, mediaKey,
+  //   fileEncSha256, jpegThumbnail, height, width, caption, etc.
+  const innerMsg = isImage
+   ? generatedMedia.message.imageMessage
+   : generatedMedia.message.videoMessage;
+
+  if (!innerMsg) throw new Error(`No ${isImage ? 'imageMessage' : 'videoMessage'} in generated message`);
+
+  // Step 3: Wrap in groupStatusMessageV2 — this is what WhatsApp requires
+  //   to render media in the group status / updates feed.
+  //   Sending without this wrapper causes WA to silently discard the status.
+  await relayGroupStatus(sock, chatId, {
+   groupStatusMessageV2: {
+    message: isImage ? { imageMessage: innerMsg } : { videoMessage: innerMsg },
+   },
+  });
+
+  await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
+  return sock.sendMessage(chatId, { text: `✅ *${isImage ? 'Image' : 'Video'} group status posted!*\n\n_Daratech_ ⚡` }, { quoted: message });
 
  } catch (err) {
- console.error('[gcstatus/media]', err);
- await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
- return sock.sendMessage(chatId, { text: `❌ Failed to post media status.\n\n_${err.message}_\n\n_Daratech_ ⚡` }, { quoted: message });
+  console.error('[gcstatus/media]', err);
+  await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
+  return sock.sendMessage(chatId, { text: `❌ Failed to post media status.\n\n_${err.message}_\n\n_Daratech_ ⚡` }, { quoted: message });
  }
 }
 

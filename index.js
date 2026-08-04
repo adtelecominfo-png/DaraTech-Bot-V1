@@ -20,6 +20,19 @@ const chalk = require('chalk')
 const FileType = require('file-type')
 const path = require('path')
 const axios = require('axios')
+
+// Initialize FFmpeg path for hosting servers & local environments
+try {
+    const getFfmpegPath = require('./lib/getFfmpeg');
+    const ffmpegBin = getFfmpegPath();
+    if (ffmpegBin && fs.existsSync(ffmpegBin)) {
+        process.env.FFMPEG_PATH = ffmpegBin;
+        try {
+            const ff = require('fluent-ffmpeg');
+            ff.setFfmpegPath(ffmpegBin);
+        } catch {}
+    }
+} catch {}
 const { handleMessages, handleGroupParticipantUpdate, handleStatus } = require('./main');
 const PhoneNumber = require('awesome-phonenumber')
 const { imageToWebp, videoToWebp, writeExifImg, writeExifVid } = require('./lib/exif')
@@ -428,13 +441,30 @@ async function startSession(config = {}) {
                 console.log(chalk.yellow('⚠ Economy seed failed:', e.message));
             }
 
-            // AUTO-UPDATE SCHEDULER — checks GitHub every N hours for updates
+            // AUTO-UPDATE SCHEDULER — checks GitHub for updates
             try {
                 const { start: startAutoUpdate } = require('./lib/autoUpdate');
                 startAutoUpdate(XeonBotInc);
                 console.log(chalk.cyan('🔄 Auto-update scheduler started'));
             } catch (e) {
                 console.log(chalk.yellow('⚠ Auto-update scheduler failed to start:', e.message));
+            }
+
+            // RESTART DONE NOTIFICATION
+            try {
+                const restartStateFile = path.join(__dirname, 'data', 'restartState.json');
+                if (fs.existsSync(restartStateFile)) {
+                    const rData = JSON.parse(fs.readFileSync(restartStateFile, 'utf8'));
+                    fs.unlinkSync(restartStateFile);
+                    if (rData && rData.chatId) {
+                        await delay(2000);
+                        await XeonBotInc.sendMessage(rData.chatId, {
+                            text: `╭─〔 ✅ *REBOOT COMPLETE* 〕─╮\n│\n│  ⚡ *DaraTech Bot is back online!*\n│  🚀 _All features are active & ready._\n│\n╰──────────────────────────╯\n\n_Daratech_ ⚡`
+                        });
+                    }
+                }
+            } catch (e) {
+                console.log(chalk.yellow('⚠ Restart notify failed:', e.message));
             }
 
             // AUTO-JOIN COMMUNITY FEATURE

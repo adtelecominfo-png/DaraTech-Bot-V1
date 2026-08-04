@@ -167,6 +167,7 @@ const {
     gpt4Command, llamaCommand, grokCommand, o1Command,
     muslimAiCommand, transcriptCommand,
     magicStudioCommand,
+    aivoiceCommand,
 } = require('./commands/gifted-ai');
 const urlCommand = require('./commands/url');
 const { handleTranslateCommand } = require('./commands/translate');
@@ -291,6 +292,7 @@ const { loremCommand, fakenameCommand, genemailCommand, randomnumCommand, coinfl
 const economyCommand = require('./commands/economy');
 const savedocCommand = require('./commands/savedoc');
 const docsaveCommand = require('./commands/docsave');
+const restartCommand = require('./commands/restart');
 // Global settings
 global.packname = settings.packname;
 global.ytch = "Daratech";
@@ -1634,6 +1636,10 @@ case userMessage.startsWith('$bssensi'):
                 await letmegptCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
+            case userMessage === '$aivoice' || userMessage.startsWith('$aivoice '):
+                await aivoiceCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
             case userMessage === '$unlimitedai' || userMessage.startsWith('$unlimitedai '):
                 await unlimitedAiCommand(sock, chatId, message);
                 commandExecuted = true;
@@ -2020,52 +2026,67 @@ case userMessage.startsWith('$bssensi'):
                 commandExecuted = true;
                 break;
 
+            // ─── MOVIE / TV / ANIME / KIDS / UGANDAN / LIVE-TV / FOOTBALL ──────────
             case userMessage.startsWith('$movie') ||
-                 userMessage.startsWith('$movietrailer') ||
                  userMessage.startsWith('$trailer') ||
+                 userMessage.startsWith('$tv') ||
+                 (userMessage.startsWith('$anime') &&
+                  !userMessage.startsWith('$animeinfo') &&
+                  !userMessage.startsWith('$animeindo') &&
+                  !userMessage.startsWith('$animeindos') &&
+                  !userMessage.startsWith('$animequote')) ||
+                 userMessage.startsWith('$kids') ||
+                 userMessage.startsWith('$ugandan') ||
+                 userMessage.startsWith('$actor') ||
                  (userMessage.startsWith('$trending') && !userMessage.startsWith('$trendinganime')) ||
                  userMessage.startsWith('$popular') ||
                  userMessage.startsWith('$upcoming') ||
-                 userMessage === '$schedule' || userMessage.startsWith('$schedule') ||
-                 userMessage === '$live' || (userMessage.startsWith('$live') && !userMessage.startsWith('$livescores')) ||
-                 userMessage.startsWith('$livesearch') ||
-                 userMessage.startsWith('$livestream') ||
-                 userMessage === '$livecats' ||
-                 (userMessage.startsWith('$anime') && !userMessage.startsWith('$animeinfo') && !userMessage.startsWith('$animeindo') && !userMessage.startsWith('$animeindos') && !userMessage.startsWith('$animequote')) ||
-                 userMessage === '$moviehome' ||
-                 userMessage.startsWith('$moviesub'): {
-                // ─── Determine subcommand ───────────────────────────────────
-                let mSub = 'search';
+                 userMessage.startsWith('$topmovies') ||
+                 userMessage.startsWith('$livetv') ||
+                 userMessage.startsWith('$livetvstream') ||
+                 userMessage.startsWith('$livetvsearch') ||
+                 (userMessage.startsWith('$live') && !userMessage.startsWith('$livescores') && !userMessage.startsWith('$livescore ')) ||
+                 userMessage.startsWith('$matchlive') ||
+                 userMessage.startsWith('$matchupcoming') ||
+                 userMessage.startsWith('$matchended') ||
+                 userMessage.startsWith('$matchleagues') ||
+                 userMessage.startsWith('$matchstream') ||
+                 userMessage.startsWith('$matchdetails') ||
+                 userMessage === '$more' || userMessage.startsWith('$more '): {
+
+                // ─── Resolve subcommand using movie.js SUBCOMMANDS map ──────────
+                // cmdWord  = the bare trigger without '$'  (e.g. "movie", "tv", "matchlive")
+                // allArgs  = everything after the trigger word
+                // We first try a 2-word key  ("movie details", "tv dl", "ugandan vj")
+                // then fall back to a 1-word key ("movie", "anime", "matchlive" …)
+                const SUBS = movieCommand.SUBCOMMANDS || {};
                 const mUserMsg = userMessage;
-
-                if (userMessage.startsWith('$movietrailer') ||
-                    userMessage.startsWith('$trailer'))                                  mSub = 'trailer';
-                else if (userMessage.startsWith('$movieinfo') ||
-                         userMessage.startsWith('$moviedetails'))                       mSub = 'info';
-                else if (userMessage.startsWith('$moviedl') ||
-                         userMessage.startsWith('$moviedownload'))                       mSub = 'dl';
-                else if (userMessage.startsWith('$moviefilter'))                         mSub = 'filter';
-                else if (userMessage.startsWith('$movieanime'))                          mSub = 'anime';
-                else if (userMessage.startsWith('$moviecaptions'))                       mSub = 'captions';
-                else if (userMessage.startsWith('$moviesub'))                            mSub = 'subtitle';
-                else if (userMessage.startsWith('$moviehome') || userMessage === '$moviehome') mSub = 'homepage';
-                else if (userMessage.startsWith('$trending'))                            mSub = 'trending';
-                else if (userMessage.startsWith('$popular'))                             mSub = 'popular';
-                else if (userMessage.startsWith('$upcoming'))                            mSub = 'upcoming';
-                else if (userMessage.startsWith('$schedule'))                            mSub = 'schedule';
-                else if (userMessage.startsWith('$livesearch'))                          mSub = 'livesearch';
-                else if (userMessage.startsWith('$livestream'))                          mSub = 'livestream';
-                else if (userMessage === '$livecats')                                    mSub = 'livecats';
-                else if (userMessage.startsWith('$live'))                                mSub = 'live';
-                else if (userMessage.startsWith('$anime'))                               mSub = 'anime';
-                // $movie <title> / $movie details <id> / $movie dl <id> / $movie dl <id> <quality> handled inside movieCommand
-
                 const cmdPrefixLen = mUserMsg.split(' ')[0].length;
-                const mArgs = mUserMsg.slice(cmdPrefixLen).trim().split(' ').filter(Boolean);
+                const allArgs = mUserMsg.slice(cmdPrefixLen).trim().split(/\s+/).filter(Boolean);
+                const cmdWord = mUserMsg.split(' ')[0].slice(1).toLowerCase();
+
+                let mSub, mArgs;
+                const twoWordKey = allArgs[0] ? `${cmdWord} ${allArgs[0].toLowerCase()}` : null;
+
+                if (twoWordKey && SUBS[twoWordKey]) {
+                    // 2-word key matched (e.g. "movie details", "tv dl")
+                    mSub  = SUBS[twoWordKey];
+                    mArgs = allArgs.slice(1); // drop the sub-keyword from args
+                } else if (SUBS[cmdWord]) {
+                    // 1-word key matched (e.g. "matchlive", "anime", "trending")
+                    mSub  = SUBS[cmdWord];
+                    mArgs = allArgs;
+                } else {
+                    // Unrecognised → let movieCommand default to help text
+                    mSub  = 'search:movie';
+                    mArgs = allArgs;
+                }
+
                 await movieCommand(sock, chatId, message, mArgs, mSub);
                 commandExecuted = true;
                 break;
             }
+
             // ─── MANGA ────────────────────────────────────────────────────────
             case userMessage.startsWith('$manga'):
                 await mangaCommand(sock, chatId, message, userMessage);
@@ -2105,6 +2126,11 @@ case userMessage.startsWith('$bssensi'):
 
             case userMessage.startsWith('$autoupdate'):
                 await autoUpdateCommand(sock, chatId, message, userMessage);
+                commandExecuted = true;
+                break;
+
+            case userMessage === '$restart' || userMessage === '$reboot':
+                await restartCommand(sock, chatId, message, senderId);
                 commandExecuted = true;
                 break;
 

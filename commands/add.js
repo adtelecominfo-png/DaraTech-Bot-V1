@@ -78,19 +78,14 @@ async function addCommand(sock, chatId, message, userMessage) {
                 console.log(`[add] groupParticipantsUpdate result for ${jid}:`, JSON.stringify(res));
 
                 // res is an array; check the first (and only) entry
+                // Baileys v7: status is ALWAYS a string (p.attrs.error || '200')
+                // When success: status === '200'
+                // When error:  status === the error code e.g. '403', '408', '409'
                 const entry = Array.isArray(res) ? res[0] : null;
                 if (entry) {
-                    // Normalise status — Baileys may return it as string or number
-                    const status = entry.status != null ? Number(entry.status) : null;
-
-                    // Some builds surface error as entry.error (string code)
-                    if (entry.error) {
-                        const reason = failReason(entry.error);
-                        return `❌ +${num} — ${reason}`;
-                    }
-                    // Check numeric status (200 = success)
-                    if (status !== null && status !== 200) {
-                        const reason = failReason(status);
+                    const status = String(entry.status ?? '200');
+                    if (status !== '200') {
+                        const reason = failReason(Number(status));
                         return `❌ +${num} — ${reason}`;
                     }
                 }

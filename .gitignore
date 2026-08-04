@@ -32,3 +32,10 @@ dara-bot/
 *.njsproj
 *.sln
 *.sw?
+.DS_Store
+baileys_store.json
+*-player-script.js
+bin/
+data/clean_store.json
+data/lastSearches.json
+

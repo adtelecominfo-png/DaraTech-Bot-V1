@@ -1,44 +1,42 @@
 'use strict';
 /**
- * Movie Command — powered by RUNFLIX API (movieapi.runflix.name.ng)
- *
- * Main:    $movie <title>           → search
- * Sub:     $movie details <id>      → full info + poster
- *          $movie dl <id>           → download / stream links
- *
- * Browse:  $trending  $popular  $upcoming  $schedule
- * Anime:   $anime <title>    $anime dl <id>
- * Live TV: $live  $livesearch <name>  $livestream <id>  $livecats
- * Filter:  $moviefilter <genre or platform>[,type]
- * Extra:   $moviecaptions <id>   $moviehome
+ * Movie / Entertainment Command — powered by DaraTech Movieapi
+ * (apimovie.runflix.name.ng/v1)
  */
 
-// Use axios — it correctly preserves Authorization headers through redirects,
-// unlike node-fetch which strips them (causing 403 on shared hosting servers).
 const axios = require('axios');
-const fs     = require('fs');
-const path   = require('path');
-const os     = require('os');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
-const MOVIE_BASE   = 'https://runflix-api-v-3305--trumpmax344.replit.app/api/v3';
-const CACHE_FILE   = path.join(__dirname, '../data/lastSearches.json');
-const CACHE_MAX    = 200; // max chatIds kept in file (rolling)
+const API_BASE = 'https://apimovie.runflix.name.ng/v1';
+const API_KEY = process.env.APIMOVIE_KEY || 'dara_f15c322ef56b466994a37d2b';
 
-// ── Persistent search-result cache ───────────────────────────────────────────
-// Survives bot restarts so $movie dl 1 still works after .update
+const CACHE_FILE = path.join(__dirname, '../data/lastSearches.json');
+const CACHE_MAX = 200;
+
 const lastSearches = new Map();
+const pageContext = new Map();
+const resultCache = new Map();
+
+function extractPage(text) {
+    const m = (text || '').match(/\s+page\s+(\d+)\s*$/i);
+    if (m) return { text: text.slice(0, m.index).trim(), page: parseInt(m[1], 10) };
+    return { text: text || '', page: 1 };
+}
+
+const PAGE_SIZE_HINT = 10;
 
 function _loadCache() {
     try {
         const raw = fs.readFileSync(CACHE_FILE, 'utf8');
         const obj = JSON.parse(raw);
         for (const [k, v] of Object.entries(obj)) lastSearches.set(k, v);
-    } catch { /* no file yet or parse error — start empty */ }
+    } catch { /* empty */ }
 }
 
 function _saveCache() {
     try {
-        // Keep only the most recent CACHE_MAX entries to avoid unbounded growth
         const entries = [...lastSearches.entries()];
         const trimmed = entries.slice(-CACHE_MAX);
         const obj = Object.fromEntries(trimmed);
@@ -49,285 +47,126 @@ function _saveCache() {
 
 _loadCache();
 
-async function apiFetch(path) {
-    const url = `${MOVIE_BASE}${path}`;
+// ─── Core API fetch ─────────────────────────────────────────────────────────
+async function apiFetch(pathAndQuery) {
+    const sep = pathAndQuery.includes('?') ? '&' : '?';
+    const url = `${API_BASE}${pathAndQuery}${sep}apikey=${API_KEY}`;
     try {
         const { data } = await axios.get(url, {
             headers: {
-                'Accept':          'application/json, text/plain, */*',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Authorization': `Bearer ${API_KEY}`,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             },
             timeout: 20000,
             maxRedirects: 5,
         });
+        if (data && data.success === false) {
+            throw new Error(data.error || 'API returned success:false');
+        }
         return data;
     } catch (err) {
         const status = err.response?.status;
-        const msg = err.response?.data?.message || err.message || `HTTP ${status || 'timeout'}`;
+        const msg = err.response?.data?.error || err.response?.data?.message || err.message || `HTTP ${status || 'timeout'}`;
         throw new Error(msg);
     }
 }
 
-/**
- * shortenUrl — same backends as the bot's own $vgd / $tinyurl commands.
- * Chain: v.gd (direct) → TinyURL (direct) → original URL
- */
-async function shortenUrl(longUrl) {
-    const enc = encodeURIComponent(longUrl);
+// ─── Type registry ──────────────────────────────────────────────────────────
+const TYPES = {
+    movie: { seg: 'movies', cmd: 'movie', label: 'Movie', emoji: '🎬', hasFeatured: true, hasTrending: true, hasPopular: true, hasTopRated: true, hasNew: true, hasEpisodes: false, hasDownload: true, hasRelatedEp: true },
+    tv: { seg: 'tvshows', cmd: 'tv', label: 'TV Show', emoji: '📺', hasFeatured: true, hasNew: true, hasEpisodes: true, hasDownload: false, hasRelatedEp: true },
+    anime: { seg: 'anime', cmd: 'anime', label: 'Anime', emoji: '🎌', hasFeatured: true, hasNew: true, hasEpisodes: true, hasDownload: false, hasRelatedEp: true },
+    kids: { seg: 'kids', cmd: 'kids', label: 'Kids', emoji: '🧸', hasFeatured: false, hasNew: false, hasEpisodes: false, hasDownload: false, hasRelatedEp: true },
+    ugandan: { seg: 'ugandan', cmd: 'ugandan', label: 'Ugandan VJ', emoji: '🇺🇬', hasFeatured: false, hasNew: false, hasEpisodes: false, hasDownload: true, hasRelatedEp: false, hasLatest: true },
+};
 
-    // 1️⃣ v.gd — same call as _shortenDirect('vgd')
-    try {
-        const { data } = await axios.get(
-            `https://v.gd/create.php?format=json&url=${enc}`,
-            { timeout: 8000 }
-        );
-        if (data?.shorturl) return data.shorturl;
-    } catch { /* fall through */ }
-
-    // 2️⃣ TinyURL — same call as _shortenDirect('ssur') fallback
-    try {
-        const { data } = await axios.get(
-            `https://tinyurl.com/api-create.php?url=${enc}`,
-            { timeout: 8000, responseType: 'text' }
-        );
-        const short = (data || '').trim();
-        if (short.startsWith('http') && short.length < longUrl.length) return short;
-    } catch { /* fall through */ }
-
-    return longUrl;   // all services failed — return original
-}
-
-// ─── Format helpers ───────────────────────────────────────────────────────────
-
-function mediaEmoji(type) {
-    if (!type) return '🎬';
-    const t = type.toLowerCase();
-    if (t.includes('anime'))                                        return '🎌';
-    if (t.includes('series') || t.includes('tv') || t.includes('show')) return '📺';
-    if (t.includes('live'))                                         return '📡';
-    return '🎬';
-}
-
-function fileSize(bytes) {
-    const b = parseInt(bytes);
-    if (!b || isNaN(b)) return '';
-    if (b >= 1e9) return `${(b / 1e9).toFixed(1)} GB`;
-    if (b >= 1e6) return `${Math.round(b / 1e6)} MB`;
-    return `${Math.round(b / 1e3)} KB`;
-}
-
-/**
- * Unified result formatter — handles both movie (subjectId/cover.url/genre string)
- * and anime/upcoming (id/thumbnail/genres array) item shapes.
- */
-function formatResult(item, i) {
-    const em     = mediaEmoji(item.type || item.format || '');
-    const id     = item.subjectId || item.id || '';
-    const year   = (item.releaseDate || item.airingDate || '').slice(0, 4) || item.year || '';
-    const type   = item.type || item.format || 'Movie';
-    const rating = item.imdbRatingValue || item.imdbRate || item.rating;
-    const rStr   = rating ? `  ⭐ ${rating}` : '';
-    const genre  = Array.isArray(item.genres)
-        ? item.genres.slice(0, 3).join(', ')
-        : (item.genre || '');
+function formatResult(item, i, cfg) {
+    const year = item.year || '';
+    const rStr = item.rating ? `  ⭐ ${item.rating}` : '';
+    const genre = Array.isArray(item.genres) ? item.genres.slice(0, 3).join(', ') : '';
     const genreStr = genre ? `  🏷 ${genre}` : '';
-    return `${em} *${i + 1}.* ${item.title || item.name}\n    📅 ${year || '—'}  •  ${type}${rStr}${genreStr}\n    🆔 \`${id}\``;
+    const durStr = item.duration ? `  ⏱ ${item.duration}` : '';
+    return `${cfg.emoji} *${i + 1}.* ${item.title}\n    📅 ${year || '—'}${rStr}${genreStr}${durStr}\n    🆔 \`${item.id || item.subjectId}\``;
 }
 
-function formatInfo(data, subtitles) {
-    const d  = data.results || data;
-    const em = mediaEmoji(d.type);
-    let msg  = `${em} *${d.title || d.name}*\n`;
+function seasonSummaryLine(seasons) {
+    return (seasons || []).map(s => `S${s.season}(${s.episodes?.length || 0}ep)`).join('  ');
+}
 
-    if (d.releaseDate)                          msg += `📅 *Year:* ${d.releaseDate.slice(0, 4)}\n`;
-    if (d.type)                                 msg += `🎭 *Type:* ${d.type}\n`;
-    const rating = d.imdbRatingValue || d.rating || d.imdbRate;
-    if (rating)                                 msg += `⭐ *IMDb:* ${rating}/10\n`;
-    if (d.duration)                             msg += `⏱ *Duration:* ${d.duration}\n`;
-    if (d.genre)                                msg += `🏷 *Genre:* ${d.genre}\n`;
-    if (d.countryName || d.country)             msg += `🌍 *Country:* ${d.countryName || d.country}\n`;
-    if (d.language)                             msg += `🗣 *Language:* ${d.language}\n`;
+function formatDetail(d, cfg, episodeData, cmdName) {
+    const id = d.id || d.subjectId;
+    let msg = `${cfg.emoji} *${d.title}*\n`;
+    if (d.year) msg += `📅 *Year:* ${d.year}\n`;
+    msg += `🎭 *Category:* ${d.category || cfg.label}\n`;
+    if (d.rating) msg += `⭐ *IMDb:* ${d.rating}/10\n`;
+    if (d.duration) msg += `⏱ *Duration:* ${d.duration}\n`;
+    if (d.genres?.length) msg += `🏷 *Genre:* ${d.genres.join(', ')}\n`;
+    if (d.country) msg += `🌍 *Country:* ${d.country}\n`;
+    if (d.language) msg += `🗣 *Language:* ${d.language}\n`;
+    if (d.vjname) msg += `🎙 *VJ:* ${d.vjname}\n`;
 
-    // Season / episode breakdown — shown for any series regardless of detail level
-    if (d.seasonDetails && d.seasonDetails.length) {
-        const totalEps = d.totalEpisodes
-            || d.seasonDetails.reduce((a, s) => a + (s.totalEpisodes || 0), 0);
-        const seasonLines = d.seasonDetails.map(s =>
-            `S${s.season}` + (s.totalEpisodes ? `(${s.totalEpisodes}ep)` : '')
-        ).join('  ');
-        msg += `📺 *Seasons:* ${d.seasonDetails.length}`;
-        if (totalEps) msg += `  •  *Total Episodes:* ${totalEps}`;
-        msg += `\n📋 ${seasonLines}\n`;
-    } else if (d.seasons) {
-        // Only season count available — still show it
-        msg += `📺 *Seasons:* ${d.seasons}`;
-        if (d.totalEpisodes) msg += `  •  *Total Episodes:* ${d.totalEpisodes}`;
-        msg += `\n`;
+    if (episodeData?.seasons?.length) {
+        msg += `📺 *Seasons:* ${episodeData.seasons.length}  •  *Total Episodes:* ${episodeData.totalEpisodes || 0}\n`;
+        msg += `📋 ${seasonSummaryLine(episodeData.seasons)}\n`;
     }
 
-    // Dubs / audio languages available
-    const dubList = d.dubs || d.audioTracks || [];
-    if (dubList.length > 1) {
-        const langs = dubList.map(dub => dub.lanName || dub.lanCode || dub.language).filter(Boolean);
-        msg += `🌐 *Available Dubs:* ${langs.join(' | ')}\n`;
+    if (d.cast?.length) {
+        const names = d.cast.slice(0, 5).map(c => c.name).join(', ');
+        msg += `🎭 *Cast:* ${names}\n`;
     }
-
-    if (d.staffList && d.staffList.length) {
-        const dirs = d.staffList.filter(s => s.staffType === 2).slice(0, 2).map(s => s.name);
-        const cast = [...new Set(d.staffList.filter(s => s.staffType === 1).map(s => s.name))].slice(0, 5);
-        if (dirs.length) msg += `🎬 *Director:* ${dirs.join(', ')}\n`;
-        if (cast.length) msg += `🎭 *Cast:* ${cast.join(', ')}\n`;
+    if (d.description) {
+        const desc = d.description.length > 400 ? d.description.slice(0, 400) + '…' : d.description;
+        msg += `\n📝 *Synopsis:*\n${desc}\n`;
     }
-
-    const synopsis = d.description || d.overview || d.plot || '';
-    if (synopsis) msg += `\n📝 *Synopsis:*\n${synopsis.slice(0, 500)}${synopsis.length > 500 ? '...' : ''}`;
-
-    const id = d.subjectId || d.id;
-    if (id) {
-        msg += `\n\n🆔 *ID:* \`${id}\``;
-        msg += `\n💡 *$movie dl ${id}* — Resolution picker & download`;
-        if (d.trailer?.VideoAddress?.url)
-            msg += `\n🎬 *$movietrailer ${id}* — Watch official trailer`;
-        else
-            msg += `\n🎞 *Trailer Unavailable* — Check YouTube for a trailer`;
-        if (subtitles && subtitles.length) {
-            const subLangs = subtitles
-                .map(s => s.language || s.languageCode || s.lang)
-                .filter(Boolean).join(', ');
-            msg += `\n📜 *Subtitle:* ${subLangs || 'Available'}`;
-            msg += `\n💡 *$moviesub ${id}* — Download subtitle .srt file(s)`;
-            msg += `\n💡 *$moviecaptions ${id}* — View all subtitles & audio tracks`;
-        }
+    msg += `\n🆔 *ID:* \`${id}\`\n`;
+    msg += `💡 *$${cmdName} dl ${id}* — Download / Stream\n`;
+    if (d.trailer && d.trailer !== 'NONE' && d.trailer.startsWith('http')) {
+        msg += `🎬 *$${cmdName}trailer ${id}* — Watch trailer`;
     }
     return msg;
 }
 
-/**
- * dedupeByQuality — for duplicate quality labels keep only the source
- * with the highest file size (best encode wins).
- */
-function dedupeByQuality(sources) {
-    const map = new Map();
-    for (const s of sources) {
-        const key  = (s.quality || 'unknown').toLowerCase().replace(/\s+/g, '');
-        const size = parseInt(s.size) || 0;
-        if (!map.has(key) || size > (parseInt(map.get(key).size) || 0)) {
-            map.set(key, s);
-        }
-    }
-    return [...map.values()];
+function buildFileName(title, epLabel) {
+    const safe = str => (str || '').replace(/[^\w\s.-]/g, '').trim().replace(/\s+/g, '.');
+    const parts = [safe(title) || 'Video'];
+    if (epLabel) parts.push(epLabel.replace(/\s+/g, ''));
+    parts.push('Daratech');
+    return parts.filter(Boolean).join('.') + '.mp4';
 }
 
-// ─── Series helpers ───────────────────────────────────────────────────────────
-
-function isSeriesType(type) {
-    if (!type) return false;
-    const t = type.toLowerCase();
-    return t.includes('series') || t.includes('tv') || t.includes('show');
+function renderList(list, cfg, header, hasMore) {
+    if (!list.length) return `⚠️ No results found.`;
+    const lines = list.slice(0, 15).map((it, i) => formatResult(it, i, cfg)).join('\n\n');
+    let msg = `${header}\n\n${lines}\n\n💡 *$${cfg.cmd} details <id>* — Full info`;
+    if (hasMore) msg += `\n➡️ *$more* — Next page`;
+    return msg;
 }
 
-/**
- * parsePick — split user's pick string into season, episode, audio index, quality.
- * Supports: "s1e3", "s2", "s1e5 1080p", "1080p audio:2", "s1e3 720p audio:1"
- */
-function parsePick(pick) {
-    const seMatch    = pick.match(/\bs(\d+)e(\d+)\b/i);
-    const sOnly      = !seMatch && pick.match(/\bs(\d+)\b/i);
-    const audioMatch = pick.match(/\baudio:(\d+)\b/i);
-    const cleaned    = pick
-        .replace(/\bs\d+e\d+\b/gi, '')
-        .replace(/\bs\d+\b/gi, '')
-        .replace(/\baudio:\d+\b/gi, '')
-        .trim();
-    return {
-        season:     seMatch  ? parseInt(seMatch[1])  : (sOnly ? parseInt(sOnly[1]) : null),
-        episode:    seMatch  ? parseInt(seMatch[2])  : null,
-        audioIndex: audioMatch ? parseInt(audioMatch[1]) : null,
-        quality:    cleaned  || null,
-    };
+function formatBytes(bytes) {
+    if (bytes === null || bytes === undefined || isNaN(bytes)) return null;
+    if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+    return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 }
 
-// ─── Size limits ──────────────────────────────────────────────────────────────
-// Files above BUFFER_THRESHOLD are sent via URL (no bot-side buffering) to
-// avoid OOM crashes on memory-limited servers.  WhatsApp's own servers fetch
-// the URL directly, so the bot never holds the full file in RAM.
-const BUFFER_THRESHOLD = 100 * 1024 * 1024; // 100 MB
-const DOC_LIMIT        = 2   * 1024 * 1024 * 1024; // 2 GB — WA document ceiling
-
-/**
- * downloadBuffer — fetch a URL into a Buffer.
- * Only called for files ≤ BUFFER_THRESHOLD to prevent OOM.
- * Returns null if download fails (caller falls back to URL path).
- */
-// Shared headers for CDN downloads. Many video CDNs sit behind hotlink/anti-bot
-// protection that rejects "bare" requests with 428 (Precondition Required) or
-// 403 unless a Referer/Origin is present — so we send one that matches the
-// API's own origin, since that's the "expected" caller as far as the CDN is
-// concerned.
-const CDN_ORIGIN = new URL(MOVIE_BASE).origin;
-function cdnHeaders() {
-    return {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Referer': CDN_ORIGIN + '/',
-        'Origin':  CDN_ORIGIN,
-    };
-}
-
-// Statuses worth a short retry — 428/429 are precondition/rate-limit style
-// blocks that are frequently transient, and 502/503/504 are upstream hiccups.
-const RETRYABLE_STATUSES = new Set([428, 429, 502, 503, 504]);
-
-async function withCdnRetry(fn, attempts = 3) {
-    let lastErr;
-    for (let i = 0; i < attempts; i++) {
-        try {
-            return await fn();
-        } catch (err) {
-            lastErr = err;
-            const status = err.response?.status;
-            if (!RETRYABLE_STATUSES.has(status) || i === attempts - 1) throw err;
-            await new Promise(r => setTimeout(r, 1000 * (i + 1))); // 1s, 2s backoff
-        }
-    }
-    throw lastErr;
-}
-
-async function downloadBuffer(url) {
+async function probeSize(url) {
     try {
-        const resp = await withCdnRetry(() => axios.get(url, {
-            responseType: 'arraybuffer',
-            timeout: 300000,          // 5 min
-            maxContentLength: Infinity,
-            maxBodyLength:    Infinity,
-            headers: cdnHeaders(),
-        }));
-        return {
-            buf: Buffer.from(resp.data),
-            contentType: (resp.headers['content-type'] || 'video/mp4').split(';')[0].trim().toLowerCase(),
-        };
-    } catch (err) {
-        console.warn('[movie:downloadBuffer] failed:', err.response?.status ? `HTTP ${err.response.status}` : err.message);
+        const resp = await axios.head(url, { timeout: 15000, maxRedirects: 5 });
+        const len = parseInt(resp.headers['content-length']);
+        return isNaN(len) ? null : len;
+    } catch {
         return null;
     }
 }
 
-/**
- * downloadToTempFile — streams a URL straight to disk (never fully in RAM).
- * Used for large videos so Baileys can process a *local* file to build the
- * streaming sidecar / thumbnail it needs for inline playback — something it
- * can't reliably do when only given a bare remote URL.
- * Returns the temp file path, or null on failure. Caller must delete it.
- */
-async function downloadToTempFile(url, subjectId) {
-    const tmpPath = path.join(os.tmpdir(), `movie_${subjectId}_${Date.now()}.mp4`);
+async function downloadToTempFile(url, tag) {
+    const tmpPath = path.join(os.tmpdir(), `movie_${tag}_${Date.now()}.mp4`);
     try {
-        const resp = await withCdnRetry(() => axios.get(url, {
+        const resp = await axios.get(url, {
             responseType: 'stream',
-            timeout: 300000, // 5 min
-            headers: cdnHeaders(),
-        }));
+            timeout: 300000,
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        });
         await new Promise((resolve, reject) => {
             const writer = fs.createWriteStream(tmpPath);
             resp.data.pipe(writer);
@@ -337,1331 +176,1185 @@ async function downloadToTempFile(url, subjectId) {
         });
         return tmpPath;
     } catch (err) {
-        const status = err.response?.status;
-        console.warn('[movie:downloadToTempFile] failed:', status ? `HTTP ${status}` : err.message);
-        try { fs.unlinkSync(tmpPath); } catch { /* not created */ }
+        console.warn('[movie:downloadToTempFile] failed:', err.message);
+        try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
         return null;
     }
 }
 
-// ─── Filename builder ──────────────────────────────────────────────────────────
-/**
- * buildFileName — constructs a clean document filename.
- * Format: Title.SxxExx.Quality.Daratech.mp4  (episode parts optional)
- */
-function buildFileName(title, epLabel, quality) {
-    const safe  = str => (str || '').replace(/[^\w\s.-]/g, '').trim().replace(/\s+/g, '.');
-    const parts = [safe(title) || 'Video'];
-    if (epLabel) parts.push(epLabel.replace(/\s+/g, ''));   // "S01E03" already clean
-    if (quality)  parts.push(safe(quality));
-    parts.push('Daratech');
-    return parts.filter(Boolean).join('.') + '.mp4';
+async function downloadBuffer(url) {
+    try {
+        const resp = await axios.get(url, {
+            responseType: 'arraybuffer',
+            timeout: 120000,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        });
+        return {
+            buf: Buffer.from(resp.data),
+            contentType: (resp.headers['content-type'] || 'video/mp4').split(';')[0].trim().toLowerCase(),
+        };
+    } catch (err) {
+        console.warn('[movie:downloadBuffer] failed:', err.message);
+        return null;
+    }
 }
 
-// Same dot-separated naming convention as buildFileName, but for .srt subtitles
-// (e.g. "Game.of.Thrones.S08E02.English.Daratech.srt").
-function buildSubFileName(title, epLabel, lang) {
-    const safe  = str => (str || '').replace(/[^\w\s.-]/g, '').trim().replace(/\s+/g, '.');
-    const parts = [safe(title) || 'Subtitle'];
-    if (epLabel) parts.push(epLabel.replace(/\s+/g, ''));
-    parts.push(safe(lang) || 'Sub');
-    parts.push('Daratech');
-    return parts.filter(Boolean).join('.') + '.srt';
-}
+const BUFFER_THRESHOLD = 100 * 1024 * 1024; // 100 MB
 
-/**
- * parseSources — normalise both movie & anime source shapes into a flat array.
- *   Movie:  data.results[]  + data.subtitles[]  + data.audioTracks[]
- *   Anime:  data.results.sources[]  + data.results.subtitles[]  + …
- */
-function parseSources(data) {
-    return {
-        sources:     Array.isArray(data.results) ? data.results : (data.results?.sources || []),
-        subtitles:   data.subtitles   || data.results?.subtitles   || [],
-        audioTracks: data.audioTracks || data.results?.audioTracks || [],
-    };
-}
-
-/**
- * sendAsDocument — core sender.
- *
- * Small files (≤ 100 MB):
- *   Tier 1 → video (inline player, buffered)
- *   Tier 2 → document (buffered)
- *   Tier 3 → document via URL (no buffer)
- *   Tier 4 → plain-text link
- *
- * Large files (> 100 MB):
- *   Tier 1 → video, streamed to a temp file on disk first (needed so Baileys
- *            can build the streaming sidecar/thumbnail — a bare remote URL
- *            sends but won't play). Disk streaming keeps RAM flat.
- *   Tier 2 → document via URL (fallback, no bot RAM used)
- *   Tier 3 → plain-text link
- *
- * linksText is only sent in the final plain-text fallback — NOT after a
- * successful file/video send to avoid duplicate messages.
- *
- * @param sizeHint  known file size in bytes from API (optional)
- */
-async function sendAsDocument(sock, chatId, message, dlUrl, title, quality, epLabel, linksText, sizeHint) {
+async function sendMedia(sock, chatId, message, dlUrl, title, quality, epLabel, knownSize) {
     const caption = [
-        `🎬 *${title || 'Movie'}*`,
+        `🎬 *${title || 'Video'}*`,
         epLabel ? `📺 *Episode:* ${epLabel}` : '',
         `🎞 *Quality:* ${quality || 'Unknown'}`,
         ``,
-        `_Downloaded by Daratech_`,
+        `_Downloaded by Daratech_ ⚡`,
     ].filter(l => l !== undefined).join('\n').replace(/\n\n\n+/g, '\n\n');
 
-    const fileName  = buildFileName(title, epLabel, quality);
-    const knownSize = parseInt(sizeHint) || 0;
-    const isLarge   = knownSize > BUFFER_THRESHOLD; // > 100 MB
+    const fileName = buildFileName(title, epLabel);
+    const size = (typeof knownSize === 'number' && knownSize > 0) ? knownSize : await probeSize(dlUrl);
+    const isSmallKnown = size !== null && size <= BUFFER_THRESHOLD;
 
-    // ── LARGE FILE path (> 100 MB) ────────────────────────────────────────────
-    if (isLarge) {
-        // Tier 1: stream to a temp file on disk, then send as video from the
-        // local path. Baileys needs a local file (not a bare remote URL) to
-        // build the streaming sidecar/thumbnail — without it the video
-        // "sends" but never actually plays. Disk streaming keeps RAM flat.
-        const tmpPath = await downloadToTempFile(dlUrl, epLabel ? `${title}_${epLabel}` : title);
-        if (tmpPath) {
+    if (isSmallKnown) {
+        const dlResult = await downloadBuffer(dlUrl);
+        const buf = dlResult?.buf || null;
+        const mimeType = (dlResult?.contentType?.startsWith('video/') ? dlResult.contentType : 'video/mp4');
+
+        if (buf) {
             try {
-                await sock.sendMessage(chatId, {
-                    video: { url: tmpPath },
-                    mimetype: 'video/mp4',
-                    caption,
-                }, { quoted: message });
-                return; // success — no extra links message
+                await sock.sendMessage(chatId, { video: buf, mimetype: mimeType, caption }, { quoted: message });
+                return;
             } catch (err) {
-                console.warn('[movie:send] large-file local video failed, trying document:', err.message);
-            } finally {
-                fs.unlink(tmpPath, () => {}); // best-effort cleanup, non-blocking
+                console.warn('[movie:send] buffered video failed:', err.message);
+            }
+            try {
+                await sock.sendMessage(chatId, { document: buf, mimetype: mimeType, fileName, caption }, { quoted: message });
+                return;
+            } catch (err) {
+                console.warn('[movie:send] buffered document failed:', err.message);
             }
         }
+    }
 
-        // Tier 2: document via URL (fallback — WhatsApp servers still fetch it, zero RAM)
+    const tmpPath = await downloadToTempFile(dlUrl, (title || 'video').replace(/[^\w]/g, '_'));
+    if (tmpPath) {
         try {
-            await sock.sendMessage(chatId, {
-                document: { url: dlUrl },
-                mimetype: 'video/mp4',
-                fileName,
-                caption,
-            }, { quoted: message });
-            return; // success — no extra links message
+            await sock.sendMessage(chatId, { video: { url: tmpPath }, mimetype: 'video/mp4', caption }, { quoted: message });
+            return;
         } catch (err) {
-            console.warn('[movie:send] large-file URL document failed:', err.message);
-        }
-
-        // Tier 3: plain-text link only if all else failed
-        await sock.sendMessage(chatId, {
-            text: linksText || `🔗 *Direct link:*\n${dlUrl}`
-        }, { quoted: message });
-        return;
-    }
-
-    // ── SMALL FILE path (≤ 100 MB) ────────────────────────────────────────────
-    const dlResult = await downloadBuffer(dlUrl);
-    const buf      = dlResult?.buf || null;
-    const mimeType = (dlResult?.contentType?.startsWith('video/') ? dlResult.contentType : 'video/mp4');
-
-    // Tier 1: video (inline player)
-    if (buf) {
-        try {
-            await sock.sendMessage(chatId, {
-                video: buf, mimetype: mimeType, caption,
-            }, { quoted: message });
-            return; // success — no extra links message
-        } catch (videoErr) {
-            console.warn('[movie:send] video send failed, trying document:', videoErr.message);
+            console.warn('[movie:send] local-file video failed:', err.message);
+        } finally {
+            fs.unlink(tmpPath, () => { });
         }
     }
 
-    // Tier 2: document (buffered)
-    if (buf) {
-        try {
-            await sock.sendMessage(chatId, {
-                document: buf, mimetype: mimeType, fileName, caption,
-            }, { quoted: message });
-            return; // success — no extra links message
-        } catch (docErr) {
-            console.warn('[movie:send] buffered document failed, trying URL:', docErr.message);
-        }
-    }
-
-    // Tier 3: document via URL (no buffer — CDN link still fresh at this point)
     try {
-        await sock.sendMessage(chatId, {
-            document: { url: dlUrl }, mimetype: 'video/mp4', fileName, caption,
-        }, { quoted: message });
-        return; // success — no extra links message
-    } catch (urlErr) {
-        console.warn('[movie:send] URL document failed, falling back to link:', urlErr.message);
+        await sock.sendMessage(chatId, { document: { url: dlUrl }, mimetype: 'video/mp4', fileName, caption }, { quoted: message });
+        return;
+    } catch (err) {
+        console.warn('[movie:send] URL document failed:', err.message);
     }
 
-    // Tier 4: plain-text link
-    await sock.sendMessage(chatId, {
-        text: linksText || `🔗 *Direct link:*\n${dlUrl}`
-    }, { quoted: message });
+    await sock.sendMessage(chatId, { text: `🔗 *Direct link:*\n${dlUrl}` }, { quoted: message });
 }
 
-/**
- * sendVideoOrLinks — builds the links list then calls sendAsDocument.
- * Title here may include the episode label; epLabel is passed separately
- * so the filename can be constructed correctly.
- */
-async function sendVideoOrLinks(sock, chatId, message, data, title, poster, epLabel) {
-    const { sources, subtitles, audioTracks } = parseSources(data);
-
-    if (!sources.length) {
-        return sock.sendMessage(chatId, {
-            text: '⚠️ No download sources found for this title.\n\n_The movie may not have links yet._'
-        }, { quoted: message });
-    }
-
-    const validSources = sources.filter(s => (s.download_url || s.url)?.startsWith('http'));
-    if (!validSources.length) {
-        return sock.sendMessage(chatId, { text: '⚠️ No valid download URLs in API response.' }, { quoted: message });
-    }
-
-    // Pick the one being sent (resolveAndSend already narrows to [selected])
-    const target  = validSources[0];
-    const dlUrl   = target.download_url || target.url;
-    const quality = target.quality || '';
-
-    // Let the user know the fetch is underway — this can take a while for
-    // large files, so show what's downloading before we go quiet.
-    const notifyLabel = epLabel ? `${title || 'Movie'} (${epLabel})` : (title || 'Movie');
-    await sock.sendMessage(chatId, {
-        text: `📥 Downloading *${notifyLabel}* — ${quality || 'Unknown'}…\n_Please wait…_`
-    }, { quoted: message });
-
-    // Always build a links block — used as fallback when video can't be sent
-    const titleLabel = epLabel ? `${title || 'Movie'} ${epLabel}` : (title || 'Movie');
-    // Shorten all URLs in parallel (TinyURL, falls back to original on failure)
-    const shortUrls = await Promise.all(
-        validSources.map(s => shortenUrl(s.download_url || s.url))
-    );
-    let linksText = `📥 *Download Links* — ${titleLabel}\n\n`;
-    validSources.forEach((s, i) => {
-        const q   = s.quality || `Link ${i + 1}`;
-        const sz  = s.size ? ` (${fileSize(s.size)})` : '';
-        const fmt = s.format ? ` [${s.format.toUpperCase()}]` : '';
-        linksText += `*${i + 1}. ${q}${fmt}${sz}*\n${shortUrls[i]}\n\n`;
-    });
-    if (audioTracks.length > 1)
-        linksText += `🔊 *Audio:* ${audioTracks.map(a => a.language).join(' | ')}\n`;
-    if (subtitles.length)
-        linksText += `📜 *Subs:* ${subtitles.map(s => s.language || s.languageCode).join(', ')}\n`;
-
-    // Strip epLabel from display title to avoid duplication in caption
-    const baseTitle = epLabel ? (title || '').replace(epLabel, '').trim() : (title || '');
-
-    return sendAsDocument(sock, chatId, message, dlUrl, baseTitle || title, quality, epLabel || null, linksText.trim(), target.size);
+async function react(sock, message, emoji) {
+    try { await sock.sendMessage(message.key.remoteJid, { react: { text: emoji, key: message.key } }); } catch { /* ignore */ }
 }
 
-// ─── Shared resolution picker & send helpers ──────────────────────────────────
+function renderCachedPage(sock, chatId, message, cfg, headerBase, allItems, page, typeResolver) {
+    resultCache.set(chatId, allItems);
+    const start = (page - 1) * PAGE_SIZE_HINT;
+    const slice = allItems.slice(start, start + PAGE_SIZE_HINT);
 
-/**
- * showResolutionPicker — sends the "pick a quality" message.
- * Also shows audio dub options if more than one track is available.
- */
-function showResolutionPicker(sock, chatId, message, sorted, audioTracks, subtitles, title, id, epLabel, hasTrailer) {
-    const NUMS = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
-    const emoji = epLabel ? '📺' : '🎬';
-    const epTag  = epLabel ? ` ${epLabel}` : '';
-    let msg = `${emoji} *${title}${epTag}*\n\n📋 *Available Resolutions:*\n\n`;
+    if (!slice.length) {
+        return sock.sendMessage(chatId, { text: `📭 No more results — that's everything (${allItems.length} total).` }, { quoted: message });
+    }
 
-    sorted.forEach((s, i) => {
-        const sz      = s.size ? fileSize(s.size) : '?';
-        const codec   = s.codec ? ` · ${s.codec.toUpperCase()}` : '';
-        const canSend = (parseInt(s.size) || Infinity) <= DOC_LIMIT ? ' ✅' : '';
-        msg += `${NUMS[i] || `${i + 1}.`}  *${s.quality}*  —  ${sz}${codec}${canSend}\n`;
+    lastSearches.set(chatId, slice.map(it => ({ type: typeResolver(it), id: it.id || it.subjectId, title: it.title })));
+    _saveCache();
+
+    const hasMore = start + PAGE_SIZE_HINT < allItems.length;
+    pageContext.set(chatId, {
+        page,
+        run: (nextPage) => renderCachedPage(sock, chatId, message, cfg, headerBase, allItems, nextPage, typeResolver),
     });
 
-    const dlCmd = epLabel ? `$movie dl ${id} ${epLabel.toLowerCase()} ` : `$movie dl ${id} `;
-    msg += `\n✅ _= can be sent as video/file in chat_\n`;
-    msg += `\n💬 *Pick a resolution:*\n`;
-    msg += `_${dlCmd}1_ — by number\n`;
-    msg += `_${dlCmd}360p_ — by quality name\n`;
+    const header = `${headerBase}${page > 1 ? ` (page ${page})` : ''}`;
+    return sock.sendMessage(chatId, { text: renderList(slice, cfg, header, hasMore) }, { quoted: message });
+}
 
-    if (audioTracks && audioTracks.length > 1) {
-        msg += `\n🔊 *Audio Dubs Available:*\n`;
-        audioTracks.forEach((a, i) => {
-            const orig = a.isOriginal ? ' ✓ Original' : '';
-            msg += `  *${i + 1}.* ${a.language || `Track ${i + 1}`}${orig}\n`;
+function resolveId(chatId, rawArg) {
+    const cached = lastSearches.get(chatId);
+    if (!rawArg) {
+        if (cached && cached[0]) return cached[0];
+        return { id: null, type: null };
+    }
+    if (/^\d+$/.test(rawArg)) {
+        const idx = parseInt(rawArg, 10) - 1;
+        if (cached && cached[idx]) return cached[idx];
+    }
+    return { id: rawArg, type: null };
+}
+
+const LABEL_TO_TYPE = Object.fromEntries(
+    Object.entries(TYPES).map(([key, cfg]) => [cfg.label.toLowerCase(), key])
+);
+
+function checkCachedTypeMismatch(resolved, typeKey, rawArg, cmdHint) {
+    if (resolved.type && typeKey && TYPES[typeKey] && TYPES[resolved.type] && resolved.type !== typeKey) {
+        const actualCfg = TYPES[resolved.type];
+        return `⚠️ That's a *${actualCfg.label}* title, not a *${TYPES[typeKey].label}* — use *$${actualCfg.cmd}${cmdHint ? ' ' + cmdHint : ''} ${rawArg || ''}* instead.`;
+    }
+    return null;
+}
+
+function checkDetailTypeMismatch(data, typeKey, rawArg, cmdHint) {
+    const category = (data?.category || '').trim().toLowerCase();
+    if (!category) return null;
+    const actualType = LABEL_TO_TYPE[category];
+    if (actualType && actualType !== typeKey) {
+        const actualCfg = TYPES[actualType];
+        return `⚠️ That's a *${actualCfg.label}* title, not a *${TYPES[typeKey].label}* — use *$${actualCfg.cmd}${cmdHint ? ' ' + cmdHint : ''} ${rawArg || ''}* instead.`;
+    }
+    return null;
+}
+
+// ─── Core Commands ──────────────────────────────────────────────────────────
+
+async function doSearch(sock, chatId, message, rawQuery, typeKey, pageOverride) {
+    if (!rawQuery) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey} <title>*` }, { quoted: message });
+    const { text: query, page: parsedPage } = extractPage(rawQuery);
+    const page = pageOverride || parsedPage;
+    if (!query) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey} <title>*` }, { quoted: message });
+    const cfg = TYPES[typeKey];
+    await react(sock, message, '🔎');
+
+    if (typeKey === 'anime') {
+        const data = await apiFetch(`/search/anime?q=${encodeURIComponent(query)}&page=${page}`);
+        const items = data.items || [];
+        lastSearches.set(chatId, items.map(it => ({ type: typeKey, id: it.id || it.subjectId, title: it.title })));
+        _saveCache();
+        pageContext.set(chatId, {
+            page,
+            run: (nextPage) => doSearch(sock, chatId, message, query, typeKey, nextPage),
         });
-        msg += `\n💡 Add *audio:<n>* to pick a dub:\n`;
-        msg += `_${dlCmd}1080p audio:2_ — 1080p + dub #2\n`;
+        const header = `${cfg.emoji} *${cfg.label} results for "${query}"*${page > 1 ? ` (page ${page})` : ''}`;
+        return sock.sendMessage(chatId, { text: renderList(items, cfg, header, items.length >= PAGE_SIZE_HINT) }, { quoted: message });
     }
 
-    if (hasTrailer)
-        msg += `\n🎬 *$movietrailer ${id}* — Watch trailer first`;
-    else
-        msg += `\n🎞 *Trailer Unavailable* — Check YouTube for a trailer`;
-    if (subtitles && subtitles.length) {
-        const subLangs = subtitles.map(s => s.language || s.languageCode).join(', ');
-        msg += `\n📜 *Subtitles available:* ${subLangs}`;
-        msg += `\n💡 *$moviesub ${id}* — Download subtitle file(s)`;
-        msg += `\n💡 *$moviesub ${id} english* — English only`;
+    let allItems = [];
+    try {
+        const data = typeKey === 'movie'
+            ? await apiFetch(`/search?q=${encodeURIComponent(query)}`)
+            : await apiFetch(`/search/${cfg.seg}?q=${encodeURIComponent(query)}`);
+        allItems = data.items || [];
+    } catch {
+        try {
+            const fallbackData = await apiFetch(`/${cfg.seg}`);
+            allItems = (fallbackData.items || []).filter(it => (it.title || '').toLowerCase().includes(query.toLowerCase()));
+        } catch { /* ignore */ }
     }
+    const header = `${cfg.emoji} *${cfg.label} results for "${query}"*`;
+    return renderCachedPage(sock, chatId, message, cfg, header, allItems, page, () => typeKey);
+}
 
+async function doActorSearch(sock, chatId, message, rawQuery, pageOverride) {
+    if (!rawQuery) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$actor <name>*` }, { quoted: message });
+    const { text: query, page: parsedPage } = extractPage(rawQuery);
+    const page = pageOverride || parsedPage;
+    if (!query) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$actor <name>*` }, { quoted: message });
+    await react(sock, message, '🔎');
+    const data = await apiFetch(`/search/actor?q=${encodeURIComponent(query)}`);
+    const allItems = data.items || [];
+    const header = `🎭 *Titles featuring "${query}"*`;
+    return renderCachedPage(sock, chatId, message, TYPES.movie, header, allItems, page, it => it.subjectType === 2 ? 'tv' : 'movie');
+}
+
+async function doDetails(sock, chatId, message, rawArg, typeKey) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey} details <id>*` }, { quoted: message });
+    const cfg = TYPES[typeKey];
+    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg, 'details');
+    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
+    await react(sock, message, '📄');
+    const data = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(resolved.id)}`);
+    const detailErr = checkDetailTypeMismatch(data, typeKey, rawArg, 'details');
+    if (detailErr) return sock.sendMessage(chatId, { text: detailErr }, { quoted: message });
+
+    let episodeData = null;
+    try { episodeData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/episodes`); }
+    catch { /* non-fatal */ }
+
+    const caption = formatDetail(data, cfg, episodeData, typeKey);
+    const coverUrl = data.cover || data.poster || data.backdrop;
+    if (coverUrl) {
+        try {
+            return await sock.sendMessage(chatId, { image: { url: coverUrl }, caption }, { quoted: message });
+        } catch (err) {
+            console.warn('[movie:doDetails] cover image failed, sending text:', err.message);
+        }
+    }
+    return sock.sendMessage(chatId, { text: caption }, { quoted: message });
+}
+
+async function doTrailer(sock, chatId, message, rawArg, typeKey) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey}trailer <id>*` }, { quoted: message });
+    const cfg = TYPES[typeKey];
+    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg);
+    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
+    await react(sock, message, '🎬');
+    const data = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(resolved.id)}`);
+    const detailErr = checkDetailTypeMismatch(data, typeKey, rawArg);
+    if (detailErr) return sock.sendMessage(chatId, { text: detailErr }, { quoted: message });
+    if (!data.trailer || data.trailer === 'NONE' || !data.trailer.startsWith('http')) {
+        return sock.sendMessage(chatId, { text: `⚠️ No trailer video available for *${data.title || 'this title'}*.` }, { quoted: message });
+    }
+    return sock.sendMessage(chatId, {
+        video: { url: data.trailer },
+        mimetype: 'video/mp4',
+        caption: `🎬 *${data.title}* — Trailer\n\n_Daratech_ ⚡`,
+    }, { quoted: message });
+}
+
+async function doCast(sock, chatId, message, rawArg, typeKey) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey}cast <id>*` }, { quoted: message });
+    const cfg = TYPES[typeKey];
+    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg);
+    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
+    await react(sock, message, '🎭');
+    const data = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(resolved.id)}`);
+    const detailErr = checkDetailTypeMismatch(data, typeKey, rawArg);
+    if (detailErr) return sock.sendMessage(chatId, { text: detailErr }, { quoted: message });
+    const cast = data.cast || [];
+    if (!cast.length) return sock.sendMessage(chatId, { text: `⚠️ No cast info available for *${data.title || 'this title'}*.` }, { quoted: message });
+    const lines = cast.slice(0, 20).map((c, i) => {
+        const role = (c.role && c.role.toLowerCase() !== 'self' && c.role.toLowerCase() !== 'actor') ? ` — ${c.role}` : '';
+        return `${i + 1}. *${c.name}*${role}`;
+    }).join('\n');
+    return sock.sendMessage(chatId, { text: `🎭 *${data.title} — Cast*\n\n${lines}` }, { quoted: message });
+}
+
+async function doRelated(sock, chatId, message, rawArg, typeKey) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey}related <id>*` }, { quoted: message });
+    const cfg = TYPES[typeKey];
+    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg, 'related');
+    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
+    await react(sock, message, '🔗');
+
+    let title = 'this title';
+    try {
+        const detail = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(resolved.id)}`);
+        if (detail.title) title = detail.title;
+    } catch { /* ignore */ }
+
+    const data = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/related`);
+    const items = data.items || [];
+    lastSearches.set(chatId, items.map(it => ({ type: typeKey, id: it.id || it.subjectId, title: it.title })));
+    _saveCache();
+    const header = `🔗 *Related to "${title}"*`;
+    return sock.sendMessage(chatId, { text: renderList(items, cfg, header) }, { quoted: message });
+}
+
+async function doEpisodes(sock, chatId, message, rawArg, typeKey) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey} episodes <id>*` }, { quoted: message });
+    const cfg = TYPES[typeKey];
+    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg, 'episodes');
+    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
+    await react(sock, message, '📺');
+    const data = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/episodes`);
+    const seasons = data.seasons || [];
+    if (!seasons.length) return sock.sendMessage(chatId, { text: '⚠️ No episode data available.' }, { quoted: message });
+    let msg = `📺 *Episodes* (${data.totalEpisodes || 0} total)\n\n`;
+    for (const s of seasons) {
+        msg += `*Season ${s.season}* — ${s.episodes.length} episode(s)\n`;
+    }
+    msg += `\n💡 *$${typeKey} dl <id> s<season>e<episode>* — download episode`;
     return sock.sendMessage(chatId, { text: msg }, { quoted: message });
 }
 
-/**
- * resolveAndSend — resolve quality + audio pick from parsePick() result, then send.
- */
-async function resolveAndSend(sock, chatId, message, sorted, srcData, parsed, title, poster, audioTracks, subtitles, id, epLabel) {
-    const qualityStr = parsed.quality || '';
-    let selected = null;
+function parseDlTokens(tokens) {
+    let season = null, episode = null, qualityToken = null;
+    for (const t of tokens) {
+        const se = t.match(/^s(\d+)e(\d+)$/i);
+        const sOnly = t.match(/^s(\d+)$/i);
+        const eOnly = t.match(/^e(\d+)$/i);
+        if (se) { season = +se[1]; episode = +se[2]; continue; }
+        if (sOnly) { season = +sOnly[1]; continue; }
+        if (eOnly) { episode = +eOnly[1]; continue; }
+        qualityToken = t;
+    }
+    return { season, episode, qualityToken };
+}
 
-    if (qualityStr) {
-        const num = parseInt(qualityStr);
-        if (!isNaN(num) && num >= 1 && num <= sorted.length) {
-            selected = sorted[num - 1];
-        }
-        if (!selected) {
-            selected = sorted.find(s =>
-                (s.quality || '').toLowerCase().replace(/\s+/g, '').includes(qualityStr.replace(/\s+/g, ''))
-            );
-        }
+function resolveQualityChoice(qualities, token) {
+    if (!token) return null;
+    if (/^\d+$/.test(token)) {
+        const idx = parseInt(token, 10) - 1;
+        return qualities[idx] || null;
+    }
+    const norm = token.toLowerCase().replace(/p$/, '');
+    return qualities.find(q => String(q.resolution) === norm || (q.label || '').toLowerCase().includes(norm)) || null;
+}
+
+function dlCmdPrefix(typeKey, id, season, episode) {
+    let s = `$${typeKey} dl ${id}`;
+    if (season !== null) s += ` s${season}`;
+    if (episode !== null) s += `e${episode}`;
+    return s;
+}
+
+async function showSeasonPicker(sock, chatId, message, typeKey, id, title, episodeData) {
+    const seasons = episodeData.seasons || [];
+    const nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+    let msg = `📺 *${title}*\n📊 *${seasons.length} Season${seasons.length === 1 ? '' : 's'} • ${episodeData.totalEpisodes || 0} Total Episodes*\n\n`;
+    seasons.forEach((s, i) => {
+        msg += `${nums[i] || `${i + 1}.`}  *Season ${s.season}*  —  ${s.episodes.length} episode${s.episodes.length === 1 ? '' : 's'}\n`;
+    });
+    msg += `\n💬 *Pick a season:*\n`;
+    msg += `_${dlCmdPrefix(typeKey, id, seasons[0]?.season ?? 1, null)}_ — Season ${seasons[0]?.season ?? 1} episodes\n`;
+    if (seasons[1]) msg += `_${dlCmdPrefix(typeKey, id, seasons[1].season, null)}_ — Season ${seasons[1].season} episodes\n`;
+    msg += `_${dlCmdPrefix(typeKey, id, seasons[0]?.season ?? 1, 1)}_ — Download S${seasons[0]?.season ?? 1}E1 directly`;
+    return sock.sendMessage(chatId, { text: msg }, { quoted: message });
+}
+
+async function showEpisodePicker(sock, chatId, message, typeKey, id, title, season, seasonEpisodes) {
+    const nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+    let msg = `📺 *${title}* — Season ${season}\n\n`;
+    seasonEpisodes.slice(0, 30).forEach((e, i) => {
+        msg += `${nums[i] || `${i + 1}.`}  ${e.title || `Episode ${e.episode}`}\n`;
+    });
+    msg += `\n💬 *Pick an episode:*\n_${dlCmdPrefix(typeKey, id, season, seasonEpisodes[0]?.episode ?? 1)}_ — Download episode`;
+    return sock.sendMessage(chatId, { text: msg }, { quoted: message });
+}
+
+async function showQualityPicker(sock, chatId, message, typeKey, id, title, qualities, season, episode, trailerAvailable) {
+    const nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'];
+    let msg = `🎬 *${title}*\n\n📋 *Available Resolutions:*\n\n`;
+    qualities.forEach((q, i) => {
+        const label = q.label || (q.resolution ? `${q.resolution}p` : 'Auto');
+        const sizeStr = formatBytes(q.size);
+        msg += `${nums[i] || `${i + 1}.`}  *${label}*${sizeStr ? ` — ${sizeStr}` : ''}\n`;
+    });
+    const prefix = dlCmdPrefix(typeKey, id, season, episode);
+    msg += `\n💬 *Pick a resolution:*\n`;
+    msg += `_${prefix} 1_ — by number\n`;
+    msg += `_${prefix} ${(qualities[0]?.label || '').replace(/\s.*/, '') || '480p'}_ — by quality name`;
+    if (trailerAvailable) msg += `\n\n🎬 *$${typeKey}trailer ${id}* — Watch trailer first`;
+    return sock.sendMessage(chatId, { text: msg }, { quoted: message });
+}
+
+function normalizeQualities(list) {
+    return (list || []).map(q => ({ ...q, label: q.label || q.quality || (q.resolution ? `${q.resolution}p` : 'Auto') }));
+}
+
+async function doDownload(sock, chatId, message, rawArg, tokens, typeKey) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey} dl <id>*` }, { quoted: message });
+    const cfg = TYPES[typeKey];
+    const id = resolved.id;
+    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg, 'dl');
+    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
+    await react(sock, message, '⬇️');
+
+    const detail = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(id)}`);
+    const detailErr = checkDetailTypeMismatch(detail, typeKey, rawArg, 'dl');
+    if (detailErr) return sock.sendMessage(chatId, { text: detailErr }, { quoted: message });
+    const { season, episode, qualityToken } = parseDlTokens(tokens);
+
+    let seasons = [];
+    let episodeData = null;
+    if (cfg.hasEpisodes) {
+        episodeData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/episodes`);
+        seasons = episodeData.seasons || [];
     } else {
-        // No quality given but audio given — use smallest (best first in sorted desc)
-        selected = sorted[sorted.length - 1] || sorted[0];
+        try {
+            episodeData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/episodes`);
+            seasons = episodeData.seasons || [];
+        } catch { /* non-episodic */ }
     }
 
-    if (!selected) {
-        const avail = sorted.map((s, i) => `${i + 1}. ${s.quality}`).join('\n');
+    if (seasons.length) {
+        if (season === null) {
+            return showSeasonPicker(sock, chatId, message, typeKey, id, detail.title, episodeData);
+        }
+        const seasonObj = seasons.find(s => s.season === season);
+        if (!seasonObj) return sock.sendMessage(chatId, { text: `⚠️ Season ${season} not found. Title has ${seasons.length} season(s).` }, { quoted: message });
+
+        if (episode === null) {
+            return showEpisodePicker(sock, chatId, message, typeKey, id, detail.title, season, seasonObj.episodes);
+        }
+
+        let qualities;
+        if (typeKey === 'tv') {
+            const dlData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/season/${season}/episode/${episode}/download`);
+            qualities = normalizeQualities(dlData.links || dlData.qualities || []);
+        } else if (typeKey === 'anime') {
+            try {
+                const dlData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/download?ep=${episode}&season=${season}`);
+                qualities = normalizeQualities(dlData.links || dlData.qualities || []);
+            } catch {
+                const streamData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/stream?ep=${episode}&season=${season}`);
+                qualities = normalizeQualities(streamData.qualities || streamData.links || []);
+            }
+        } else {
+            const streamData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/stream?ep=${episode}&season=${season}`);
+            qualities = normalizeQualities(streamData.qualities || streamData.links || []);
+        }
+        if (!qualities.length) return sock.sendMessage(chatId, { text: '📭 No download source found for this episode.' }, { quoted: message });
+
+        if (!qualityToken) {
+            return showQualityPicker(sock, chatId, message, typeKey, id, `${detail.title} — S${season}E${episode}`, qualities, season, episode, !!detail.trailer);
+        }
+        const pick = resolveQualityChoice(qualities, qualityToken);
+        if (!pick) return sock.sendMessage(chatId, { text: `⚠️ "${qualityToken}" isn't an available resolution.` }, { quoted: message });
+
+        const epLabel = `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
+        const sizeStr = formatBytes(pick.size);
+        await sock.sendMessage(chatId, { text: `📥 Downloading *${detail.title}* (${epLabel}) — ${pick.label}${sizeStr ? ` (${sizeStr})` : ''}…\n_Please wait…_` }, { quoted: message });
+        await sendMedia(sock, chatId, message, pick.url, detail.title, pick.label, epLabel, pick.size);
+        return react(sock, message, '✅');
+    }
+
+    // ── Non-episodic titles (Movie, Ugandan, Kids, etc.) ──────────────────────
+    let flatData;
+    try {
+        flatData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/download`);
+    } catch {
+        flatData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/stream`);
+    }
+    const qualities = normalizeQualities(flatData.links || flatData.qualities || []);
+    if (!qualities.length) return sock.sendMessage(chatId, { text: '📭 No download source found for this title.' }, { quoted: message });
+
+    if (!qualityToken) {
+        return showQualityPicker(sock, chatId, message, typeKey, id, detail.title, qualities, null, null, !!detail.trailer);
+    }
+    const pick = resolveQualityChoice(qualities, qualityToken);
+    if (!pick) return sock.sendMessage(chatId, { text: `⚠️ "${qualityToken}" isn't an available resolution.` }, { quoted: message });
+
+    const sizeStr = formatBytes(pick.size);
+    await sock.sendMessage(chatId, { text: `📥 Downloading *${detail.title}* — ${pick.label}${sizeStr ? ` (${sizeStr})` : ''}…\n_Please wait…_` }, { quoted: message });
+    await sendMedia(sock, chatId, message, pick.url, detail.title, pick.label, null, pick.size);
+    return react(sock, message, '✅');
+}
+
+// ─── Help text ──────────────────────────────────────────────────────────────
+const HELP_TEXT = `🎬 *DARATECH MOVIE BOT COMMANDS*
+
+*🔍 Search*
+▸ *$movie <title>* — movies
+▸ *$tv <title>* — TV shows
+▸ *$anime <title>* — anime
+▸ *$kids <title>* — kids content
+▸ *$ugandan <title>* — Ugandan VJ titles
+▸ *$actor <name>* — search by actor
+
+*📄 Details*
+▸ *$movie details <id>* / *$tv details <id>* / *$anime details <id>*
+▸ *$kids details <id>* / *$ugandan details <id>*
+▸ *$moviefull <id>* — full info + cast + stills + related in one shot
+
+*⬇️ Download*
+▸ *$movie dl <id>* — resolution picker
+▸ *$tv dl <id> s1e3* / *$anime dl <id> s1e3* — series episode download
+▸ *$kids dl <id>* / *$ugandan dl <id>*
+▸ Append quality: *$movie dl <id> 1080p* or *$movie dl <id> 2*
+
+*📺 Episodes*
+▸ *$tv episodes <id>* / *$anime episodes <id>*
+
+*🎬 Trailer / Cast / Related*
+▸ *$movietrailer <id>* *$moviecast <id>* *$movierelated <id>*
+▸ *$tvtrailer <id>* *$tvcast <id>* *$tvrelated <id>*
+▸ *$animetrailer <id>* *$animerelated <id>* *$kidsrelated <id>* *$kidstrailer <id>*
+▸ *$moviestills <id>* / *$tvstills <id>* — screenshot gallery
+
+*📜 Subtitles / Captions*
+▸ *$moviecaptions <id>* — list available subtitle languages
+▸ *$moviecaptions <id> english* — download English subtitle
+▸ *$tvcaptions <id> s1e1* — list subs for a TV episode
+▸ *$tvcaptions <id> s1e1 english* — download sub for TV episode
+▸ *$animecaptions <id> s1e1 [lang]* / *$kidscaptions <id> [lang]*
+
+*🇺🇬 Ugandan VJ*
+▸ *$ugandan vj <name>* — titles by that VJ
+▸ *$ugandanvjs* — list all VJs
+▸ *$ugandanlatest* — newest uploads
+
+*📊 Browse*
+▸ *$trending* *$popular* *$upcoming* *$topmovies*
+▸ *$tvnew* *$animenew*
+
+*🏷 Filter & More*
+▸ *$moviefilter <genre>* — e.g. $moviefilter action
+▸ *$moviehome* — featured content
+▸ *$more* — next page of last search/browse
+
+*📡 Live TV*
+▸ *$livetv* — browse all live channels
+▸ *$livetvsearch <name>* — search channels
+▸ *$livetvstream <id>* — watch live stream
+
+*⚽ Live Football Matches*
+▸ *$matchlive* — live matches now
+▸ *$matchupcoming* — upcoming fixtures
+▸ *$matchended* — recent finished matches
+▸ *$matchstream <id>* — stream link for a match
+▸ *$matchdetails <id>* — full match info
+▸ *$matchleagues* — list leagues
+
+💡 *IDs* — use the number from a search result or paste the full ID.`;
+
+async function doHomepage(sock, chatId, message) {
+    await react(sock, message, '🏠');
+    const data = await apiFetch('/home/full');
+    const rows = data.rows || [];
+    if (!rows.length) return sock.sendMessage(chatId, { text: '⚠️ Could not load featured content.' }, { quoted: message });
+
+    let msg = '🏠 *Featured Content*\n\n';
+    const seen = new Set();
+    const allFeaturedItems = [];
+    for (const row of rows.slice(0, 4)) {
+        const items = (row.items || []).filter(it => {
+            if (seen.has(it.id)) return false;
+            seen.add(it.id);
+            return true;
+        }).slice(0, 4);
+        if (!items.length) continue;
+        msg += `*— ${row.title} —*\n`;
+        items.forEach((it) => {
+            allFeaturedItems.push(it);
+            const idx = allFeaturedItems.length;
+            const rStr = it.rating ? `  ⭐ ${it.rating}` : '';
+            msg += `${it.subjectType === 2 ? '📺' : '🎬'} *${idx}.* ${it.title}\n    📅 ${it.year || '—'}${rStr}  •  🆔 \`${it.id}\`\n`;
+        });
+        msg += '\n';
+    }
+
+    lastSearches.set(chatId, allFeaturedItems.map(it => ({
+        type: it.subjectType === 2 ? 'tv' : 'movie',
+        id: String(it.id || it.subjectId || ''),
+        title: it.title
+    })));
+    _saveCache();
+
+    msg += '💡 *$movie details <number or id>* — Full info';
+    return sock.sendMessage(chatId, { text: msg }, { quoted: message });
+}
+
+async function doGenreFilter(sock, chatId, message, rawGenre, pageOverride) {
+    if (!rawGenre) return sock.sendMessage(chatId, { text: '⚠️ Usage: *$moviefilter <genre>*' }, { quoted: message });
+    const { text: genre, page: parsedPage } = extractPage(rawGenre);
+    const page = pageOverride || parsedPage;
+    if (!genre) return sock.sendMessage(chatId, { text: '⚠️ Usage: *$moviefilter <genre>*' }, { quoted: message });
+    await react(sock, message, '🏷');
+    const data = await apiFetch(`/filter?category=movies&genre=${encodeURIComponent(genre)}&page=${page}`);
+    const items = data.items || [];
+    lastSearches.set(chatId, items.map(it => ({ type: 'movie', id: it.id || it.subjectId, title: it.title })));
+    _saveCache();
+    pageContext.set(chatId, {
+        page,
+        run: (nextPage) => doGenreFilter(sock, chatId, message, genre, nextPage),
+    });
+    const header = `🏷 *${genre} movies*${page > 1 ? ` (page ${page})` : ''}`;
+    return sock.sendMessage(chatId, { text: renderList(items, TYPES.movie, header, items.length >= PAGE_SIZE_HINT) }, { quoted: message });
+}
+
+async function doCaptions(sock, chatId, message, rawArg, typeKey, tokens) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey}captions <id> [lang]*` }, { quoted: message });
+    const cfg = TYPES[typeKey];
+    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg, 'captions');
+    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
+    await react(sock, message, '📜');
+
+    const { season, episode, qualityToken: langFilter } = parseDlTokens(tokens || []);
+
+    let title = 'Title';
+    try {
+        const d = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(resolved.id)}`);
+        if (d.title) title = d.title;
+    } catch { /* ignore */ }
+
+    let streamData;
+    if (cfg.hasEpisodes) {
+        if (season === null || episode === null) {
+            return sock.sendMessage(chatId, { text: `⚠️ This title has episodes.\n\n*Usage:* *$${typeKey}captions ${rawArg} s<N>e<N> [lang]*\n_e.g. $${typeKey}captions ${rawArg} s1e1 english_` }, { quoted: message });
+        }
+        streamData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/season/${season}/episode/${episode}/stream`);
+    } else {
+        let seasons = [];
+        try {
+            const epData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/episodes`);
+            seasons = epData.seasons || [];
+        } catch { /* non-episodic */ }
+
+        if (seasons.length) {
+            if (season === null || episode === null) {
+                return sock.sendMessage(chatId, { text: `⚠️ This title has episodes.\n\n*Usage:* *$${typeKey}captions ${rawArg} s<N>e<N> [lang]*` }, { quoted: message });
+            }
+            streamData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/season/${season}/episode/${episode}/stream`);
+        } else {
+            streamData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/stream`);
+        }
+    }
+
+    const subs = streamData.subtitles || [];
+    const epLabel = (season !== null && episode !== null) ? ` S${season}E${episode}` : '';
+    const fullTitle = `${title}${epLabel}`;
+
+    if (!subs.length) return sock.sendMessage(chatId, { text: `⚠️ No subtitles available for *${fullTitle}*.` }, { quoted: message });
+
+    if (!langFilter) {
+        const langList = subs.map((s, i) => `${i + 1}. *${s.lang || 'Unknown'}*`).join('\n');
+        const hint = cfg.hasEpisodes
+            ? `*$${typeKey}captions ${rawArg} s${season || 1}e${episode || 1} english* — download English`
+            : `*$${typeKey}captions ${rawArg} english* — download English`;
         return sock.sendMessage(chatId, {
-            text: `❌ Quality "*${qualityStr}*" not found.\n\nAvailable:\n${avail}\n\n_Use number or quality name_`
+            text: `📜 *Subtitles for "${fullTitle}"*\n\n${langList}\n\n💡 ${hint}`
         }, { quoted: message });
     }
 
-    // Audio dub override: if selected audio track has its own URL, swap the source
-    if (parsed.audioIndex && audioTracks && audioTracks.length >= parsed.audioIndex) {
-        const track = audioTracks[parsed.audioIndex - 1];
-        if (track?.url || track?.download_url) {
-            selected = { ...selected, download_url: track.url || track.download_url, url: track.url || track.download_url };
-        }
+    const targets = subs.filter(s => (s.lang || '').toLowerCase().includes(langFilter.toLowerCase()));
+    if (!targets.length) {
+        const available = subs.map(s => `*${s.lang || 'Unknown'}*`).join(', ');
+        return sock.sendMessage(chatId, { text: `⚠️ No subtitle matching "*${langFilter}*" for *${fullTitle}*.\n\nAvailable: ${available}` }, { quoted: message });
     }
 
-    const syntheticData = Array.isArray(srcData.results)
-        ? { ...srcData, results: [selected] }
-        : { ...srcData, results: { ...(srcData.results || {}), sources: [selected] } };
-
-    // Pass epLabel separately so sendVideoOrLinks/buildFileName can construct
-    // the correct filename: Title.SxxExx.Quality.Daratech.mp4
-    return sendVideoOrLinks(sock, chatId, message, syntheticData, title || 'Movie', poster, epLabel || null);
+    const sub = targets[0];
+    await sock.sendMessage(chatId, { text: `📥 Downloading *${sub.lang}* subtitle for *${fullTitle}*…` }, { quoted: message });
+    try {
+        const resp = await axios.get(sub.url, { responseType: 'arraybuffer', timeout: 30000 });
+        const rawExt = (sub.url || '').split('.').pop().split('?')[0].toLowerCase();
+        const ext = ['srt', 'vtt', 'ass', 'ssa'].includes(rawExt) ? rawExt : 'srt';
+        const safeName = fullTitle.replace(/[^\w\s.-]/g, '').trim().replace(/\s+/g, '_');
+        const fileName = `${safeName}_${(sub.lang || 'sub').replace(/\s+/g, '_')}.${ext}`;
+        await sock.sendMessage(chatId, {
+            document: Buffer.from(resp.data),
+            mimetype: 'text/plain',
+            fileName,
+            caption: `📜 *${fullTitle}*\n🗣 *Language:* ${sub.lang}\n\n_Daratech_ ⚡`,
+        }, { quoted: message });
+        await react(sock, message, '✅');
+    } catch (err) {
+        await sock.sendMessage(chatId, { text: `⚠️ Failed to download *${sub.lang}* subtitle: ${err.message}` }, { quoted: message });
+        await react(sock, message, '❌');
+    }
 }
 
-// ─── Help text ────────────────────────────────────────────────────────────────
-
-const HELP_TEXT = `🎬 *MOVIE COMMANDS*
-
-*🔍 Search*
-▸ *$movie <title>*          — Search movies & shows
-▸ *$movie details <id>*     — Full info + poster
-▸ *$movie dl <id>*          — Download (auto-detects movie or series)
-▸ *$movietrailer <id>*      — Watch official trailer 🎬
-
-*📺 Series / Shows*
-▸ *$movie dl <id>*          — Shows all seasons + episode count
-▸ *$movie dl <id> s1*       — Episode list for Season 1
-▸ *$movie dl <id> s1e3*     — Download S1 Episode 3 (quality picker)
-▸ *$movie dl <id> s1e3 720p* — Download S1 Ep3 at 720p directly
-
-*🌐 Dubs (different audio languages)*
-▸ Each dub has its own ID shown in the season list
-▸ *$movie dl <dub-id> s1e1* — Download that dub's episode
-
-*🎬 Movies*
-▸ *$movie dl <id>*          — Shows quality picker
-▸ *$movie dl <id> 1*        — Download quality #1 directly
-▸ *$movie dl <id> 720p*     — Download by quality name
-
-*📊 Browse*
-▸ *$trending*               — What's hot right now 🔥
-▸ *$upcoming*               — Upcoming seasons 🗓
-▸ *$schedule*               — Weekly airing schedule 📅
-▸ *$schedule daily/monthly* — Change schedule period
-
-*🎌 Anime*
-▸ *$anime <title>*          — Search anime
-▸ *$anime dl <id>*          — Shows seasons + episode count
-▸ *$anime dl <id> s1*       — Episode list for Season 1
-▸ *$anime dl <id> s1e3*     — Download S1 Episode 3
-▸ *$anime dl <id> s1e3 1080p* — Specific quality
-
-*📡 Live TV*
-▸ *$live*                   — Browse live channels
-▸ *$livesearch <name>*      — Search live TV channels
-▸ *$livestream <id>*        — Get stream link
-▸ *$livecats*               — Browse categories
-
-*🔎 Filter & More*
-▸ *$moviefilter <genre>*    — e.g. $moviefilter action
-▸ *$moviefilter action,1*   — genre + type (1=Movie, 2=Series)
-▸ *$moviecaptions <id>*     — Subtitles & audio info
-▸ *$moviehome*              — Featured content
-
-_✅ = file small enough to send directly in chat_
-_💡 IDs come from search results — copy the full ID_`;
-
-// ─── Main command handler ─────────────────────────────────────────────────────
-
-async function movieCommand(sock, chatId, message, args, subcommand) {
+async function doStills(sock, chatId, message, rawArg, typeKey) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey}stills <id>*` }, { quoted: message });
+    const cfg = TYPES[typeKey];
+    await react(sock, message, '🖼');
+    const data = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/stills`);
+    const rawStills = data.stills || data.images || (Array.isArray(data) ? data : []);
+    if (!rawStills.length) return sock.sendMessage(chatId, { text: '⚠️ No stills available for this title.' }, { quoted: message });
+    
+    let title = 'Unknown';
     try {
+        const detail = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(resolved.id)}`);
+        if (detail.title) title = detail.title;
+    } catch { /* ignore */ }
 
-        // Detect inline sub-keywords inside plain $movie command
-        if (!subcommand || subcommand === 'search') {
-            const first = (args[0] || '').toLowerCase();
-            if (first === 'details' || first === 'info') {
-                subcommand = 'info';
-                args = args.slice(1);
-            } else if (first === 'dl' || first === 'download') {
-                subcommand = 'dl';
-                args = args.slice(1);
-            }
-        }
+    const stills = rawStills.map(s => typeof s === 'string' ? s : s.url || s.image || s.src).filter(Boolean);
+    if (!stills.length) return sock.sendMessage(chatId, { text: '⚠️ Could not load stills images.' }, { quoted: message });
 
-        const query = args.join(' ').trim();
-
-        // Show help when $movie sent alone
-        if ((!subcommand || subcommand === 'search') && !query) {
-            return sock.sendMessage(chatId, { text: HELP_TEXT }, { quoted: message });
-        }
-
-        // ── SEARCH ──────────────────────────────────────────────────────────
-        if (!subcommand || subcommand === 'search') {
-            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a title.\n*Example:* _$movie avengers_' }, { quoted: message });
-            await sock.sendMessage(chatId, { react: { text: '🔍', key: message.key } });
-
-            const data = await apiFetch(`/search/${encodeURIComponent(query)}`);
-            // Response: data.results.items[]
-            const list = data.results?.items || [];
-            if (!list.length) {
-                return sock.sendMessage(chatId, {
-                    text: `⚠️ No results for "*${query}*"\n\nTry a different spelling or use *$trending* to see what's popular.`
-                }, { quoted: message });
-            }
-            const top = list.slice(0, 10);
-            // Remember results so users can pick by number (e.g. $movie dl 1)
-            lastSearches.set(chatId, top);
-            _saveCache();
-            const lines = top.map(formatResult);
-            return sock.sendMessage(chatId, {
-                text:
-                    `🔍 *Search: ${query}*\n\n` +
-                    lines.join('\n\n') +
-                    `\n\n` +
-                    `💡 *Quick pick by number:*\n` +
-                    `  *$movie dl 1* — download result 1\n` +
-                    `  *$movie details 2* — info for result 2`
+    await sock.sendMessage(chatId, { text: `🖼 *${title}* — ${stills.length} still(s). Sending up to 6…` }, { quoted: message });
+    let sent = 0;
+    for (const stillUrl of stills.slice(0, 6)) {
+        try {
+            await sock.sendMessage(chatId, {
+                image: { url: stillUrl },
+                caption: `🖼 *${title}* — Screenshot ${sent + 1}\n\n_Daratech_ ⚡`,
             }, { quoted: message });
+            sent++;
+        } catch { /* skip */ }
+    }
+    if (!sent) await sock.sendMessage(chatId, { text: '⚠️ Could not send stills images.' }, { quoted: message });
+}
+
+async function doUniversalFull(sock, chatId, message, rawArg) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: '⚠️ Usage: *$moviefull <id>*' }, { quoted: message });
+    await react(sock, message, '📦');
+    
+    let detail = null, typeKey = resolved.type || 'movie';
+    for (const k of ['movie', 'tv', 'anime', 'kids', 'ugandan']) {
+        try {
+            detail = await apiFetch(`/${TYPES[k].seg}/detail/${encodeURIComponent(resolved.id)}`);
+            typeKey = k;
+            break;
+        } catch { /* continue */ }
+    }
+    if (!detail) return sock.sendMessage(chatId, { text: '⚠️ Title not found.' }, { quoted: message });
+
+    const cfg = TYPES[typeKey] || TYPES.movie;
+    let msg = formatDetail(detail, cfg, null, typeKey);
+    
+    if (detail.cast?.length) {
+        msg += `\n🎭 *Full Cast:*\n` + detail.cast.slice(0, 8).map(c => `  • ${c.name}${c.role ? ` as ${c.role}` : ''}`).join('\n');
+    }
+    if (detail.related?.length) {
+        msg += `\n\n🔗 *Related Titles:*\n` + detail.related.slice(0, 5).map((r, i) => `  ${i + 1}. ${r.title}  \`${r.id || r.subjectId}\``).join('\n');
+    }
+
+    const cover = detail.cover || detail.poster || detail.backdrop;
+    if (cover) {
+        try { return await sock.sendMessage(chatId, { image: { url: cover }, caption: msg }, { quoted: message }); } catch { /* fall through */ }
+    }
+    return sock.sendMessage(chatId, { text: msg }, { quoted: message });
+}
+
+async function doLiveTV(sock, chatId, message, page = 1) {
+    await react(sock, message, '📡');
+    const data = await apiFetch('/livetv/channels');
+    const channels = data.livetv || data.channels || data.items || (Array.isArray(data) ? data : []);
+    if (!channels.length) return sock.sendMessage(chatId, { text: '⚠️ No live channels found.' }, { quoted: message });
+
+    const pageSize = 15;
+    const totalPages = Math.ceil(channels.length / pageSize);
+    const currPage = Math.min(Math.max(1, page), totalPages);
+    const start = (currPage - 1) * pageSize;
+    const slice = channels.slice(start, start + pageSize);
+
+    lastSearches.set(chatId, slice.map(c => ({
+        type: 'livetv',
+        id: String(c.id || c.channelId || ''),
+        title: c.name || c.title || 'Channel'
+    })));
+    _saveCache();
+
+    pageContext.set(chatId, {
+        page: currPage,
+        run: (nextPage) => doLiveTV(sock, chatId, message, nextPage),
+    });
+
+    const lines = slice.map((c, i) =>
+        `📡 *${start + i + 1}.* ${c.name || c.title || 'Channel'}\n    🆔 \`${c.id || c.channelId}\``
+    ).join('\n\n');
+
+    let text = `📡 *LIVE TV CHANNELS* (Page ${currPage}/${totalPages} — ${channels.length} total)\n\n${lines}`;
+    if (currPage < totalPages) {
+        text += `\n\n➡️ *$more* — Next page`;
+    }
+    text += `\n\n💡 *$livetvstream <number or id>* — Watch channel\n💡 *$livetvsearch <name>* — Search channel\n\n_Daratech_ ⚡`;
+
+    return sock.sendMessage(chatId, { text }, { quoted: message });
+}
+
+async function doLiveTVSearch(sock, chatId, message, rawQuery) {
+    if (!rawQuery) return sock.sendMessage(chatId, { text: '⚠️ Usage: *$livetvsearch <channel name>*' }, { quoted: message });
+    await react(sock, message, '🔍');
+    const data = await apiFetch(`/livetv/search?q=${encodeURIComponent(rawQuery)}`);
+    const channels = data.livetv || data.channels || data.results || data.items || (Array.isArray(data) ? data : []);
+    if (!channels.length) return sock.sendMessage(chatId, { text: `⚠️ No channels found for "*${rawQuery}*".` }, { quoted: message });
+    
+    const slice = channels.slice(0, 15);
+    lastSearches.set(chatId, slice.map(c => ({
+        type: 'livetv',
+        id: String(c.id || c.channelId || ''),
+        title: c.name || c.title || 'Channel'
+    })));
+    _saveCache();
+
+    const lines = slice.map((c, i) =>
+        `📡 *${i + 1}.* ${c.name || c.title || 'Channel'}\n    🆔 \`${c.id || c.channelId}\``
+    ).join('\n\n');
+    return sock.sendMessage(chatId, {
+        text: `🔍 *Live TV results for "${rawQuery}"*\n\n${lines}\n\n💡 *$livetvstream <number or id>* — Watch channel`
+    }, { quoted: message });
+}
+
+async function doLiveTVStream(sock, chatId, message, rawArg) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: '⚠️ Usage: *$livetvstream <channel-id or number>*' }, { quoted: message });
+    await react(sock, message, '📡');
+    const data = await apiFetch(`/livetv/channel/${encodeURIComponent(resolved.id)}`);
+    const streamUrl = data.streamUrl || data.hlsUrl || data.url;
+    let msg = `📡 *${data.name || 'Live TV Channel'}*\n\n`;
+    if (streamUrl) {
+        msg += `🔗 *Stream URL:*\n${streamUrl}\n\n_Open in VLC or ExoPlayer to stream._`;
+    } else {
+        msg += `⚠️ Channel stream URL is currently offline or unavailable.`;
+    }
+    msg += `\n\n_Daratech_ ⚡`;
+    if (data.logo) {
+        try { return await sock.sendMessage(chatId, { image: { url: data.logo }, caption: msg }, { quoted: message }); } catch { /* ignore */ }
+    }
+    return sock.sendMessage(chatId, { text: msg }, { quoted: message });
+}
+
+function formatMatchTime(timeStr) {
+    if (!timeStr) return '';
+    try {
+        const d = new Date(timeStr);
+        if (isNaN(d.getTime())) return timeStr;
+        const datePart = d.toISOString().split('T')[0];
+        const hours = String(d.getUTCHours()).padStart(2, '0');
+        const mins = String(d.getUTCMinutes()).padStart(2, '0');
+        return `${datePart} ${hours}:${mins} UTC`;
+    } catch {
+        return timeStr;
+    }
+}
+
+function formatMatch(m, i) {
+    const home = typeof m.homeTeam === 'string' ? m.homeTeam : m.homeTeam?.name || m.home || '?';
+    const away = typeof m.awayTeam === 'string' ? m.awayTeam : m.awayTeam?.name || m.away || '?';
+    const score = (m.score && m.score !== '0-0') ? `*${m.score}*` : 'vs';
+    const status = m.status ? ` _(${m.status})_` : '';
+    const league = typeof m.league === 'string' ? m.league : m.league?.name || m.leagueName || '';
+    const timeStr = m.time || m.date || '';
+    const formattedTime = formatMatchTime(timeStr);
+    const id = m.id || m.matchId || '';
+
+    let line = `⚽ *${i + 1}.* ${home} ${score} ${away}${status}`;
+    if (league) line += `\n    🏆 ${league}`;
+    if (formattedTime) line += `\n    ⏰ ${formattedTime}`;
+    if (id) line += `\n    🆔 \`${id}\``;
+    return line;
+}
+
+async function doMatchList(sock, chatId, message, endpoint, title, emoji, page = 1) {
+    await react(sock, message, emoji);
+    const data = await apiFetch(endpoint);
+    const matches = data.matches || data.items || (Array.isArray(data) ? data : []);
+    if (!matches.length) {
+        return sock.sendMessage(chatId, { text: `${emoji} No matches found.` }, { quoted: message });
+    }
+
+    const pageSize = 10;
+    const totalPages = Math.ceil(matches.length / pageSize);
+    const currPage = Math.min(Math.max(1, page), totalPages);
+    const start = (currPage - 1) * pageSize;
+    const slice = matches.slice(start, start + pageSize);
+
+    lastSearches.set(chatId, slice.map(m => {
+        const home = typeof m.homeTeam === 'string' ? m.homeTeam : m.homeTeam?.name || m.home || '?';
+        const away = typeof m.awayTeam === 'string' ? m.awayTeam : m.awayTeam?.name || m.away || '?';
+        return {
+            type: 'match',
+            id: String(m.id || m.matchId || ''),
+            title: `${home} vs ${away}`
+        };
+    }));
+    _saveCache();
+
+    pageContext.set(chatId, {
+        page: currPage,
+        run: (nextPage) => doMatchList(sock, chatId, message, endpoint, title, emoji, nextPage),
+    });
+
+    const lines = slice.map((m, i) => formatMatch(m, start + i)).join('\n\n');
+    let text = `${emoji} *${title}* (Page ${currPage}/${totalPages} — ${matches.length} total)\n\n${lines}`;
+
+    if (currPage < totalPages) {
+        text += `\n\n➡️ *$more* — Next page`;
+    }
+    text += `\n\n💡 *$matchstream <number or id>* — Stream link\n💡 *$matchdetails <number or id>* — Match info\n\n_Daratech_ ⚡`;
+
+    return sock.sendMessage(chatId, { text }, { quoted: message });
+}
+
+async function doMatchLive(sock, chatId, message) {
+    return doMatchList(sock, chatId, message, '/football/live', 'LIVE FOOTBALL MATCHES', '⚽');
+}
+
+async function doMatchUpcoming(sock, chatId, message) {
+    return doMatchList(sock, chatId, message, '/football/upcoming', 'UPCOMING FIXTURES', '📅');
+}
+
+async function doMatchEnded(sock, chatId, message) {
+    return doMatchList(sock, chatId, message, '/football/finished', 'ENDED MATCHES', '🏁');
+}
+
+async function doMatchLeagues(sock, chatId, message, rawQuery, page = 1) {
+    await react(sock, message, '🏆');
+    const data = await apiFetch('/football/leagues');
+    let leagues = data.leagues || data.items || (Array.isArray(data) ? data : []);
+    if (rawQuery) {
+        leagues = leagues.filter(l => (l.name || '').toLowerCase().includes(rawQuery.toLowerCase()));
+    }
+    if (!leagues.length) return sock.sendMessage(chatId, { text: `⚠️ No leagues found${rawQuery ? ` matching "${rawQuery}"` : ''}.` }, { quoted: message });
+
+    const pageSize = 15;
+    const totalPages = Math.ceil(leagues.length / pageSize);
+    const currPage = Math.min(Math.max(1, page), totalPages);
+    const start = (currPage - 1) * pageSize;
+    const slice = leagues.slice(start, start + pageSize);
+
+    lastSearches.set(chatId, slice.map(l => ({
+        type: 'league',
+        id: String(l.id || l.leagueId || ''),
+        title: l.name || l.leagueName || String(l)
+    })));
+    _saveCache();
+
+    pageContext.set(chatId, {
+        page: currPage,
+        run: (nextPage) => doMatchLeagues(sock, chatId, message, rawQuery, nextPage),
+    });
+
+    const lines = slice.map((l, i) =>
+        `🏆 *${start + i + 1}.* ${l.name || l.leagueName || String(l)}${l.id || l.leagueId ? `\n    🆔 \`${l.id || l.leagueId}\`` : ''}`
+    ).join('\n\n');
+
+    let text = `🏆 *FOOTBALL LEAGUES* (Page ${currPage}/${totalPages} — ${leagues.length} total)\n\n${lines}`;
+    if (currPage < totalPages) {
+        text += `\n\n➡️ *$more* — Next page`;
+    }
+    text += `\n\n_Daratech_ ⚡`;
+
+    return sock.sendMessage(chatId, { text }, { quoted: message });
+}
+
+async function doMatchStream(sock, chatId, message, rawArg) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: '⚠️ Usage: *$matchstream <match-id>*' }, { quoted: message });
+    await react(sock, message, '📺');
+    const data = await apiFetch(`/football/stream/${encodeURIComponent(resolved.id)}`);
+    const hlsUrl = data.hlsUrl || data.url || data.streamUrl;
+    if (!hlsUrl) return sock.sendMessage(chatId, { text: '⚠️ No stream URL available for this match.' }, { quoted: message });
+    return sock.sendMessage(chatId, {
+        text: `📺 *Match Stream Link*\n\n🔗 ${hlsUrl}\n\n_Open in VLC or HLS-compatible player._\n\n_Daratech_ ⚡`
+    }, { quoted: message });
+}
+
+async function doMatchDetails(sock, chatId, message, rawArg) {
+    const resolved = resolveId(chatId, rawArg);
+    if (!resolved.id) return sock.sendMessage(chatId, { text: '⚠️ Usage: *$matchdetails <match-id>*' }, { quoted: message });
+    await react(sock, message, '📋');
+    const data = await apiFetch(`/football/details/${encodeURIComponent(resolved.id)}`);
+    const home = typeof data.homeTeam === 'string' ? data.homeTeam : data.homeTeam?.name || data.home || '?';
+    const away = typeof data.awayTeam === 'string' ? data.awayTeam : data.awayTeam?.name || data.away || '?';
+    const score = data.score || 'TBD';
+    const league = typeof data.league === 'string' ? data.league : data.league?.name || data.leagueName || '';
+    const status = data.status || 'Unknown';
+    const streams = data.streams || [];
+    let msg = `⚽ *MATCH DETAILS*\n\n`;
+    msg += `🏠 *Home:* ${home}\n`;
+    msg += `✈️ *Away:* ${away}\n`;
+    msg += `📊 *Score:* ${score}\n`;
+    msg += `📌 *Status:* ${status}\n`;
+    if (league) msg += `🏆 *League:* ${league}\n`;
+    if (data.date) msg += `📅 *Date:* ${data.date}\n`;
+    if (streams.length) {
+        msg += `\n📺 *Stream Links:*\n`;
+        streams.slice(0, 3).forEach((s, i) => { msg += `  ${i + 1}. ${s.url || s}\n`; });
+    } else {
+        msg += `\n💡 *$matchstream ${resolved.id}* — Stream link`;
+    }
+    msg += `\n\n_Daratech_ ⚡`;
+    return sock.sendMessage(chatId, { text: msg }, { quoted: message });
+}
+
+async function doUgandanVj(sock, chatId, message, vjName, pageOverride) {
+    if (!vjName) {
+        await react(sock, message, '🎙');
+        const data = await apiFetch('/ugandan/vjs');
+        const vjs = data.vjs || [];
+        const lines = vjs.map((v, i) => `${i + 1}. ${v.name || v}`).join('\n');
+        return sock.sendMessage(chatId, { text: `🎙 *Available VJs*\n\n${lines}\n\n💡 *$ugandan vj <name>* — browse by VJ` }, { quoted: message });
+    }
+    const { text: name, page: parsedPage } = extractPage(vjName);
+    const page = pageOverride || parsedPage;
+    await react(sock, message, '🎙');
+    const data = await apiFetch(`/ugandan/vj/${encodeURIComponent(name)}`);
+    const allItems = data.items || [];
+    const header = `🎙 *Titles by ${name}*`;
+    return renderCachedPage(sock, chatId, message, TYPES.ugandan, header, allItems, page, () => 'ugandan');
+}
+
+async function doBrowse(sock, chatId, message, basePath, typeKey, headerLabel, page = 1) {
+    await react(sock, message, '📚');
+    const sep = basePath.includes('?') ? '&' : '?';
+    const data = await apiFetch(`${basePath}${sep}page=${page}`);
+    const items = data.items || [];
+    lastSearches.set(chatId, items.map(it => ({ type: typeKey, id: it.id || it.subjectId, title: it.title })));
+    _saveCache();
+    pageContext.set(chatId, {
+        page,
+        run: (nextPage) => doBrowse(sock, chatId, message, basePath, typeKey, headerLabel, nextPage),
+    });
+    const header = `${TYPES[typeKey].emoji} *${headerLabel}*${page > 1 ? ` (page ${page})` : ''}`;
+    return sock.sendMessage(chatId, { text: renderList(items, TYPES[typeKey], header, items.length >= PAGE_SIZE_HINT) }, { quoted: message });
+}
+
+async function doMore(sock, chatId, message) {
+    const ctx = pageContext.get(chatId);
+    if (!ctx) {
+        return sock.sendMessage(chatId, { text: `⚠️ Nothing to continue — run a search or browse command first.` }, { quoted: message });
+    }
+    await react(sock, message, '➡️');
+    return ctx.run(ctx.page + 1);
+}
+
+// ─── Main Dispatcher ────────────────────────────────────────────────────────
+async function movieCommand(sock, chatId, message, args, subcommand) {
+    const rest = args.join(' ').trim();
+    const [a1, a2, a3] = args;
+
+    try {
+        switch (subcommand) {
+            case 'search:movie': if (!rest) return sock.sendMessage(chatId, { text: HELP_TEXT }, { quoted: message }); return await doSearch(sock, chatId, message, rest, 'movie');
+            case 'search:tv': return await doSearch(sock, chatId, message, rest || a1, 'tv');
+            case 'search:anime': return await doSearch(sock, chatId, message, rest || a1, 'anime');
+            case 'search:kids': return await doSearch(sock, chatId, message, rest || a1, 'kids');
+            case 'search:ugandan': return await doSearch(sock, chatId, message, rest || a1, 'ugandan');
+            case 'search:actor': return await doActorSearch(sock, chatId, message, rest);
+
+            case 'details:movie': return await doDetails(sock, chatId, message, a1, 'movie');
+            case 'details:tv': return await doDetails(sock, chatId, message, a1, 'tv');
+            case 'details:anime': return await doDetails(sock, chatId, message, a1, 'anime');
+            case 'details:kids': return await doDetails(sock, chatId, message, a1, 'kids');
+            case 'details:ugandan': return await doDetails(sock, chatId, message, a1, 'ugandan');
+
+            case 'dl:movie': return await doDownload(sock, chatId, message, a1, args.slice(1), 'movie');
+            case 'dl:tv': return await doDownload(sock, chatId, message, a1, args.slice(1), 'tv');
+            case 'dl:anime': return await doDownload(sock, chatId, message, a1, args.slice(1), 'anime');
+            case 'dl:kids': return await doDownload(sock, chatId, message, a1, args.slice(1), 'kids');
+            case 'dl:ugandan': return await doDownload(sock, chatId, message, a1, args.slice(1), 'ugandan');
+
+            case 'trailer:movie': return await doTrailer(sock, chatId, message, a1, 'movie');
+            case 'trailer:tv': return await doTrailer(sock, chatId, message, a1, 'tv');
+            case 'trailer:anime': return await doTrailer(sock, chatId, message, a1, 'anime');
+            case 'trailer:kids': return await doTrailer(sock, chatId, message, a1, 'kids');
+
+            case 'cast:movie': return await doCast(sock, chatId, message, a1, 'movie');
+            case 'cast:tv': return await doCast(sock, chatId, message, a1, 'tv');
+            case 'related:movie': return await doRelated(sock, chatId, message, a1, 'movie');
+            case 'related:tv': return await doRelated(sock, chatId, message, a1, 'tv');
+            case 'related:anime': return await doRelated(sock, chatId, message, a1, 'anime');
+            case 'related:kids': return await doRelated(sock, chatId, message, a1, 'kids');
+
+            case 'stills:movie': return await doStills(sock, chatId, message, a1, 'movie');
+            case 'stills:tv': return await doStills(sock, chatId, message, a1, 'tv');
+
+            case 'full:universal': return await doUniversalFull(sock, chatId, message, a1);
+
+            case 'episodes:tv': return await doEpisodes(sock, chatId, message, a1, 'tv');
+            case 'episodes:anime': return await doEpisodes(sock, chatId, message, a1, 'anime');
+
+            case 'captions:movie': return await doCaptions(sock, chatId, message, a1, 'movie', args.slice(1));
+            case 'captions:tv': return await doCaptions(sock, chatId, message, a1, 'tv', args.slice(1));
+            case 'captions:anime': return await doCaptions(sock, chatId, message, a1, 'anime', args.slice(1));
+            case 'captions:kids': return await doCaptions(sock, chatId, message, a1, 'kids', args.slice(1));
+
+            case 'ugandan:vj': return await doUgandanVj(sock, chatId, message, rest);
+            case 'ugandan:latest': return await doBrowse(sock, chatId, message, '/ugandan/latest', 'ugandan', 'Latest Ugandan VJ titles');
+
+            case 'trending': return await doBrowse(sock, chatId, message, '/movies/trending', 'movie', 'Trending Movies');
+            case 'popular': return await doBrowse(sock, chatId, message, '/movies/popular', 'movie', 'Popular Movies');
+            case 'upcoming': return await doBrowse(sock, chatId, message, '/movies/new', 'movie', 'New Movies');
+            case 'topmovies': return await doBrowse(sock, chatId, message, '/movies/top-rated', 'movie', 'Top-Rated Movies');
+            case 'tvnew': return await doBrowse(sock, chatId, message, '/tvshows/new', 'tv', 'New TV Shows');
+            case 'animenew': return await doBrowse(sock, chatId, message, '/anime/new', 'anime', 'New Anime');
+
+            case 'homepage': return await doHomepage(sock, chatId, message);
+            case 'moviefilter': return await doGenreFilter(sock, chatId, message, rest);
+
+            case 'livetv': return await doLiveTV(sock, chatId, message);
+            case 'livetv:search': return await doLiveTVSearch(sock, chatId, message, rest);
+            case 'livetv:stream': return await doLiveTVStream(sock, chatId, message, a1);
+
+            case 'match:live': return await doMatchLive(sock, chatId, message);
+            case 'match:upcoming': return await doMatchUpcoming(sock, chatId, message);
+            case 'match:ended': return await doMatchEnded(sock, chatId, message);
+            case 'match:leagues': return await doMatchLeagues(sock, chatId, message, rest);
+            case 'match:stream': return await doMatchStream(sock, chatId, message, a1);
+            case 'match:details': return await doMatchDetails(sock, chatId, message, a1);
+
+            case 'more': return await doMore(sock, chatId, message);
+
+            default:
+                return sock.sendMessage(chatId, { text: HELP_TEXT }, { quoted: message });
         }
-
-        // ── DETAILS / INFO ──────────────────────────────────────────────────
-        if (subcommand === 'info') {
-            if (!query) {
-                return sock.sendMessage(chatId, {
-                    text: '❌ Provide a movie ID or pick number.\n*Example:* _$movie details 1234376946650333432_\n*Quick pick:* _$movie details 2_ (from last search)\n\n💡 Get IDs by searching first: *$movie <title>*'
-                }, { quoted: message });
-            }
-            await sock.sendMessage(chatId, { react: { text: '🎬', key: message.key } });
-
-            // Resolve numeric pick → real ID from last search
-            let infoId = query;
-            const pickNum = parseInt(query);
-            if (!isNaN(pickNum) && pickNum >= 1 && pickNum <= 10 && query === String(pickNum)) {
-                const saved = lastSearches.get(chatId) || [];
-                const picked = saved[pickNum - 1];
-                if (!picked) {
-                    return sock.sendMessage(chatId, {
-                        text: `❌ No result #${pickNum} in your last search.\nSearch first: *$movie <title>*`
-                    }, { quoted: message });
-                }
-                infoId = picked.subjectId || picked.id || '';
-                if (!infoId) {
-                    return sock.sendMessage(chatId, {
-                        text: `❌ Could not read the ID for result #${pickNum}. Search again: *$movie <title>*`
-                    }, { quoted: message });
-                }
-            }
-
-            // Fetch info + sources in parallel so we know subtitle availability
-            const [data, srcData] = await Promise.all([
-                apiFetch(`/info/${encodeURIComponent(infoId)}`),
-                apiFetch(`/sources/${encodeURIComponent(infoId)}`).catch(() => null)
-            ]);
-            const { subtitles: infoSubs } = srcData ? parseSources(srcData) : { subtitles: [] };
-            const text   = formatInfo(data, infoSubs);
-            const poster = data.results?.cover?.url || data.results?.thumbnail;
-            if (poster) {
-                await sock.sendMessage(chatId, { image: { url: poster }, caption: text }, { quoted: message });
-            } else {
-                await sock.sendMessage(chatId, { text }, { quoted: message });
-            }
-            return;
-        }
-
-        // ── DOWNLOAD / SOURCES ──────────────────────────────────────────────
-        if (subcommand === 'dl') {
-            // args[0] = ID or pick number,  args[1+] = pick: "1" | "360p" | "s1" | "s1e3" | "s1e3 720p"
-            let id   = args[0] || '';
-            const pick = args.slice(1).join(' ').trim().toLowerCase();
-
-            if (!id) {
-                return sock.sendMessage(chatId, {
-                    text: '❌ Provide a movie/series ID or pick number.\n*Example:* _$movie dl 1234376946650333432_\n*Quick pick:* _$movie dl 2_ (result #2 from last search)\n\n💡 Get IDs by searching first: *$movie <title>*'
-                }, { quoted: message });
-            }
-
-            // Resolve numeric pick → real ID from last search
-            const dlPickNum = parseInt(id);
-            if (!isNaN(dlPickNum) && dlPickNum >= 1 && dlPickNum <= 10 && id === String(dlPickNum)) {
-                const saved = lastSearches.get(chatId) || [];
-                const picked = saved[dlPickNum - 1];
-                if (!picked) {
-                    return sock.sendMessage(chatId, {
-                        text: `❌ No result #${dlPickNum} in your last search.\nSearch first: *$movie <title>*`
-                    }, { quoted: message });
-                }
-                const resolvedId = picked.subjectId || picked.id || '';
-                if (!resolvedId) {
-                    return sock.sendMessage(chatId, {
-                        text: `❌ Could not read the ID for result #${dlPickNum}. Search again: *$movie <title>*`
-                    }, { quoted: message });
-                }
-                id = resolvedId;
-            }
-
-            await sock.sendMessage(chatId, { react: { text: '📥', key: message.key } });
-
-            // Info always fetched first — contains seasonDetails for series
-            const infoData      = await apiFetch(`/info/${encodeURIComponent(id)}`).catch(() => null);
-            const title         = infoData?.results?.title;
-            const poster        = infoData?.results?.cover?.url || infoData?.results?.thumbnail;
-            const hasTrailer    = !!infoData?.results?.trailer?.VideoAddress?.url;
-            const mediaType     = infoData?.results?.type || '';
-            // seasonDetails comes directly from /info — no separate API call needed
-            const seasonDetails = infoData?.results?.seasonDetails || [];
-            // Dubs: each dub is a separate series with its own subjectId
-            const dubList       = infoData?.results?.dubs || infoData?.results?.audioTracks || [];
-
-            // ── SERIES PATH ──────────────────────────────────────────────────
-            // Handle series even when API returns no seasonDetails (some series
-            // only return a seasons count — we still route correctly).
-            if (isSeriesType(mediaType)) {
-                const parsed = parsePick(pick);
-
-                // If API gave no seasonDetails but gave a seasons count, build synthetic ones
-                let effectiveSeasonDetails = seasonDetails;
-                if (!effectiveSeasonDetails.length && infoData?.results?.seasons > 0) {
-                    const count = parseInt(infoData.results.seasons);
-                    effectiveSeasonDetails = Array.from({ length: count }, (_, i) => ({ season: i + 1, totalEpisodes: null }));
-                }
-
-                // No seasonDetails at all AND user didn't specify s/e — ask them to specify
-                if (!effectiveSeasonDetails.length && !parsed.season) {
-                    return sock.sendMessage(chatId, {
-                        text: [
-                            `📺 *${title || id}* is a series.`,
-                            ``,
-                            `The API did not return season info for this title.`,
-                            `Please specify the episode directly:`,
-                            ``,
-                            `_$movie dl ${id} s1e1_ — S1 Episode 1`,
-                            `_$movie dl ${id} s1e1 720p_ — specific quality`,
-                        ].join('\n')
-                    }, { quoted: message });
-                }
-
-                // ① No season → show full season overview
-                if (!parsed.season) {
-                    const totalEps  = infoData?.results?.totalEpisodes
-                        || effectiveSeasonDetails.reduce((a, s) => a + (s.totalEpisodes || 0), 0);
-                    const NUMS      = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
-                    let msg = `📺 *${title || 'Series'}*\n`;
-                    msg += `📊 *${effectiveSeasonDetails.length} Season${effectiveSeasonDetails.length > 1 ? 's' : ''}`;
-                    if (totalEps) msg += ` • ${totalEps} Total Episodes`;
-                    msg += `*\n\n`;
-
-                    effectiveSeasonDetails.forEach((s, i) => {
-                        const eps = s.totalEpisodes;
-                        const epStr = eps ? `${eps} episode${eps !== 1 ? 's' : ''}` : '? episodes';
-                        msg += `${NUMS[i] || `${i + 1}.`}  *Season ${s.season}*  —  ${epStr}\n`;
-                    });
-
-                    msg += `\n💬 *Pick a season:*\n_$movie dl ${id} s1_ — Season 1 episodes\n_$movie dl ${id} s2_ — Season 2 episodes`;
-                    msg += `\n_$movie dl ${id} s1e1_ — Download S1 Episode 1 directly`;
-
-                    // Show dub options if any non-original dubs exist
-                    const dubs = dubList.filter(d => !d.original && d.subjectId && d.subjectId !== id);
-                    if (dubs.length) {
-                        msg += `\n\n🌐 *Available Dubs (use the dub ID to download that language):*\n`;
-                        const orig = dubList.find(d => d.original);
-                        if (orig) msg += `  • ${orig.lanName || 'Original'} ✓ _(this series)_\n`;
-                        dubs.forEach(d => {
-                            msg += `  • *${d.lanName || d.lanCode}*  🆔 \`${d.subjectId}\`\n`;
-                        });
-                        msg += `\n💡 *$movie dl <dub-id> s1e1* — download that dub`;
-                    }
-
-                    return sock.sendMessage(chatId, { text: msg }, { quoted: message });
-                }
-
-                // ② Season given, no episode → show episode list for that season
-                if (parsed.season && !parsed.episode) {
-                    const seasonInfo = effectiveSeasonDetails.find(s => s.season === parsed.season);
-                    if (!seasonInfo) {
-                        const available = effectiveSeasonDetails.map(s => `S${s.season}`).join(', ');
-                        return sock.sendMessage(chatId, {
-                            text: `⚠️ Season ${parsed.season} not found in *${title || id}*.\n\nAvailable: ${available}`
-                        }, { quoted: message });
-                    }
-
-                    const totalEps = seasonInfo.totalEpisodes || 0;
-                    let msg = `📺 *${title || 'Series'}* — Season ${parsed.season}\n`;
-                    if (totalEps) {
-                        msg += `📋 *${totalEps} Episode${totalEps !== 1 ? 's' : ''}:*\n\n`;
-                        const showMax = Math.min(totalEps, 30);
-                        for (let ep = 1; ep <= showMax; ep++) {
-                            msg += `  *Ep ${ep}*  →  \`$movie dl ${id} s${parsed.season}e${ep}\`\n`;
-                        }
-                        if (totalEps > showMax) msg += `  _...and ${totalEps - showMax} more episodes_\n`;
-                    } else {
-                        // Episode count unknown — show first 20 as safe default
-                        msg += `📋 *Episodes (specify directly):*\n\n`;
-                        for (let ep = 1; ep <= 20; ep++) {
-                            msg += `  *Ep ${ep}*  →  \`$movie dl ${id} s${parsed.season}e${ep}\`\n`;
-                        }
-                        msg += `  _...try higher numbers if there are more_\n`;
-                    }
-
-                    msg += `\n💡 Add quality to download directly:\n_$movie dl ${id} s${parsed.season}e1 720p_`;
-                    return sock.sendMessage(chatId, { text: msg }, { quoted: message });
-                }
-
-                // ③ Season + episode → fetch sources with ?season=N&episode=N
-                if (parsed.season && parsed.episode) {
-                    const epLabel = `S${String(parsed.season).padStart(2, '0')}E${String(parsed.episode).padStart(2, '0')}`;
-
-                    const srcData = await apiFetch(`/sources/${encodeURIComponent(id)}?season=${parsed.season}&episode=${parsed.episode}`);
-                    const { sources, subtitles, audioTracks } = parseSources(srcData);
-
-                    if (!sources.length) {
-                        return sock.sendMessage(chatId, {
-                            text: `⚠️ No download sources found for *${title || id} ${epLabel}*.\n\n_This episode may not have links yet._`
-                        }, { quoted: message });
-                    }
-
-                    const deduped = dedupeByQuality(sources);
-                    const sorted  = [...deduped].sort((a, b) => (parseInt(b.size) || 0) - (parseInt(a.size) || 0));
-                    const epTitle = `${title || id} ${epLabel}`;
-
-                    if (parsed.quality) {
-                        return resolveAndSend(sock, chatId, message, sorted, srcData, parsed, title || id, poster, audioTracks, subtitles, id, epLabel);
-                    }
-                    return showResolutionPicker(sock, chatId, message, sorted, audioTracks, subtitles, epTitle, id, epLabel, false);
-                }
-            }
-
-            // ── MOVIE / flat source ──────────────────────────────────────────
-            const srcData = await apiFetch(`/sources/${encodeURIComponent(id)}`);
-            const { sources, subtitles, audioTracks } = parseSources(srcData);
-
-            if (!sources.length) {
-                const trailerHint = hasTrailer ? `\n\n🎬 *$movietrailer ${id}* — Watch trailer instead` : '';
-                return sock.sendMessage(chatId, {
-                    text: `⚠️ No download sources found for *${title || id}*.\n\n_The movie may not have links yet._${trailerHint}`
-                }, { quoted: message });
-            }
-
-            const deduped = dedupeByQuality(sources);
-            const sorted  = [...deduped].sort((a, b) => (parseInt(b.size) || 0) - (parseInt(a.size) || 0));
-            const parsed  = parsePick(pick);
-
-            if (pick) {
-                return resolveAndSend(sock, chatId, message, sorted, srcData, parsed, title, poster, audioTracks, subtitles, id, null);
-            }
-            return showResolutionPicker(sock, chatId, message, sorted, audioTracks, subtitles, title || 'Movie', id, null, hasTrailer);
-        }
-
-        // ── TRAILER ──────────────────────────────────────────────────────────
-        if (subcommand === 'trailer') {
-            const id = args[0] || query;
-            if (!id) {
-                return sock.sendMessage(chatId, {
-                    text: '❌ Provide a movie ID.\n*Example:* _$movietrailer 1234376946650333432_\n\n💡 Get IDs from *$movie <title>* search'
-                }, { quoted: message });
-            }
-            await sock.sendMessage(chatId, { react: { text: '🎬', key: message.key } });
-
-            const data    = await apiFetch(`/info/${encodeURIComponent(id)}`);
-            const title   = data.results?.title;
-            const trailer = data.results?.trailer;
-
-            if (!trailer?.VideoAddress?.url) {
-                return sock.sendMessage(chatId, {
-                    text: `⚠️ No trailer found for *${title || id}*.\n\n💡 *$movie dl ${id}* — Download links\n💡 *$movie details ${id}* — Full info`
-                }, { quoted: message });
-            }
-
-            const { url, duration, size } = trailer.VideoAddress;
-            const mins     = Math.floor((duration || 0) / 60);
-            const secs     = (duration || 0) % 60;
-            const timeStr  = duration ? ` · ⏱ ${mins}m ${secs}s` : '';
-            const sizeStr  = size     ? ` · ${fileSize(String(size))}` : '';
-            const caption  = `🎬 *${title}* — Official Trailer${timeStr}${sizeStr}\n\n_Daratech_`;
-
-            try {
-                await sock.sendMessage(chatId, {
-                    video:    { url },
-                    mimetype: 'video/mp4',
-                    caption,
-                }, { quoted: message });
-            } catch (e) {
-                // Fallback to link if video send fails
-                await sock.sendMessage(chatId, {
-                    text: `🎬 *${title}* — Official Trailer\n\n${url}`
-                }, { quoted: message });
-            }
-            return;
-        }
-
-        // ── TRENDING ────────────────────────────────────────────────────────
-        if (subcommand === 'trending') {
-            await sock.sendMessage(chatId, { react: { text: '🔥', key: message.key } });
-
-            const data = await apiFetch('/trending');
-            // Response: data.results.items[]
-            const list = data.results?.items || [];
-            if (!list.length) return sock.sendMessage(chatId, { text: '⚠️ No trending content found.' }, { quoted: message });
-            const lines = list.slice(0, 12).map(formatResult);
-            return sock.sendMessage(chatId, {
-                text: `🔥 *Trending Now*\n\n${lines.join('\n\n')}\n\n💡 *$movie details <id>* — Full info`
-            }, { quoted: message });
-        }
-
-        // ── UPCOMING ────────────────────────────────────────────────────────
-        if (subcommand === 'upcoming') {
-            await sock.sendMessage(chatId, { react: { text: '🗓', key: message.key } });
-
-            const params = query ? `?genre=${encodeURIComponent(query)}` : '';
-            const data   = await apiFetch(`/seasons/upcoming${params}`);
-            // Response: data.results.items[] — each item uses 'id' and 'thumbnail', 'genres' array
-            const list = data.results?.items || [];
-            if (!list.length) return sock.sendMessage(chatId, { text: '⚠️ No upcoming seasons found.' }, { quoted: message });
-            const lines = list.slice(0, 10).map(formatResult);
-            return sock.sendMessage(chatId, {
-                text: `🗓 *Upcoming Seasons*\n\n${lines.join('\n\n')}`
-            }, { quoted: message });
-        }
-
-        // ── SCHEDULE ────────────────────────────────────────────────────────
-        if (subcommand === 'schedule') {
-            await sock.sendMessage(chatId, { react: { text: '📅', key: message.key } });
-
-            const period = query || 'weekly';
-            const data   = await apiFetch(`/schedule?period=${encodeURIComponent(period)}`);
-
-            // Response: data.results.schedule[] — each entry: { date, count, items[] }
-            // Flatten all items across days
-            const scheduleArr = data.results?.schedule || [];
-            const list = scheduleArr.flatMap(day => day.items || []);
-
-            if (!list.length) {
-                return sock.sendMessage(chatId, {
-                    text: `📅 No schedule entries found for *${period}*.\n\nTry *$schedule daily* or *$schedule monthly*`
-                }, { quoted: message });
-            }
-            const lines = list.slice(0, 12).map(formatResult);
-            return sock.sendMessage(chatId, {
-                text: `📅 *${period.charAt(0).toUpperCase() + period.slice(1)} Schedule*\n\n${lines.join('\n\n')}`
-            }, { quoted: message });
-        }
-
-        // ── LIVE TV (browse) ─────────────────────────────────────────────────
-        if (subcommand === 'live') {
-            await sock.sendMessage(chatId, { react: { text: '📡', key: message.key } });
-
-            const params = query
-                ? `?category=${encodeURIComponent(query)}&limit=15`
-                : '?limit=15';
-            const data = await apiFetch(`/live${params}`);
-
-            // Response: data.results = { total, page, limit, pages, results: [{id, name, country, streams[]}] }
-            const list = data.results?.results || [];
-            if (!list.length) return sock.sendMessage(chatId, { text: '⚠️ No live channels found.' }, { quoted: message });
-
-            let msg = `📡 *Live TV Channels*${query ? ` — ${query}` : ''}\n\n`;
-            list.slice(0, 12).forEach((ch, i) => {
-                const name    = ch.name || ch.title || 'Unknown';
-                const id      = ch.id || '';
-                const country = ch.country || '';
-                const cats    = ch.categories ? ch.categories.slice(0, 2).join(', ') : '';
-                msg += `*${i + 1}.* ${name}${country ? ` 🌍 ${country}` : ''}${cats ? ` (${cats})` : ''}\n    🆔 \`${id}\`\n\n`;
-            });
-            msg += '💡 *$livestream <id>* — Get stream link\n💡 *$livesearch <name>* — Search channels\n💡 *$livecats* — Browse by category';
-            return sock.sendMessage(chatId, { text: msg }, { quoted: message });
-        }
-
-        // ── LIVE SEARCH ──────────────────────────────────────────────────────
-        if (subcommand === 'livesearch') {
-            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a channel name.\n*Example:* _$livesearch CNN_' }, { quoted: message });
-            await sock.sendMessage(chatId, { react: { text: '📡', key: message.key } });
-
-            const data = await apiFetch(`/live/search/${encodeURIComponent(query)}`);
-            // Response: data.results = { total, query, results: [{id, name, country, streams[]}] }
-            const list = data.results?.results || [];
-            if (!list.length) return sock.sendMessage(chatId, { text: `⚠️ No channels found for "*${query}*"` }, { quoted: message });
-
-            let msg = `📡 *Live Search: ${query}*\n\n`;
-            list.slice(0, 10).forEach((ch, i) => {
-                const name    = ch.name || ch.title || 'Unknown';
-                const id      = ch.id || '';
-                const country = ch.country || '';
-                msg += `*${i + 1}.* ${name}${country ? ` 🌍 ${country}` : ''}\n    🆔 \`${id}\`\n\n`;
-            });
-            msg += '💡 Copy the ID exactly and use *$livestream <id>* to get the stream link';
-            return sock.sendMessage(chatId, { text: msg }, { quoted: message });
-        }
-
-        // ── LIVE STREAM ──────────────────────────────────────────────────────
-        if (subcommand === 'livestream') {
-            if (!query) {
-                return sock.sendMessage(chatId, {
-                    text: '❌ Provide a channel ID.\n*Example:* _$livestream CNN.us_\n\n💡 Get exact IDs from *$live* or *$livesearch <name>*'
-                }, { quoted: message });
-            }
-            await sock.sendMessage(chatId, { react: { text: '📡', key: message.key } });
-
-            let data;
-            try {
-                data = await apiFetch(`/live/stream/${encodeURIComponent(query)}`);
-            } catch (_fetchErr) {
-                return sock.sendMessage(chatId, {
-                    text: `⚠️ Channel *${query}* was not found or is unavailable.\n\n💡 Use *$livesearch <name>* to find the exact channel ID.\n💡 Use *$live* to browse all channels.`
-                }, { quoted: message });
-            }
-
-            if (!data.success) {
-                return sock.sendMessage(chatId, {
-                    text: `⚠️ Channel *${query}* was not found.\n\n💡 Use *$livesearch <name>* to find the exact channel ID.`
-                }, { quoted: message });
-            }
-
-            // Response: data.results = { id, name, streams: [{url, httpReferrer, userAgent}] }
-            const ch      = data.results || {};
-            const streams = ch.streams || [];
-            if (!streams.length) {
-                return sock.sendMessage(chatId, { text: '⚠️ No stream available for this channel right now.' }, { quoted: message });
-            }
-
-            const name = ch.name || query;
-            let msg    = `📡 *Live Stream: ${name}*\n\n`;
-            streams.forEach((s, i) => {
-                msg += `*Stream ${i + 1}:*\n${s.url}\n\n`;
-            });
-            msg += '_Open link in VLC, MX Player or any media player that supports M3U8_';
-            return sock.sendMessage(chatId, { text: msg }, { quoted: message });
-        }
-
-        // ── LIVE CATEGORIES ──────────────────────────────────────────────────
-        if (subcommand === 'livecats') {
-            await sock.sendMessage(chatId, { react: { text: '📡', key: message.key } });
-
-            const data = await apiFetch('/live/categories');
-            // Response: data.results = { total, categories: [{name, count}] }
-            const cats = data.results?.categories || [];
-            if (!cats.length) return sock.sendMessage(chatId, { text: '⚠️ Could not load categories.' }, { quoted: message });
-
-            const list = cats.slice(0, 20).map((c, i) => `*${i + 1}.* ${c.name}  _(${c.count} channels)_`).join('\n');
-            return sock.sendMessage(chatId, {
-                text: `📡 *Live TV Categories*\n\n${list}\n\n💡 *$live <category>* — Browse by category name`
-            }, { quoted: message });
-        }
-
-        // ── ANIME ────────────────────────────────────────────────────────────
-        if (subcommand === 'anime') {
-            const first = (args[0] || '').toLowerCase();
-
-            // Anime download: $anime dl <id> [s1] [s1e3] [s1e3 1080p]
-            if (first === 'dl' || first === 'download') {
-                const animeId = args[1] || '';
-                const pick    = args.slice(2).join(' ').trim().toLowerCase();
-
-                if (!animeId) return sock.sendMessage(chatId, { text: '❌ Provide an anime ID.\n*Example:* _$anime dl <id>_\n*Season/ep:* _$anime dl <id> s1e3_' }, { quoted: message });
-                await sock.sendMessage(chatId, { react: { text: '📥', key: message.key } });
-
-                // Fetch info first — contains seasonDetails if this is a series
-                const infoData      = await apiFetch(`/info/${encodeURIComponent(animeId)}`).catch(() => null);
-                const title         = infoData?.results?.title;
-                const poster        = infoData?.results?.cover?.url || infoData?.results?.thumbnail;
-                const mediaType     = infoData?.results?.type || infoData?.results?.format || '';
-                const seasonDetails = infoData?.results?.seasonDetails || [];
-                const dubList       = infoData?.results?.dubs || infoData?.results?.audioTracks || [];
-
-                const parsed = parsePick(pick);
-
-                // ── Series: has season details ───────────────────────────────
-                if (isSeriesType(mediaType) && seasonDetails.length > 0) {
-
-                    // ① No season → show season overview
-                    if (!parsed.season) {
-                        const totalEps = infoData.results.totalEpisodes || seasonDetails.reduce((a, s) => a + (s.totalEpisodes || 0), 0);
-                        const NUMS     = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
-                        let msg = `🎌 *${title || 'Anime'}*\n`;
-                        msg += `📊 *${seasonDetails.length} Season${seasonDetails.length > 1 ? 's' : ''} • ${totalEps} Total Episodes*\n\n`;
-                        seasonDetails.forEach((s, i) => {
-                            const eps = s.totalEpisodes || '?';
-                            msg += `${NUMS[i] || `${i + 1}.`}  *Season ${s.season}*  —  ${eps} episode${eps !== 1 ? 's' : ''}\n`;
-                        });
-                        msg += `\n💬 *Pick a season:*\n_$anime dl ${animeId} s1_ — Season 1 episodes\n_$anime dl ${animeId} s1e1_ — Download S1 Ep1 directly`;
-
-                        const dubs = dubList.filter(d => !d.original && d.subjectId && d.subjectId !== animeId);
-                        if (dubs.length) {
-                            msg += `\n\n🌐 *Available Dubs:*\n`;
-                            const orig = dubList.find(d => d.original);
-                            if (orig) msg += `  • ${orig.lanName || 'Original'} ✓ _(this series)_\n`;
-                            dubs.forEach(d => {
-                                msg += `  • *${d.lanName || d.lanCode}*  🆔 \`${d.subjectId}\`\n`;
-                            });
-                            msg += `\n💡 *$anime dl <dub-id> s1e1* — download that language`;
-                        }
-                        return sock.sendMessage(chatId, { text: msg }, { quoted: message });
-                    }
-
-                    // ② Season given, no episode → show episode list
-                    if (parsed.season && !parsed.episode) {
-                        const seasonInfo = seasonDetails.find(s => s.season === parsed.season);
-                        if (!seasonInfo) {
-                            const available = seasonDetails.map(s => `S${s.season}`).join(', ');
-                            return sock.sendMessage(chatId, {
-                                text: `⚠️ Season ${parsed.season} not found in *${title || animeId}*.\n\nAvailable: ${available}`
-                            }, { quoted: message });
-                        }
-                        const totalEps = seasonInfo.totalEpisodes || 0;
-                        const showMax  = Math.min(totalEps, 30);
-                        let msg = `🎌 *${title || 'Anime'}* — Season ${parsed.season}\n`;
-                        msg += `📋 *${totalEps} Episode${totalEps !== 1 ? 's' : ''}:*\n\n`;
-                        for (let ep = 1; ep <= showMax; ep++) {
-                            msg += `  *Ep ${ep}*  →  \`$anime dl ${animeId} s${parsed.season}e${ep}\`\n`;
-                        }
-                        if (totalEps > showMax) msg += `  _...and ${totalEps - showMax} more_\n`;
-                        msg += `\n💡 Add quality: _$anime dl ${animeId} s${parsed.season}e1 1080p_`;
-                        return sock.sendMessage(chatId, { text: msg }, { quoted: message });
-                    }
-
-                    // ③ Season + episode → fetch sources with ?season=N&episode=N
-                    if (parsed.season && parsed.episode) {
-                        const epLabel = `S${String(parsed.season).padStart(2, '0')}E${String(parsed.episode).padStart(2, '0')}`;
-                        const epTitle = `${title || animeId} ${epLabel}`;
-
-                        const srcData = await apiFetch(`/anime/sources/${encodeURIComponent(animeId)}?season=${parsed.season}&episode=${parsed.episode}`);
-                        const { sources, subtitles, audioTracks } = parseSources(srcData);
-
-                        if (!sources.length) {
-                            return sock.sendMessage(chatId, {
-                                text: `⚠️ No download sources found for *${epTitle}*.\n\n_This episode may not have links yet._`
-                            }, { quoted: message });
-                        }
-
-                        const deduped = dedupeByQuality(sources);
-                        const sorted  = [...deduped].sort((a, b) => (parseInt(b.size) || 0) - (parseInt(a.size) || 0));
-
-                        if (parsed.quality) {
-                            return resolveAndSend(sock, chatId, message, sorted, srcData, parsed, title || animeId, poster, audioTracks, subtitles, animeId, epLabel);
-                        }
-                        return showResolutionPicker(sock, chatId, message, sorted, audioTracks, subtitles, epTitle, animeId, epLabel, false);
-                    }
-                }
-
-                // ── Flat / movie-style anime ─────────────────────────────────
-                const srcData = await apiFetch(`/anime/sources/${encodeURIComponent(animeId)}`);
-                const { sources, subtitles, audioTracks } = parseSources(srcData);
-
-                if (!sources.length) {
-                    return sock.sendMessage(chatId, {
-                        text: `⚠️ No download sources found for *${title || animeId}*.\n\n_May not have links yet._`
-                    }, { quoted: message });
-                }
-
-                const deduped = dedupeByQuality(sources);
-                const sorted  = [...deduped].sort((a, b) => (parseInt(b.size) || 0) - (parseInt(a.size) || 0));
-
-                if (pick) {
-                    return resolveAndSend(sock, chatId, message, sorted, srcData, parsed, title, poster, audioTracks, subtitles, animeId, null);
-                }
-
-                // No pick: show resolution picker
-                const NUMS = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
-                let msg = `🎌 *${title || 'Anime'}*\n\n📋 *Available Resolutions:*\n\n`;
-                sorted.forEach((s, i) => {
-                    const sz      = s.size ? fileSize(s.size) : '?';
-                    const codec   = s.codec ? ` · ${s.codec.toUpperCase()}` : '';
-                    const canSend = (parseInt(s.size) || Infinity) <= DOC_LIMIT ? ' ✅' : '';
-                    msg += `${NUMS[i] || `${i + 1}.`}  *${s.quality}*  —  ${sz}${codec}${canSend}\n`;
-                });
-                msg += `\n✅ _= can be sent as video/file in chat_\n`;
-                msg += `\n💬 *Pick a resolution:*\n_$anime dl ${animeId} 1_ — by number\n_$anime dl ${animeId} 1080p_ — by name`;
-                if (subtitles.length) msg += `\n📜 *Subs:* ${subtitles.map(s => s.language || s.languageCode).join(', ')}`;
-                return sock.sendMessage(chatId, { text: msg }, { quoted: message });
-            }
-
-            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide an anime title.\n*Example:* _$anime naruto_' }, { quoted: message });
-            await sock.sendMessage(chatId, { react: { text: '🎌', key: message.key } });
-
-            const data = await apiFetch(`/anime/search/${encodeURIComponent(query)}`);
-            // Response: data.results.items[]
-            const list = data.results?.items || [];
-            if (!list.length) return sock.sendMessage(chatId, { text: `⚠️ No anime found for "*${query}*"` }, { quoted: message });
-            const lines = list.slice(0, 8).map(formatResult);
-            return sock.sendMessage(chatId, {
-                text: `🎌 *Anime: ${query}*\n\n${lines.join('\n\n')}\n\n💡 *$movie details <id>* — Full info\n💡 *$anime dl <id>* — Download links`
-            }, { quoted: message });
-        }
-
-        // ── FILTER ───────────────────────────────────────────────────────────
-        if (subcommand === 'filter') {
-            if (!query) {
-                return sock.sendMessage(chatId, {
-                    text: '❌ Provide a genre or platform.\n\n*Examples:*\n_$moviefilter action_\n_$moviefilter bollywood_\n_$moviefilter comedy,1_ (1=Movie, 2=Series)'
-                }, { quoted: message });
-            }
-            await sock.sendMessage(chatId, { react: { text: '🔎', key: message.key } });
-
-            const [genre, typeStr] = query.split(',').map(s => s.trim());
-            const platforms        = ['netflix', 'amazon', 'disney', 'hulu', 'bollywood', 'hbo', 'appletv', 'primevideo'];
-            const isPlatform       = platforms.includes(genre.toLowerCase());
-            const typeParam        = typeStr ? `&type=${typeStr}` : '';
-            const apiPath          = isPlatform
-                ? `/filter?platform=${encodeURIComponent(genre)}${typeParam}`
-                : `/filter?genre=${encodeURIComponent(genre)}${typeParam}`;
-
-            const data = await apiFetch(apiPath);
-            // Response: data.results.items[]
-            const list = data.results?.items || [];
-            if (!list.length) {
-                return sock.sendMessage(chatId, {
-                    text: `⚠️ No results for "*${genre}*"\n\nNote: genre/platform filtering depends on upstream data — try a different genre like _action_, _comedy_, _thriller_`
-                }, { quoted: message });
-            }
-            const lines     = list.slice(0, 10).map(formatResult);
-            const label     = isPlatform ? `Platform: ${genre}` : `Genre: ${genre}`;
-            const typeLabel = typeStr ? ` (${typeStr === '1' ? 'Movies' : 'Series'})` : '';
-            return sock.sendMessage(chatId, {
-                text: `🔎 *Filter — ${label}${typeLabel}*\n\n${lines.join('\n\n')}\n\n💡 *$movie details <id>* — Full info`
-            }, { quoted: message });
-        }
-
-        // ── CAPTIONS / SUBTITLES ─────────────────────────────────────────────
-        if (subcommand === 'captions') {
-            if (!query) return sock.sendMessage(chatId, { text: '❌ Provide a movie ID.\n*Example:* _$moviecaptions <id>_\n*Quick pick:* _$moviecaptions 1_ (result #1 from last search)' }, { quoted: message });
-
-            // Resolve numeric pick → real ID from last search
-            let captionId = query;
-            const capPickNum = parseInt(captionId);
-            if (!isNaN(capPickNum) && capPickNum >= 1 && capPickNum <= 10 && captionId === String(capPickNum)) {
-                const saved  = lastSearches.get(chatId) || [];
-                const picked = saved[capPickNum - 1];
-                if (!picked) {
-                    return sock.sendMessage(chatId, {
-                        text: `❌ No result #${capPickNum} in your last search.\nSearch first: *$movie <title>*`
-                    }, { quoted: message });
-                }
-                const resolvedId = picked.subjectId || picked.id || '';
-                if (!resolvedId) {
-                    return sock.sendMessage(chatId, {
-                        text: `❌ Could not read the ID for result #${capPickNum}. Search again: *$movie <title>*`
-                    }, { quoted: message });
-                }
-                captionId = resolvedId;
-            }
-
-            await sock.sendMessage(chatId, { react: { text: '📜', key: message.key } });
-
-            // Sources endpoint provides subtitles + audioTracks alongside download links
-            const srcData = await apiFetch(`/sources/${encodeURIComponent(captionId)}`);
-            const subs    = srcData.subtitles   || [];
-            const audio   = srcData.audioTracks || [];
-
-            if (!subs.length && !audio.length) {
-                return sock.sendMessage(chatId, { text: '⚠️ No subtitles or audio tracks found for this title.' }, { quoted: message });
-            }
-            let msg = '📜 *Captions & Audio Tracks*\n\n';
-            if (subs.length) {
-                msg += `*Subtitles (${subs.length}):*\n`;
-                subs.forEach((s, i) => { msg += `  ${i + 1}. ${s.language || s.languageCode}\n`; });
-                msg += '\n';
-            }
-            if (audio.length) {
-                msg += `*Audio Tracks (${audio.length}):*\n`;
-                audio.forEach((a, i) => { msg += `  ${i + 1}. ${a.language}${a.isOriginal ? ' ✓ Original' : ''}\n`; });
-            }
-            msg += `\n💡 Download subtitles: *$moviesub ${query}*\n💡 Specific language: *$moviesub ${query} english*`;
-            return sock.sendMessage(chatId, { text: msg }, { quoted: message });
-        }
-
-        // ── SUBTITLE DOWNLOAD ────────────────────────────────────────────────
-        // $moviesub <id>              — list available subtitles (no download)
-        // $moviesub <id> <number>     — download subtitle #<number> from that list
-        // $moviesub <id> english      — filter the list by language (still list-only)
-        // Uses /captions/{subjectId}/{streamId} to get signed .srt URLs.
-        if (subcommand === 'subtitle') {
-            let subjectId = args[0] || '';
-            const rest      = args.slice(1).join(' ').trim();
-            const subNum    = /^\d+$/.test(rest) ? parseInt(rest, 10) : null;
-            const langFilter = subNum ? '' : rest.toLowerCase();
-
-            if (!subjectId) {
-                return sock.sendMessage(chatId, {
-                    text:
-                        '❌ Provide a movie ID.\n\n' +
-                        '*Usage:*\n' +
-                        '  `$moviesub <id>`            — list available subtitles\n' +
-                        '  `$moviesub <id> <number>`   — download subtitle #<number>\n' +
-                        '  `$moviesub <id> english`    — download by language\n\n' +
-                        '💡 Get the ID from `$movie <title>`'
-                }, { quoted: message });
-            }
-
-            // Resolve numeric pick → real ID from last search (same as $movie dl)
-            const subPickNum = parseInt(subjectId);
-            if (!isNaN(subPickNum) && subPickNum >= 1 && subPickNum <= 10 && subjectId === String(subPickNum)) {
-                const saved  = lastSearches.get(chatId) || [];
-                const picked = saved[subPickNum - 1];
-                if (!picked) {
-                    return sock.sendMessage(chatId, {
-                        text: `❌ No result #${subPickNum} in your last search.\nSearch first: *$movie <title>*`
-                    }, { quoted: message });
-                }
-                const resolvedId = picked.subjectId || picked.id || '';
-                if (!resolvedId) {
-                    return sock.sendMessage(chatId, {
-                        text: `❌ Could not read the ID for result #${subPickNum}. Search again: *$movie <title>*`
-                    }, { quoted: message });
-                }
-                subjectId = resolvedId;
-            }
-
-            await sock.sendMessage(chatId, { react: { text: '📜', key: message.key } });
-            await sock.sendMessage(chatId, { text: '📜 Fetching subtitle list…' }, { quoted: message });
-
-            // Step 1: get sources (for streamId) + info (for the title) in parallel
-            const [srcData, infoData] = await Promise.all([
-                apiFetch(`/sources/${encodeURIComponent(subjectId)}`),
-                apiFetch(`/info/${encodeURIComponent(subjectId)}`).catch(() => null)
-            ]);
-            const sources  = Array.isArray(srcData.results) ? srcData.results : (srcData.results?.sources || []);
-            const streamId = sources[0]?.id;
-            const title    = infoData?.results?.title || '';
-
-            if (!streamId) {
-                return sock.sendMessage(chatId, {
-                    text: '⚠️ No stream sources found for this title — cannot retrieve subtitles.'
-                }, { quoted: message });
-            }
-
-            // Step 2: fetch the proper captions endpoint
-            const capData  = await apiFetch(`/captions/${encodeURIComponent(subjectId)}/${encodeURIComponent(streamId)}`);
-            const captions = capData.results?.captions || [];
-
-            if (!captions.length) {
-                return sock.sendMessage(chatId, {
-                    text: '⚠️ No subtitles available for this title.'
-                }, { quoted: message });
-            }
-
-            // Helper: download one caption and send it as a document
-            const sendCaption = async (cap) => {
-                const lang     = cap.language || cap.languageCode || 'Unknown';
-                const srtUrl   = cap.url;
-                const fileName = buildSubFileName(title, '', lang);
-
-                const resp = await axios.get(srtUrl, {
-                    responseType: 'arraybuffer',
-                    timeout: 30000,
-                    maxRedirects: 5,
-                });
-                const buf = Buffer.from(resp.data);
-
-                await sock.sendMessage(chatId, {
-                    document: buf,
-                    mimetype:  'text/plain',
-                    fileName,
-                    caption:   `📜 *${lang}* subtitle\n_${fileName}_\n\n_Daratech_ ⚡`,
-                }, { quoted: message });
-            };
-
-            // ── DOWNLOAD MODE: a specific subtitle number was given ──────────
-            if (subNum) {
-                const cap = captions[subNum - 1];
-                if (!cap) {
-                    const listLines = captions.map((c, i) => `  ${i + 1}. ${c.language || c.languageCode}`).join('\n');
-                    return sock.sendMessage(chatId, {
-                        text: `❌ No subtitle #${subNum}.\n\n*Available:*\n${listLines}\n\n💬 *$moviesub ${subjectId} <number>* — download one`
-                    }, { quoted: message });
-                }
-
-                const lang = cap.language || cap.languageCode || 'Unknown';
-                await sock.sendMessage(chatId, {
-                    text: `📜 Downloading *${lang}* subtitle…\n_Please wait…_`
-                }, { quoted: message });
-
-                try {
-                    await sendCaption(cap);
-                    await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
-                } catch (dlErr) {
-                    await sock.sendMessage(chatId, {
-                        text: `⚠️ Failed to download *${lang}* subtitle: ${dlErr.message}`
-                    }, { quoted: message });
-                    await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
-                }
-                return;
-            }
-
-            // ── DOWNLOAD MODE: a language was given (e.g. "english") ─────────
-            if (langFilter) {
-                const targets = captions.filter(c =>
-                    (c.language || '').toLowerCase().includes(langFilter) ||
-                    (c.languageCode || '').toLowerCase().includes(langFilter)
-                );
-
-                if (!targets.length) {
-                    const available = captions.map(c => c.language || c.languageCode).join(', ');
-                    return sock.sendMessage(chatId, {
-                        text: `⚠️ No subtitle matching "*${langFilter}*".\n\nAvailable: ${available}`
-                    }, { quoted: message });
-                }
-
-                const listLines = targets.map(c => `  ${c.language || c.languageCode}`).join('\n');
-                await sock.sendMessage(chatId, {
-                    text: `📜 *Downloading ${targets.length} subtitle(s):*\n${listLines}\n\n_Please wait…_`
-                }, { quoted: message });
-
-                let sent = 0;
-                for (const cap of targets) {
-                    const lang = cap.language || cap.languageCode || 'Unknown';
-                    try {
-                        await sendCaption(cap);
-                        sent++;
-                    } catch (dlErr) {
-                        await sock.sendMessage(chatId, {
-                            text: `⚠️ Failed to download *${lang}* subtitle: ${dlErr.message}`
-                        }, { quoted: message });
-                    }
-                }
-
-                await sock.sendMessage(chatId, { react: { text: sent > 0 ? '✅' : '❌', key: message.key } });
-                return;
-            }
-
-            // ── LIST MODE (default): show numbered subtitles, don't download ──
-            const listLines = captions
-                .map((c, i) => `  ${i + 1}. ${c.language || c.languageCode}`)
-                .join('\n');
-
-            await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
-            return sock.sendMessage(chatId, {
-                text: `📜 *Available Subtitles:*\n${listLines}\n\n💬 *$moviesub ${subjectId} <number>* — download by number\n💬 *$moviesub ${subjectId} english* — download by language`
-            }, { quoted: message });
-        }
-
-        // ── HOMEPAGE / FEATURED ──────────────────────────────────────────────
-        if (subcommand === 'homepage') {
-            await sock.sendMessage(chatId, { react: { text: '🏠', key: message.key } });
-
-            const data = await apiFetch('/homepage');
-            // Response: data.results = { sections: [{type, title, items:[]}], totalSections }
-            const sections = data.results?.sections || [];
-            // Flatten all section items into one list
-            const list = sections.flatMap(sec => (sec.items || []).map(item => ({ ...item, _section: sec.title })));
-
-            if (!list.length) return sock.sendMessage(chatId, { text: '⚠️ Could not load featured content.' }, { quoted: message });
-
-            // Group by section — show first 3 sections, up to 4 items each
-            let msg = '🏠 *Featured Content*\n\n';
-            const seen = new Set();
-            for (const sec of sections.slice(0, 3)) {
-                const secItems = (sec.items || []).filter(it => {
-                    const id = it.subjectId || it.id;
-                    if (seen.has(id)) return false;
-                    seen.add(id);
-                    return true;
-                }).slice(0, 4);
-                if (!secItems.length) continue;
-                msg += `*— ${sec.title || sec.type} —*\n`;
-                secItems.forEach((item, i) => {
-                    const id     = item.subjectId || item.id || '';
-                    const year   = (item.releaseDate || '').slice(0, 4) || item.year || '';
-                    const rating = item.imdbRatingValue || item.imdbRate || item.rating;
-                    const rStr   = rating ? `  ⭐ ${rating}` : '';
-                    msg += `${mediaEmoji(item.type)} *${i + 1}.* ${item.title}\n    📅 ${year || '—'}${rStr}  •  🆔 \`${id}\`\n`;
-                });
-                msg += '\n';
-            }
-            msg += '💡 *$movie details <id>* — Full info';
-            return sock.sendMessage(chatId, { text: msg }, { quoted: message });
-        }
-
     } catch (err) {
         console.error('[movie.js] Error:', err.message);
-
-        const e = (err.message || '').toLowerCase();
-        const isNoSource   = e.includes('no sources') || e.includes('legacy mirrors') || e.includes('v3');
-        const isNotFound   = e.includes('not found') || e.includes('404');
-        const isTimeout    = e.includes('timeout') || e.includes('econnreset') || e.includes('network');
-        const isRateLimit  = e.includes('rate limit') || e.includes('429') || e.includes('too many');
-
-        let errText;
-        if (subcommand === 'subtitle' || subcommand === 'captions') {
-            if (isNoSource || isNotFound) {
-                errText = `📭 No subtitles found for this title.\n\n_The subtitle source returned nothing — this movie/episode may not have subtitles indexed yet._`;
-            } else if (isTimeout) {
-                errText = `⏳ Subtitle server timed out. Try again in a moment.`;
-            } else {
-                errText = `❌ Couldn't fetch subtitles.\n\n_${err.message}_`;
-            }
-        } else if (subcommand === 'dl') {
-            if (isNoSource) {
-                errText = `📭 No download sources available for this title yet.\n\n_The movie/episode hasn't been indexed on the download server. Try again later or search for an alternate version._`;
-            } else if (isNotFound) {
-                errText = `🔍 Title not found on the download server.\n\n_Double-check the ID with *$movie <title>* and try again._`;
-            } else if (isTimeout) {
-                errText = `⏳ Download server timed out. Try again in a moment.`;
-            } else if (isRateLimit) {
-                errText = `🚦 Too many requests — slow down a bit and try again in 30 seconds.`;
-            } else {
-                errText = `❌ Download failed.\n\n_${err.message}_`;
-            }
-        } else if (subcommand === 'info') {
-            if (isNotFound || isNoSource) {
-                errText = `🔍 Movie info not found.\n\n_The ID may be wrong or the title isn't in the database. Search first: *$movie <title>*_`;
-            } else if (isTimeout) {
-                errText = `⏳ Info server timed out. Try again in a moment.`;
-            } else {
-                errText = `❌ Couldn't fetch movie info.\n\n_${err.message}_`;
-            }
-        } else if (subcommand === 'trailer') {
-            if (isNoSource || isNotFound) {
-                errText = `🎬 No trailer found for this title.`;
-            } else {
-                errText = `❌ Trailer fetch failed.\n\n_${err.message}_`;
-            }
-        } else {
-            if (isNoSource) {
-                errText = `📭 No results from the movie server.\n\n_Try a different title or ID, or try again in a moment._`;
-            } else if (isTimeout) {
-                errText = `⏳ Movie server timed out. Try again in a moment.`;
-            } else if (isRateLimit) {
-                errText = `🚦 Too many requests — wait 30 seconds and try again.`;
-            } else {
-                errText = `❌ Movie command failed.\n\n_${err.message}_`;
-            }
-        }
-
-        await sock.sendMessage(chatId, { text: errText }, { quoted: message });
+        return sock.sendMessage(chatId, { text: `⚠️ Error: ${err.message}` }, { quoted: message });
     }
 }
 
+const SUBCOMMANDS = {
+    movie: 'search:movie',
+    'movie details': 'details:movie',
+    'movie dl': 'dl:movie',
+    movietrailer: 'trailer:movie',
+    trailer: 'trailer:movie',
+    moviecast: 'cast:movie',
+    movierelated: 'related:movie',
+    moviecaptions: 'captions:movie',
+    moviesub: 'captions:movie',
+    moviestills: 'stills:movie',
+    moviefull: 'full:universal',
+    moviehome: 'homepage',
+    moviefilter: 'moviefilter',
+
+    tv: 'search:tv',
+    'tv details': 'details:tv',
+    'tv dl': 'dl:tv',
+    'tv episodes': 'episodes:tv',
+    tvtrailer: 'trailer:tv',
+    tvcast: 'cast:tv',
+    tvrelated: 'related:tv',
+    tvcaptions: 'captions:tv',
+    tvstills: 'stills:tv',
+    tvnew: 'tvnew',
+
+    anime: 'search:anime',
+    'anime details': 'details:anime',
+    'anime dl': 'dl:anime',
+    'anime episodes': 'episodes:anime',
+    animetrailer: 'trailer:anime',
+    animerelated: 'related:anime',
+    animecaptions: 'captions:anime',
+    animenew: 'animenew',
+
+    kids: 'search:kids',
+    'kids details': 'details:kids',
+    'kids dl': 'dl:kids',
+    kidsrelated: 'related:kids',
+    kidscaptions: 'captions:kids',
+    kidstrailer: 'trailer:kids',
+
+    ugandan: 'search:ugandan',
+    'ugandan details': 'details:ugandan',
+    'ugandan dl': 'dl:ugandan',
+    'ugandan vj': 'ugandan:vj',
+    ugandanvjs: 'ugandan:vj',
+    ugandanlatest: 'ugandan:latest',
+
+    actor: 'search:actor',
+
+    trending: 'trending',
+    popular: 'popular',
+    upcoming: 'upcoming',
+    topmovies: 'topmovies',
+
+    livetv: 'livetv',
+    tvchannel: 'livetv',
+    channels: 'livetv',
+    live: 'livetv',
+    livetvsearch: 'livetv:search',
+    livesearch: 'livetv:search',
+    livetvstream: 'livetv:stream',
+    livestream: 'livetv:stream',
+
+    matchlive: 'match:live',
+    matchupcoming: 'match:upcoming',
+    matchended: 'match:ended',
+    matchleagues: 'match:leagues',
+    matchstream: 'match:stream',
+    matchdetails: 'match:details',
+
+    more: 'more',
+};
+
 module.exports = movieCommand;
+module.exports.SUBCOMMANDS = SUBCOMMANDS;

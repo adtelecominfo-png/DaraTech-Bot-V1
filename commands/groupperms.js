@@ -51,8 +51,7 @@ async function gpermCommand(sock, chatId, message) {
         // Resolve each permission from metadata
         const editInfo  = meta.restrict      ? '🔒 OFF — admins only'   : '✅ ON  — all members';
         const sendMsgs  = meta.announce      ? '🔒 OFF — admins only'   : '✅ ON  — all members';
-        const memberAdd = (meta.memberAddMode === 'admin_add')
-                         ? '🔒 OFF — admins only'   : '✅ ON  — all members';
+        const memberAdd = meta.memberAddMode ? '✅ ON  — all members'   : '🔒 OFF — admins only';
 
         // Invite link: try to fetch current invite code — if it exists link is active
         let invLink = '✅ ON  — active';
@@ -61,8 +60,7 @@ async function gpermCommand(sock, chatId, message) {
             invLink = code ? '✅ ON  — active' : '🔒 OFF — revoked';
         } catch { invLink = '❓ unknown'; }
 
-        const msgHistory = meta.memberHistoryFullAccess ? '✅ ON  — allowed' : '🔒 OFF — restricted';
-        const approval   = (meta.joinApprovalMode === 'on')
+        const approval   = meta.joinApprovalMode
                         ? '✅ ON  — approval required'
                         : '🔓 OFF — anyone can join';
 
@@ -77,7 +75,6 @@ async function gpermCommand(sock, chatId, message) {
                 `│  💬  Send new messages   : ${sendMsgs}`,
                 `│  ➕  Add other members   : ${memberAdd}`,
                 `│  🔗  Invite via link     : ${invLink}`,
-                `│  📜  Send msg history    : ${msgHistory}`,
                 '│',
                 '├─ *Admins Can:*',
                 `│  ✔️  Approve new members : ${approval}`,
@@ -167,7 +164,7 @@ async function memberaddCommand(sock, chatId, senderId, message, arg) {
     try {
         // Read current state first
         const meta        = await sock.groupMetadata(chatId);
-        const currentlyOn = meta.memberAddMode !== 'admin_add';
+        const currentlyOn = !!meta.memberAddMode;
         const currentStr  = currentlyOn ? '✅ ON' : '🔒 OFF';
 
         if ((state === 'on') === currentlyOn) {
@@ -282,7 +279,7 @@ async function approvalCommand(sock, chatId, senderId, message, arg) {
     try {
         // Read current state first
         const meta        = await sock.groupMetadata(chatId);
-        const currentlyOn = meta.joinApprovalMode === 'on';
+        const currentlyOn = !!meta.joinApprovalMode;
         const currentStr  = currentlyOn ? '✅ ON' : '🔓 OFF';
 
         if ((state === 'on') === currentlyOn) {
@@ -292,7 +289,7 @@ async function approvalCommand(sock, chatId, senderId, message, arg) {
         }
 
         if (typeof sock.groupJoinApprovalMode === 'function') {
-            await sock.groupJoinApprovalMode(chatId, state);
+            await sock.groupJoinApprovalMode(chatId, state === 'on');
         } else {
             await sock.groupSettingUpdate(
                 chatId,
@@ -337,27 +334,17 @@ async function msghistoryCommand(sock, chatId, senderId, message, arg) {
     }
 
     try {
-        // Read current state first
-        const meta        = await sock.groupMetadata(chatId);
-        const currentlyOn = !!meta.memberHistoryFullAccess;
-        const currentStr  = currentlyOn ? '✅ ON' : '🔒 OFF';
-
-        if ((state === 'on') === currentlyOn) {
-            return sock.sendMessage(chatId, {
-                text: `ℹ️ *Send message history* is already *${currentStr}*. No change made.`,
-            }, { quoted: message });
+        const setting = state === 'on' ? 'member_history_full_access' : 'not_member_history_full_access';
+        try {
+            await sock.groupSettingUpdate(chatId, setting);
+        } catch {
+            await sock.groupSettingUpdate(chatId, state === 'on' ? 'history_full_access' : 'not_history_full_access');
         }
-
-        await sock.groupSettingUpdate(
-            chatId,
-            state === 'on' ? 'member_history_full_access' : 'not_member_history_full_access'
-        );
 
         return sock.sendMessage(chatId, {
             text: [
                 `⚙️ *Send message history updated*`,
                 `│`,
-                `│  Was  : ${currentStr}`,
                 `│  Now  : ${state === 'on' ? '✅ ON' : '🔒 OFF'}`,
                 `│`,
                 state === 'on'
@@ -379,3 +366,4 @@ module.exports = {
     approvalCommand,
     msghistoryCommand,
 };
+

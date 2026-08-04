@@ -20,8 +20,12 @@
  *   transcript → YouTube transcript (result string)
  */
 
-const axios = require('axios');
+const axios   = require('axios');
+const gTTS    = require('gtts');
+const fs      = require('fs');
+const path    = require('path');
 const { get, buildUrl } = require('../lib/gifted');
+const { toOgg }         = require('../lib/media');
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -176,6 +180,92 @@ async function transcriptCommand(sock, chatId, message) {
     }
 }
 
+// ─── AI Voice ────────────────────────────────────────────────────────────────
+
+/**
+ * $aivoice <question> — Queries the LetMeGPT AI and sends the reply as a
+ * WhatsApp audio bubble using the same TTS engine as $tts.
+ */
+async function aivoiceCommand(sock, chatId, message) {
+    const query = extractQuery(message);
+    if (!query) {
+        return sock.sendMessage(chatId, {
+            text: '🎙️ *AI Voice*\n\nUsage: *$aivoice <your question>*\n\nI will answer and send you a voice note.\n\n_Daratech_ ⚡',
+        }, { quoted: message });
+    }
+    try {
+        await react(sock, message, '⏳');
+
+        // Step 1 — Get AI text answer from LetMeGPT
+        const data = await get('/ai/letmegpt', { q: query });
+        if (!data?.success) throw new Error(data?.message || 'No response from AI');
+
+        const reply = typeof data.result === 'string'
+            ? data.result.trim()
+            : data.result?.answer?.trim() || JSON.stringify(data.result);
+
+        if (!reply) throw new Error('AI returned an empty response');
+
+        // Step 2 — Fetch MP3 audio, exactly the same way $tts does it
+        let mp3Buf;
+
+        // Method 1 — Google Translate TTS (fastest, no temp file)
+        try {
+            const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(reply)}&tl=en&client=tw-ob`;
+            const res = await axios.get(ttsUrl, {
+                responseType: 'arraybuffer',
+                timeout: 20000,
+                maxRedirects: 5,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0',
+                    'Referer':    'https://translate.google.com/',
+                },
+            });
+            mp3Buf = Buffer.from(res.data);
+            if (mp3Buf.length < 100) throw new Error('empty');
+        } catch {
+            // Method 2 — gtts library → temp file → buffer
+            const tmpDir  = path.join(__dirname, '../temp');
+            if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+            const tmpFile = path.join(tmpDir, `aivoice-${Date.now()}.mp3`);
+            try {
+                await new Promise((res, rej) => {
+                    new gTTS(reply, 'en').save(tmpFile, err => err ? rej(err) : res());
+                });
+                mp3Buf = fs.readFileSync(tmpFile);
+            } finally {
+                try { fs.unlinkSync(tmpFile); } catch {}
+            }
+        }
+
+        // Step 3 — Convert MP3 → OGG/OPUS and send as audio bubble (same as $tts)
+        const oggBuf = await toOgg(mp3Buf);
+
+        if (oggBuf) {
+            await sock.sendMessage(chatId, {
+                audio:    oggBuf,
+                mimetype: 'audio/ogg; codecs=opus',
+                ptt:      false,
+            }, { quoted: message });
+        } else {
+            // ffmpeg unavailable — send as MP3 audio (not document)
+            await sock.sendMessage(chatId, {
+                audio:    mp3Buf,
+                mimetype: 'audio/mpeg',
+                ptt:      false,
+            }, { quoted: message });
+        }
+
+        await react(sock, message, '✅');
+    } catch (err) {
+        console.error('[gifted-ai:aivoice]', err.message);
+        await react(sock, message, '❌');
+        await sock.sendMessage(chatId,
+            { text: `❌ *AI Voice* failed. Try again.\n\n_${err.message}_\n\n_Daratech_ ⚡` },
+            { quoted: message });
+    }
+}
+
 // ─── Image generation ─────────────────────────────────────────────────────────
 
 /** $magicstudio — MagicStudio AI (returns raw binary JPEG, no JSON wrapper) */
@@ -221,4 +311,5 @@ module.exports = {
     muslimAiCommand,
     transcriptCommand,
     magicStudioCommand,
+    aivoiceCommand,
 };

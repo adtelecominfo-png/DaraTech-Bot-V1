@@ -32,9 +32,12 @@ function cleanup(...files) {
     }
 }
 
+const getFfmpegPath = require('../lib/getFfmpeg');
+
 function ffmpeg(args) {
     return new Promise((resolve, reject) => {
-        const proc = spawn('ffmpeg', ['-y', '-loglevel', 'error', ...args]);
+        const bin = getFfmpegPath();
+        const proc = spawn(bin, ['-y', '-loglevel', 'error', ...args]);
         let stderr = '';
         proc.stderr.on('data', d => { stderr += d; });
         proc.on('close', code => {
@@ -175,57 +178,57 @@ async function tovideoCommand(sock, chatId, message) {
     }
 }
 
-// ── $togif — video → animated GIF ────────────────────────────────────────────
+// ── $togif — video/gif/sticker → animated GIF ────────────────────────────────
 async function togifCommand(sock, chatId, message) {
     try {
         const result = await downloadQuotedMedia(sock, message);
-        if (!result || result.mediaType !== 'video') {
+        if (!result || !['video', 'gif', 'sticker'].includes(result.mediaType)) {
             return sock.sendMessage(chatId, {
-                text: '🎞️ *TO GIF*\n\nReply to a *video* with *$togif* to convert it to an animated GIF.\n\n⚠️ Best for short clips (under 10s).\n\n_Daratech_ ⚡'
+                text: '🎞️ *TO GIF*\n\nReply to a *video*, *gif*, or *sticker* with *$togif* to convert it to an animated GIF.\n\n_Daratech_ ⚡'
             }, { quoted: message });
         }
 
         await react(sock, message, '⏳');
         await sock.sendMessage(chatId, { text: '🎞️ Converting to GIF… (may take a moment)' }, { quoted: message });
 
-        const inFile      = tmpFile('.mp4');
-        const paletteFile = tmpFile('.png');
-        const outFile     = tmpFile('.gif');
+        const inExt   = result.mediaType === 'sticker' ? '.webp' : (result.mediaType === 'gif' ? '.gif' : '.mp4');
+        const inFile  = tmpFile(inExt);
+        const outFile = tmpFile('.mp4');
         fs.writeFileSync(inFile, result.buffer);
 
-        // Two-pass palette GIF — much lighter on memory than the split-filter approach
-        // Pass 1: generate palette from first 10s at 320px / 8fps
+        // Convert input to a muted MP4 with H.264 / yuv420p format
+        // WhatsApp protocol natively renders videoMessage with gifPlayback: true as a looping animated GIF
         await ffmpeg([
             '-i', inFile,
-            '-t', '10',
-            '-vf', 'fps=8,scale=320:-2:flags=lanczos,palettegen=max_colors=64',
-            '-y', paletteFile,
+            '-t', '15',
+            '-an',
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '26',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            outFile
         ]);
 
-        // Pass 2: apply palette to produce the GIF
-        await ffmpeg([
-            '-i', inFile,
-            '-i', paletteFile,
-            '-t', '10',
-            '-filter_complex', 'fps=8,scale=320:-2:flags=lanczos[v];[v][1:v]paletteuse=dither=bayer',
-            '-loop', '0',
-            outFile,
-        ]);
+        const mp4Buf = fs.readFileSync(outFile);
+        cleanup(inFile, outFile);
 
-        const gif = fs.readFileSync(outFile);
-        cleanup(inFile, paletteFile, outFile);
+        if (!mp4Buf || !mp4Buf.length) {
+            throw new Error('GIF conversion resulted in empty output');
+        }
 
         await react(sock, message, '✅');
         await sock.sendMessage(chatId, {
-            image: gif, mimetype: 'image/gif',
+            video: mp4Buf,
+            gifPlayback: true,
             caption: `🎞️ *GIF*\n\n_Daratech_ ⚡`
         }, { quoted: message });
 
     } catch (err) {
-        console.error('[togif]', err.message);
+        console.error('[togif]', err);
         await react(sock, message, '❌');
         await sock.sendMessage(chatId, {
-            text: `❌ GIF conversion failed.\n\n_${err.message}_\n\n_Daratech_ ⚡`
+            text: `❌ GIF conversion failed.\n\n_${err.message || err}_\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 }
