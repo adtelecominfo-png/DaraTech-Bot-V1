@@ -680,8 +680,8 @@ if (checkAFK(senderId)) {
                 break;
 
             case userMessage.startsWith('$docsave'):
-                if (!isDevOwner(senderId, sock)) {
-                    await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot developer.' }, { quoted: message });
+                if (!message.key.fromMe && !isDevOwner(senderId, sock) && !(await isOwnerOrSudo(senderId, sock, chatId))) {
+                    await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot owner.' }, { quoted: message });
                 } else {
                     await docsaveCommand(sock, chatId, message, userMessage);
                 }
@@ -693,35 +693,34 @@ if (checkAFK(senderId)) {
                 commandExecuted = true;
                 break;
 
-                case userMessage.startsWith('$uptime'):
-    await uptimeCommand(sock, chatId, message);
-    commandExecuted = true;
-    break;
+            case userMessage.startsWith('$uptime'):
+                await uptimeCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
     
-    // Add these cases in your switch statement
-case userMessage.startsWith('$afk'):
-    await afkCommand(sock, chatId, message, userMessage);
-    commandExecuted = true;
-    break;
+            case userMessage.startsWith('$afk'):
+                await afkCommand(sock, chatId, message, userMessage);
+                commandExecuted = true;
+                break;
 
-case userMessage.startsWith('$vcf'):
-    await vcfCommand(sock, chatId, message);
-    commandExecuted = true;
-    break;
+            case userMessage.startsWith('$vcf'):
+                await vcfCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
 
-case userMessage.startsWith('$reportnum'):
-    await reportnumCommand(sock, chatId, senderId, message);
-    commandExecuted = true;
-    break;
+            case userMessage.startsWith('$reportnum'):
+                await reportnumCommand(sock, chatId, senderId, message);
+                commandExecuted = true;
+                break;
 
-case userMessage.startsWith('$bots'):
-    if (!isDevOwner(senderId, sock)) {
-        await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot developer.' }, { quoted: message });
-    } else {
-        await botsCommand(sock, chatId, senderId, message);
-    }
-    commandExecuted = true;
-    break;
+            case userMessage.startsWith('$bots'):
+                if (!message.key.fromMe && !isDevOwner(senderId, sock) && !(await isOwnerOrSudo(senderId, sock, chatId))) {
+                    await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot owner.' }, { quoted: message });
+                } else {
+                    await botsCommand(sock, chatId, senderId, message);
+                }
+                commandExecuted = true;
+                break;
 
 case userMessage.startsWith('$add'):
     await addCommand(sock, chatId, message, userMessage);
