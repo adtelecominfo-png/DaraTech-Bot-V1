@@ -58,14 +58,14 @@ async function settingsCommand(sock, chatId, message) {
             lines.push('');
             lines.push(`Group: ${groupId}`);
             if (antilinkOn) {
-                const al = userGroupData.antilink[groupId];
-                lines.push(`• Antilink: ON (action: ${al.action || 'delete'})`);
+                const al = userGroupData.antilink?.[groupId];
+                lines.push(`• Antilink: ON (action: ${al?.action || 'delete'})`);
             } else {
                 lines.push('• Antilink: OFF');
             }
             if (antibadwordOn) {
-                const ab = userGroupData.antibadword[groupId];
-                lines.push(`• Antibadword: ON (action: ${ab.action || 'delete'})`);
+                const ab = userGroupData.antibadword?.[groupId];
+                lines.push(`• Antibadword: ON (action: ${ab?.action || 'delete'})`);
             } else {
                 lines.push('• Antibadword: OFF');
             }

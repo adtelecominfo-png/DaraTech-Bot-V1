@@ -68,7 +68,10 @@ function loadUserGroupData() {
             fs.writeFileSync(USER_GROUP_DATA, JSON.stringify(def, null, 2));
             return def;
         }
-        return JSON.parse(fs.readFileSync(USER_GROUP_DATA, 'utf8'));
+        const data = JSON.parse(fs.readFileSync(USER_GROUP_DATA, 'utf8')) || {};
+        if (!data.chatbot || typeof data.chatbot !== 'object') data.chatbot = {};
+        if (!Array.isArray(data.groups)) data.groups = [];
+        return data;
     } catch (e) {
         return { groups: [], chatbot: {} };
     }
@@ -496,7 +499,7 @@ async function handleRimuruNameTrigger(sock, chatId, message, userMessage, sende
 
     if (chatId.endsWith('@g.us')) {
         const data = loadUserGroupData();
-        if (!data.chatbot[chatId]) return;
+        if (!data?.chatbot?.[chatId]) return;
     }
     const memKey   = getMemKey(senderId, chatId);
     const langMode = chatMemory.get(memKey)?.userInfo?.langMode;
@@ -511,7 +514,7 @@ async function handleBotchatCommand(sock, chatId, message, query, senderId) {
 
     if (isGroup) {
         const data = loadUserGroupData();
-        if (!data.chatbot[chatId]) {
+        if (!data?.chatbot?.[chatId]) {
             return sock.sendMessage(chatId, {
                 text: '🔵 *Rimuru* hasn\'t been summoned in this group yet.\n\nAsk an admin to run *$chatbot on* first.',
                 quoted: message,
@@ -532,7 +535,7 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
     if (userMessage.startsWith(RIMURU_RESPONSE_MARKER)) return;
 
     const data = loadUserGroupData();
-    if (!data.chatbot[chatId]) return;
+    if (!data?.chatbot?.[chatId]) return;
 
     try {
         const botId  = sock.user.id.split(':')[0];
