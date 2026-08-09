@@ -74,11 +74,11 @@ async function apiFetch(pathAndQuery) {
 
 // ─── Type registry ──────────────────────────────────────────────────────────
 const TYPES = {
-    movie: { seg: 'movies', cmd: 'movie', label: 'Movie', emoji: '🎬', hasFeatured: true, hasTrending: true, hasPopular: true, hasTopRated: true, hasNew: true, hasEpisodes: false, hasDownload: true, hasRelatedEp: true },
-    tv: { seg: 'tvshows', cmd: 'tv', label: 'TV Show', emoji: '📺', hasFeatured: true, hasNew: true, hasEpisodes: true, hasDownload: false, hasRelatedEp: true },
-    anime: { seg: 'anime', cmd: 'anime', label: 'Anime', emoji: '🎌', hasFeatured: true, hasNew: true, hasEpisodes: true, hasDownload: false, hasRelatedEp: true },
-    kids: { seg: 'kids', cmd: 'kids', label: 'Kids', emoji: '🧸', hasFeatured: false, hasNew: false, hasEpisodes: false, hasDownload: false, hasRelatedEp: true },
-    ugandan: { seg: 'ugandan', cmd: 'ugandan', label: 'Ugandan VJ', emoji: '🇺🇬', hasFeatured: false, hasNew: false, hasEpisodes: false, hasDownload: true, hasRelatedEp: false, hasLatest: true },
+    movie: { seg: 'movies', cmd: 'movie', label: 'Movie', emoji: '🎬', hasFeatured: true, hasTrending: true, hasPopular: true, hasTopRated: true, hasNew: true, hasEpisodes: true, hasDownload: true, hasRelatedEp: true },
+    tv: { seg: 'tvshows', cmd: 'tv', label: 'TV Show', emoji: '📺', hasFeatured: true, hasNew: true, hasEpisodes: true, hasDownload: true, hasRelatedEp: true },
+    anime: { seg: 'anime', cmd: 'anime', label: 'Anime', emoji: '🎌', hasFeatured: true, hasNew: true, hasEpisodes: true, hasDownload: true, hasRelatedEp: true },
+    kids: { seg: 'kids', cmd: 'kids', label: 'Kids', emoji: '🧸', hasFeatured: false, hasNew: false, hasEpisodes: true, hasDownload: true, hasRelatedEp: true },
+    ugandan: { seg: 'ugandan', cmd: 'ugandan', label: 'Ugandan VJ', emoji: '🇺🇬', hasFeatured: false, hasNew: false, hasEpisodes: true, hasDownload: true, hasRelatedEp: false, hasLatest: true },
 };
 
 function formatResult(item, i, cfg) {
@@ -298,27 +298,39 @@ function resolveId(chatId, rawArg) {
     return { id: rawArg, type: null };
 }
 
-const LABEL_TO_TYPE = Object.fromEntries(
-    Object.entries(TYPES).map(([key, cfg]) => [cfg.label.toLowerCase(), key])
-);
+// ─── Universal Detail Fetcher ────────────────────────────────────────────────
+async function fetchDetail(id, cfg) {
+    try {
+        const fullData = await apiFetch(`/detail/${encodeURIComponent(id)}/full`);
+        if (fullData && (fullData.title || fullData.id || fullData.subjectId)) {
+            return fullData;
+        }
+    } catch { /* fallback below */ }
 
-function checkCachedTypeMismatch(resolved, typeKey, rawArg, cmdHint) {
-    if (resolved.type && typeKey && TYPES[typeKey] && TYPES[resolved.type] && resolved.type !== typeKey) {
-        const actualCfg = TYPES[resolved.type];
-        return `⚠️ That's a *${actualCfg.label}* title, not a *${TYPES[typeKey].label}* — use *$${actualCfg.cmd}${cmdHint ? ' ' + cmdHint : ''} ${rawArg || ''}* instead.`;
-    }
-    return null;
-}
+    try {
+        const uniData = await apiFetch(`/detail/${encodeURIComponent(id)}`);
+        if (uniData && (uniData.title || uniData.id || uniData.subjectId)) {
+            return uniData;
+        }
+    } catch { /* fallback below */ }
 
-function checkDetailTypeMismatch(data, typeKey, rawArg, cmdHint) {
-    const category = (data?.category || '').trim().toLowerCase();
-    if (!category) return null;
-    const actualType = LABEL_TO_TYPE[category];
-    if (actualType && actualType !== typeKey) {
-        const actualCfg = TYPES[actualType];
-        return `⚠️ That's a *${actualCfg.label}* title, not a *${TYPES[typeKey].label}* — use *$${actualCfg.cmd}${cmdHint ? ' ' + cmdHint : ''} ${rawArg || ''}* instead.`;
+    if (cfg && cfg.seg) {
+        try {
+            const segData = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(id)}`);
+            if (segData && (segData.title || segData.id || segData.subjectId)) {
+                return segData;
+            }
+        } catch { /* fallback below */ }
     }
-    return null;
+
+    for (const c of Object.values(TYPES)) {
+        if (cfg && c.seg === cfg.seg) continue;
+        try {
+            const d = await apiFetch(`/${c.seg}/detail/${encodeURIComponent(id)}`);
+            if (d && (d.title || d.id || d.subjectId)) return d;
+        } catch {}
+    }
+    throw new Error('Title details not found.');
 }
 
 // ─── Core Commands ──────────────────────────────────────────────────────────
@@ -331,30 +343,20 @@ async function doSearch(sock, chatId, message, rawQuery, typeKey, pageOverride) 
     const cfg = TYPES[typeKey];
     await react(sock, message, '🔎');
 
-    if (typeKey === 'anime') {
-        const data = await apiFetch(`/search/anime?q=${encodeURIComponent(query)}&page=${page}`);
-        const items = data.items || [];
-        lastSearches.set(chatId, items.map(it => ({ type: typeKey, id: it.id || it.subjectId, title: it.title })));
-        _saveCache();
-        pageContext.set(chatId, {
-            page,
-            run: (nextPage) => doSearch(sock, chatId, message, query, typeKey, nextPage),
-        });
-        const header = `${cfg.emoji} *${cfg.label} results for "${query}"*${page > 1 ? ` (page ${page})` : ''}`;
-        return sock.sendMessage(chatId, { text: renderList(items, cfg, header, items.length >= PAGE_SIZE_HINT) }, { quoted: message });
-    }
-
     let allItems = [];
     try {
-        const data = typeKey === 'movie'
-            ? await apiFetch(`/search?q=${encodeURIComponent(query)}`)
-            : await apiFetch(`/search/${cfg.seg}?q=${encodeURIComponent(query)}`);
-        allItems = data.items || [];
+        const data = await apiFetch(`/search/${cfg.seg}?q=${encodeURIComponent(query)}&page=${page}`);
+        allItems = data.items || data.results || [];
     } catch {
         try {
-            const fallbackData = await apiFetch(`/${cfg.seg}`);
-            allItems = (fallbackData.items || []).filter(it => (it.title || '').toLowerCase().includes(query.toLowerCase()));
-        } catch { /* ignore */ }
+            const data = await apiFetch(`/search?q=${encodeURIComponent(query)}`);
+            allItems = data.items || data.results || [];
+        } catch {
+            try {
+                const fallbackData = await apiFetch(`/${cfg.seg}`);
+                allItems = (fallbackData.items || []).filter(it => (it.title || '').toLowerCase().includes(query.toLowerCase()));
+            } catch { /* ignore */ }
+        }
     }
     const header = `${cfg.emoji} *${cfg.label} results for "${query}"*`;
     return renderCachedPage(sock, chatId, message, cfg, header, allItems, page, () => typeKey);
@@ -376,16 +378,18 @@ async function doDetails(sock, chatId, message, rawArg, typeKey) {
     const resolved = resolveId(chatId, rawArg);
     if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey} details <id>*` }, { quoted: message });
     const cfg = TYPES[typeKey];
-    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg, 'details');
-    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
     await react(sock, message, '📄');
-    const data = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(resolved.id)}`);
-    const detailErr = checkDetailTypeMismatch(data, typeKey, rawArg, 'details');
-    if (detailErr) return sock.sendMessage(chatId, { text: detailErr }, { quoted: message });
+    const data = await fetchDetail(resolved.id, cfg);
 
     let episodeData = null;
-    try { episodeData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/episodes`); }
-    catch { /* non-fatal */ }
+    if (data.seasons?.length) {
+        episodeData = { seasons: data.seasons, totalEpisodes: data.totalEpisodes || data.episodes?.length };
+    } else {
+        try { episodeData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/episodes`); }
+        catch {
+            try { episodeData = await apiFetch(`/detail/${encodeURIComponent(resolved.id)}/episodes`); } catch {}
+        }
+    }
 
     const caption = formatDetail(data, cfg, episodeData, typeKey);
     const coverUrl = data.cover || data.poster || data.backdrop;
@@ -403,19 +407,34 @@ async function doTrailer(sock, chatId, message, rawArg, typeKey) {
     const resolved = resolveId(chatId, rawArg);
     if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey}trailer <id>*` }, { quoted: message });
     const cfg = TYPES[typeKey];
-    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg);
-    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
     await react(sock, message, '🎬');
-    const data = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(resolved.id)}`);
-    const detailErr = checkDetailTypeMismatch(data, typeKey, rawArg);
-    if (detailErr) return sock.sendMessage(chatId, { text: detailErr }, { quoted: message });
-    if (!data.trailer || data.trailer === 'NONE' || !data.trailer.startsWith('http')) {
-        return sock.sendMessage(chatId, { text: `⚠️ No trailer video available for *${data.title || 'this title'}*.` }, { quoted: message });
+
+    let trailerUrl = null;
+    let title = 'this title';
+
+    try {
+        const trailerData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/trailer`);
+        if (trailerData.trailerUrl || trailerData.trailer) trailerUrl = trailerData.trailerUrl || trailerData.trailer;
+    } catch {}
+
+    if (!trailerUrl) {
+        try {
+            const data = await fetchDetail(resolved.id, cfg);
+            if (data.title) title = data.title;
+            if (data.trailer && data.trailer !== 'NONE' && data.trailer.startsWith('http')) {
+                trailerUrl = data.trailer;
+            }
+        } catch {}
     }
+
+    if (!trailerUrl || !trailerUrl.startsWith('http')) {
+        return sock.sendMessage(chatId, { text: `⚠️ No trailer video available for *${title}*.` }, { quoted: message });
+    }
+
     return sock.sendMessage(chatId, {
-        video: { url: data.trailer },
+        video: { url: trailerUrl },
         mimetype: 'video/mp4',
-        caption: `🎬 *${data.title}* — Trailer\n\n_Daratech_ ⚡`,
+        caption: `🎬 *${title}* — Trailer\n\n_Daratech_ ⚡`,
     }, { quoted: message });
 }
 
@@ -423,37 +442,57 @@ async function doCast(sock, chatId, message, rawArg, typeKey) {
     const resolved = resolveId(chatId, rawArg);
     if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey}cast <id>*` }, { quoted: message });
     const cfg = TYPES[typeKey];
-    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg);
-    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
     await react(sock, message, '🎭');
-    const data = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(resolved.id)}`);
-    const detailErr = checkDetailTypeMismatch(data, typeKey, rawArg);
-    if (detailErr) return sock.sendMessage(chatId, { text: detailErr }, { quoted: message });
-    const cast = data.cast || [];
-    if (!cast.length) return sock.sendMessage(chatId, { text: `⚠️ No cast info available for *${data.title || 'this title'}*.` }, { quoted: message });
+
+    let cast = [];
+    let title = 'this title';
+
+    try {
+        const castData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/cast`);
+        cast = castData.cast || castData.items || [];
+    } catch {}
+
+    if (!cast.length) {
+        try {
+            const data = await fetchDetail(resolved.id, cfg);
+            if (data.title) title = data.title;
+            cast = data.cast || [];
+        } catch {}
+    }
+
+    if (!cast.length) return sock.sendMessage(chatId, { text: `⚠️ No cast info available for *${title}*.` }, { quoted: message });
+
     const lines = cast.slice(0, 20).map((c, i) => {
         const role = (c.role && c.role.toLowerCase() !== 'self' && c.role.toLowerCase() !== 'actor') ? ` — ${c.role}` : '';
         return `${i + 1}. *${c.name}*${role}`;
     }).join('\n');
-    return sock.sendMessage(chatId, { text: `🎭 *${data.title} — Cast*\n\n${lines}` }, { quoted: message });
+    return sock.sendMessage(chatId, { text: `🎭 *${title} — Cast*\n\n${lines}` }, { quoted: message });
 }
 
 async function doRelated(sock, chatId, message, rawArg, typeKey) {
     const resolved = resolveId(chatId, rawArg);
     if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey}related <id>*` }, { quoted: message });
     const cfg = TYPES[typeKey];
-    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg, 'related');
-    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
     await react(sock, message, '🔗');
 
     let title = 'this title';
-    try {
-        const detail = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(resolved.id)}`);
-        if (detail.title) title = detail.title;
-    } catch { /* ignore */ }
+    let items = [];
 
-    const data = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/related`);
-    const items = data.items || [];
+    try {
+        const relData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/related`);
+        items = relData.items || relData.results || [];
+    } catch {}
+
+    if (!items.length) {
+        try {
+            const detail = await fetchDetail(resolved.id, cfg);
+            if (detail.title) title = detail.title;
+            items = detail.related || [];
+        } catch {}
+    }
+
+    if (!items.length) return sock.sendMessage(chatId, { text: `⚠️ No related titles found for *${title}*.` }, { quoted: message });
+
     lastSearches.set(chatId, items.map(it => ({ type: typeKey, id: it.id || it.subjectId, title: it.title })));
     _saveCache();
     const header = `🔗 *Related to "${title}"*`;
@@ -464,17 +503,47 @@ async function doEpisodes(sock, chatId, message, rawArg, typeKey) {
     const resolved = resolveId(chatId, rawArg);
     if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey} episodes <id>*` }, { quoted: message });
     const cfg = TYPES[typeKey];
-    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg, 'episodes');
-    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
     await react(sock, message, '📺');
-    const data = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/episodes`);
-    const seasons = data.seasons || [];
-    if (!seasons.length) return sock.sendMessage(chatId, { text: '⚠️ No episode data available.' }, { quoted: message });
-    let msg = `📺 *Episodes* (${data.totalEpisodes || 0} total)\n\n`;
-    for (const s of seasons) {
-        msg += `*Season ${s.season}* — ${s.episodes.length} episode(s)\n`;
+
+    let data = null;
+    try { data = await fetchDetail(resolved.id, cfg); } catch {}
+
+    let seasons = data?.seasons || [];
+    if (!seasons.length) {
+        try {
+            const epData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(resolved.id)}/episodes`);
+            seasons = epData.seasons || [];
+            if (epData.totalEpisodes) data = { ...data, totalEpisodes: epData.totalEpisodes };
+        } catch {
+            try {
+                const epData = await apiFetch(`/detail/${encodeURIComponent(resolved.id)}/episodes`);
+                seasons = epData.seasons || [];
+            } catch {}
+        }
     }
-    msg += `\n💡 *$${typeKey} dl <id> s<season>e<episode>* — download episode`;
+
+    if (!seasons.length) return sock.sendMessage(chatId, { text: '⚠️ No episode data available for this title.' }, { quoted: message });
+
+    const title = data?.title || 'Episodes';
+    const totalEps = data?.totalEpisodes || seasons.reduce((sum, s) => sum + (s.episodes?.length || 0), 0);
+
+    let msg = `📺 *${title}*\n`;
+    msg += `📊 *${seasons.length} Season${seasons.length === 1 ? '' : 's'} · ${totalEps} Episodes*\n\n`;
+
+    for (const s of seasons) {
+        const eps = s.episodes || [];
+        msg += `━━━ *Season ${s.season}* (${eps.length} episode${eps.length === 1 ? '' : 's'}) ━━━\n`;
+        eps.slice(0, 15).forEach(e => {
+            const dur = e.duration ? ` · ${e.duration}min` : '';
+            const epNum = e.globalEpisode ? `E${e.globalEpisode}` : `Ep ${e.episode}`;
+            msg += `  ${epNum}. *${e.title || `Episode ${e.episode}`}*${dur}\n`;
+        });
+        if (eps.length > 15) msg += `  _...and ${eps.length - 15} more episodes_\n`;
+        msg += `\n`;
+    }
+
+    msg += `💡 *$${typeKey} dl ${resolved.id} s<season>e<episode>* — download\n`;
+    msg += `_e.g. $${typeKey} dl ${resolved.id} s1e1_`;
     return sock.sendMessage(chatId, { text: msg }, { quoted: message });
 }
 
@@ -511,25 +580,38 @@ function dlCmdPrefix(typeKey, id, season, episode) {
 
 async function showSeasonPicker(sock, chatId, message, typeKey, id, title, episodeData) {
     const seasons = episodeData.seasons || [];
+    const totalEps = episodeData.totalEpisodes || seasons.reduce((sum, s) => sum + (s.episodes?.length || 0), 0);
     const nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
-    let msg = `📺 *${title}*\n📊 *${seasons.length} Season${seasons.length === 1 ? '' : 's'} • ${episodeData.totalEpisodes || 0} Total Episodes*\n\n`;
+    let msg = `📺 *${title}*\n📊 *${seasons.length} Season${seasons.length === 1 ? '' : 's'} · ${totalEps} Total Episodes*\n\n`;
     seasons.forEach((s, i) => {
-        msg += `${nums[i] || `${i + 1}.`}  *Season ${s.season}*  —  ${s.episodes.length} episode${s.episodes.length === 1 ? '' : 's'}\n`;
+        const eps = s.episodes || [];
+        msg += `${nums[i] || `${i + 1}.`}  *${s.title || `Season ${s.season}`}*  —  ${eps.length} episode${eps.length === 1 ? '' : 's'}\n`;
     });
-    msg += `\n💬 *Pick a season:*\n`;
-    msg += `_${dlCmdPrefix(typeKey, id, seasons[0]?.season ?? 1, null)}_ — Season ${seasons[0]?.season ?? 1} episodes\n`;
-    if (seasons[1]) msg += `_${dlCmdPrefix(typeKey, id, seasons[1].season, null)}_ — Season ${seasons[1].season} episodes\n`;
+    msg += `\n💬 *Pick a season number to browse its episodes:*\n`;
+    seasons.slice(0, 3).forEach(s => {
+        msg += `_${dlCmdPrefix(typeKey, id, s.season, null)}_ — Season ${s.season} episodes\n`;
+    });
     msg += `_${dlCmdPrefix(typeKey, id, seasons[0]?.season ?? 1, 1)}_ — Download S${seasons[0]?.season ?? 1}E1 directly`;
     return sock.sendMessage(chatId, { text: msg }, { quoted: message });
 }
 
 async function showEpisodePicker(sock, chatId, message, typeKey, id, title, season, seasonEpisodes) {
     const nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
-    let msg = `📺 *${title}* — Season ${season}\n\n`;
-    seasonEpisodes.slice(0, 30).forEach((e, i) => {
-        msg += `${nums[i] || `${i + 1}.`}  ${e.title || `Episode ${e.episode}`}\n`;
+    let msg = `📺 *${title}* — Season ${season}\n`;
+    msg += `📋 *${seasonEpisodes.length} Episode${seasonEpisodes.length === 1 ? '' : 's'}*\n\n`;
+    seasonEpisodes.slice(0, 20).forEach((e, i) => {
+        const epNum = e.globalEpisode ? `E${e.globalEpisode}` : `Ep ${e.episode}`;
+        const dur = e.duration ? ` · ${e.duration}min` : '';
+        msg += `${nums[i] || `${i + 1}.`}  *${e.title || `Episode ${e.episode}`}*  (${epNum}${dur})\n`;
+        if (e.description) {
+            const desc = e.description.length > 100 ? e.description.slice(0, 100) + '…' : e.description;
+            msg += `    _${desc}_\n`;
+        }
+        msg += `\n`;
     });
-    msg += `\n💬 *Pick an episode:*\n_${dlCmdPrefix(typeKey, id, season, seasonEpisodes[0]?.episode ?? 1)}_ — Download episode`;
+    if (seasonEpisodes.length > 20) msg += `_...and ${seasonEpisodes.length - 20} more episodes_\n\n`;
+    msg += `💬 *Download an episode:*\n_${dlCmdPrefix(typeKey, id, season, seasonEpisodes[0]?.episode ?? 1)}_ — Download Ep 1\n`;
+    msg += `_${dlCmdPrefix(typeKey, id, season, (seasonEpisodes[seasonEpisodes.length - 1]?.episode ?? seasonEpisodes.length))}_ — Download last episode`;
     return sock.sendMessage(chatId, { text: msg }, { quoted: message });
 }
 
@@ -558,30 +640,28 @@ async function doDownload(sock, chatId, message, rawArg, tokens, typeKey) {
     if (!resolved.id) return sock.sendMessage(chatId, { text: `⚠️ Usage: *$${typeKey} dl <id>*` }, { quoted: message });
     const cfg = TYPES[typeKey];
     const id = resolved.id;
-    const cachedErr = checkCachedTypeMismatch(resolved, typeKey, rawArg, 'dl');
-    if (cachedErr) return sock.sendMessage(chatId, { text: cachedErr }, { quoted: message });
     await react(sock, message, '⬇️');
 
-    const detail = await apiFetch(`/${cfg.seg}/detail/${encodeURIComponent(id)}`);
-    const detailErr = checkDetailTypeMismatch(detail, typeKey, rawArg, 'dl');
-    if (detailErr) return sock.sendMessage(chatId, { text: detailErr }, { quoted: message });
+    const detail = await fetchDetail(id, cfg);
     const { season, episode, qualityToken } = parseDlTokens(tokens);
 
-    let seasons = [];
+    let seasons = detail.seasons || [];
     let episodeData = null;
-    if (cfg.hasEpisodes) {
-        episodeData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/episodes`);
-        seasons = episodeData.seasons || [];
-    } else {
+    if (!seasons.length) {
         try {
             episodeData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/episodes`);
             seasons = episodeData.seasons || [];
-        } catch { /* non-episodic */ }
+        } catch {
+            try {
+                episodeData = await apiFetch(`/detail/${encodeURIComponent(id)}/episodes`);
+                seasons = episodeData.seasons || [];
+            } catch {}
+        }
     }
 
     if (seasons.length) {
         if (season === null) {
-            return showSeasonPicker(sock, chatId, message, typeKey, id, detail.title, episodeData);
+            return showSeasonPicker(sock, chatId, message, typeKey, id, detail.title, { seasons, totalEpisodes: detail.totalEpisodes || episodeData?.totalEpisodes });
         }
         const seasonObj = seasons.find(s => s.season === season);
         if (!seasonObj) return sock.sendMessage(chatId, { text: `⚠️ Season ${season} not found. Title has ${seasons.length} season(s).` }, { quoted: message });
@@ -590,22 +670,28 @@ async function doDownload(sock, chatId, message, rawArg, tokens, typeKey) {
             return showEpisodePicker(sock, chatId, message, typeKey, id, detail.title, season, seasonObj.episodes);
         }
 
-        let qualities;
-        if (typeKey === 'tv') {
-            const dlData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/season/${season}/episode/${episode}/download`);
-            qualities = normalizeQualities(dlData.links || dlData.qualities || []);
-        } else if (typeKey === 'anime') {
+        let qualities = [];
+        const tryEndpoints = [
+            `/${cfg.seg}/${encodeURIComponent(id)}/season/${season}/episode/${episode}/download`,
+            `/${cfg.seg}/${encodeURIComponent(id)}/download?ep=${episode}&season=${season}`,
+            `/${cfg.seg}/${encodeURIComponent(id)}/season/${season}/episode/${episode}/stream`,
+            `/${cfg.seg}/${encodeURIComponent(id)}/stream?ep=${episode}&season=${season}`,
+            `/download/${encodeURIComponent(id)}?ep=${episode}&season=${season}`,
+            `/stream/${encodeURIComponent(id)}?ep=${episode}&season=${season}`,
+        ];
+
+        for (const epUrl of tryEndpoints) {
             try {
-                const dlData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/download?ep=${episode}&season=${season}`);
-                qualities = normalizeQualities(dlData.links || dlData.qualities || []);
-            } catch {
-                const streamData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/stream?ep=${episode}&season=${season}`);
-                qualities = normalizeQualities(streamData.qualities || streamData.links || []);
-            }
-        } else {
-            const streamData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/stream?ep=${episode}&season=${season}`);
-            qualities = normalizeQualities(streamData.qualities || streamData.links || []);
+                const res = await apiFetch(epUrl);
+                const list = normalizeQualities(res.links || res.qualities || []);
+                if (list.length) { qualities = list; break; }
+                if (res.url || res.streamUrl) {
+                    qualities = normalizeQualities([{ url: res.url || res.streamUrl, label: 'Auto' }]);
+                    break;
+                }
+            } catch {}
         }
+
         if (!qualities.length) return sock.sendMessage(chatId, { text: '📭 No download source found for this episode.' }, { quoted: message });
 
         if (!qualityToken) {
@@ -622,13 +708,25 @@ async function doDownload(sock, chatId, message, rawArg, tokens, typeKey) {
     }
 
     // ── Non-episodic titles (Movie, Ugandan, Kids, etc.) ──────────────────────
-    let flatData;
-    try {
-        flatData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/download`);
-    } catch {
-        flatData = await apiFetch(`/${cfg.seg}/${encodeURIComponent(id)}/stream`);
+    let qualities = [];
+    const nonEpEndpoints = [
+        `/${cfg.seg}/${encodeURIComponent(id)}/download`,
+        `/${cfg.seg}/${encodeURIComponent(id)}/stream`,
+        `/download/${encodeURIComponent(id)}`,
+        `/stream/${encodeURIComponent(id)}`,
+    ];
+    for (const urlPath of nonEpEndpoints) {
+        try {
+            const flatData = await apiFetch(urlPath);
+            const list = normalizeQualities(flatData.links || flatData.qualities || []);
+            if (list.length) { qualities = list; break; }
+            if (flatData.url || flatData.streamUrl) {
+                qualities = normalizeQualities([{ url: flatData.url || flatData.streamUrl, label: 'Auto' }]);
+                break;
+            }
+        } catch {}
     }
-    const qualities = normalizeQualities(flatData.links || flatData.qualities || []);
+
     if (!qualities.length) return sock.sendMessage(chatId, { text: '📭 No download source found for this title.' }, { quoted: message });
 
     if (!qualityToken) {
@@ -1238,8 +1336,11 @@ async function movieCommand(sock, chatId, message, args, subcommand) {
 
             case 'full:universal': return await doUniversalFull(sock, chatId, message, a1);
 
+            case 'episodes:movie': return await doEpisodes(sock, chatId, message, a1, 'movie');
             case 'episodes:tv': return await doEpisodes(sock, chatId, message, a1, 'tv');
             case 'episodes:anime': return await doEpisodes(sock, chatId, message, a1, 'anime');
+            case 'episodes:kids': return await doEpisodes(sock, chatId, message, a1, 'kids');
+            case 'episodes:ugandan': return await doEpisodes(sock, chatId, message, a1, 'ugandan');
 
             case 'captions:movie': return await doCaptions(sock, chatId, message, a1, 'movie', args.slice(1));
             case 'captions:tv': return await doCaptions(sock, chatId, message, a1, 'tv', args.slice(1));
@@ -1285,6 +1386,7 @@ const SUBCOMMANDS = {
     movie: 'search:movie',
     'movie details': 'details:movie',
     'movie dl': 'dl:movie',
+    'movie episodes': 'episodes:movie',
     movietrailer: 'trailer:movie',
     trailer: 'trailer:movie',
     moviecast: 'cast:movie',
@@ -1319,6 +1421,7 @@ const SUBCOMMANDS = {
     kids: 'search:kids',
     'kids details': 'details:kids',
     'kids dl': 'dl:kids',
+    'kids episodes': 'episodes:kids',
     kidsrelated: 'related:kids',
     kidscaptions: 'captions:kids',
     kidstrailer: 'trailer:kids',
@@ -1326,6 +1429,7 @@ const SUBCOMMANDS = {
     ugandan: 'search:ugandan',
     'ugandan details': 'details:ugandan',
     'ugandan dl': 'dl:ugandan',
+    'ugandan episodes': 'episodes:ugandan',
     'ugandan vj': 'ugandan:vj',
     ugandanvjs: 'ugandan:vj',
     ugandanlatest: 'ugandan:latest',
