@@ -8,6 +8,7 @@
 const fs   = require('fs');
 const path = require('path');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 const CONFIG_PATH = path.join(__dirname, '../data/autoreactstatus.json');
 const DEFAULT_EMOJI = '🔥';
@@ -38,7 +39,8 @@ async function handleAutoReactStatus(sock, message) {
 }
 
 async function handleAutoReactStatusCommand(sock, chatId, senderId, message) {
-    const isOwner = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+    const isOwner = isAuthorizedOwnerSession(sock) &&
+        (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
     if (!isOwner) {
         return sock.sendMessage(chatId,
             { text: '❌ Only the owner can use this command.' },

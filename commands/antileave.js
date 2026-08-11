@@ -8,6 +8,7 @@
 const fs   = require('fs');
 const path = require('path');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 const CONFIG_PATH = path.join(__dirname, '../data/antileave.json');
 
@@ -34,7 +35,8 @@ async function handleAntiLeaveCommand(sock, chatId, senderId, message) {
             { quoted: message });
     }
 
-    const isOwner = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+    const isOwner = isAuthorizedOwnerSession(sock) &&
+        (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
 
     // Must be admin or owner
     let isAdmin = false;

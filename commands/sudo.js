@@ -1,6 +1,6 @@
 const { addSudo, removeSudo, getSudoList } = require('../lib/index');
 const isOwnerOrSudo = require('../lib/isOwner');
-const { resolveOwnerNumber } = require('../lib/isOwner');
+const { resolveOwnerNumber, isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 /**
  * Normalise a raw number string to a full WhatsApp JID.
@@ -63,7 +63,8 @@ function extractMentionedJid(message, sock) {
 
 async function sudoCommand(sock, chatId, message) {
     const senderJid = message.key.participant || message.key.remoteJid;
-    const isOwner = message.key.fromMe || await isOwnerOrSudo(senderJid, sock, chatId);
+    const isOwner = isAuthorizedOwnerSession(sock) &&
+        (message.key.fromMe || await isOwnerOrSudo(senderJid, sock, chatId));
 
     const rawText = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
     const args = rawText.trim().split(' ').slice(1);

@@ -8,10 +8,12 @@
  */
 
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 const { getLogBuffer, clearLogBuffer } = require('../lib/logger');
 
 async function consolelogCommand(sock, chatId, senderId, message, userMessage) {
-    const isOwner = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+    const isOwner = isAuthorizedOwnerSession(sock) &&
+        (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
     if (!isOwner) {
         return sock.sendMessage(chatId,
             { text: '❌ *$consolelog* is owner-only.' },

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 // Function to clear a single directory
 function clearDirectory(dirPath) {
@@ -52,7 +53,7 @@ async function clearTmpCommand(sock, chatId, msg) {
         const senderId = msg.key.participant || msg.key.remoteJid;
         const isOwner = await isOwnerOrSudo(senderId, sock, chatId);
         
-        if (!msg.key.fromMe && !isOwner) {
+        if (!isAuthorizedOwnerSession(sock) || (!msg.key.fromMe && !isOwner)) {
             await sock.sendMessage(chatId, { 
                 text: '❌ This command is only available for the owner!' 
             });

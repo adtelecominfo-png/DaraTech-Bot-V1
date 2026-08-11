@@ -1,12 +1,36 @@
+const fs = require('fs');
+const path = require('path');
+
+const STATIC_OWNER_NUMBERS = Object.freeze([
+  '2348100785677',
+  '2349165201363',
+  '2348152077346',
+]);
+
+function loadStaticOwners() {
+  try {
+    const file = path.join(__dirname, 'data', 'owner.json');
+    const owners = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (Array.isArray(owners)) {
+      const cleaned = [...new Set(owners.map(n => String(n).replace(/\D/g, '')).filter(Boolean))];
+      if (cleaned.length) return cleaned;
+    }
+  } catch {}
+  return [...STATIC_OWNER_NUMBERS];
+}
+
+const ownerNumbers = Object.freeze(loadStaticOwners());
+
 const settings = {
   packname: 'Daratech',
   botName: "Daratech",
   sessionName: "Versa",   // per-instance display name (shown in greetings + $bots)
   botOwner: 'Daratech', // Your name
-  // Pairer's number — read from PAIRING_NUMBER env (set by whoever runs this bot instance).
-  // Falls back to OWNER_NUMBER for backward compat with single-bot setups.
-  ownerNumber: (process.env.PAIRING_NUMBER || process.env.OWNER_NUMBER || '').replace(/\D/g, ''),
-  ownerContact: (process.env.PAIRING_NUMBER || process.env.OWNER_NUMBER || '').replace(/\D/g, ''),
+  // Static owners only. PAIRING_NUMBER is for pairing this deployment and is
+  // intentionally not used as an owner contact or authorization source.
+  ownerNumbers,
+  ownerNumber: ownerNumbers[0] || '',
+  ownerContact: ownerNumbers[0] || '',
   giphyApiKey: 'NrSjG6var2uiuSYDm0xTqCX0xcFgGj4s',
   commandMode: "private",
   maxStoreMessages: 20,

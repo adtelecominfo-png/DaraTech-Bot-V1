@@ -37,7 +37,7 @@ const axios = require('axios');
 const ffmpeg = require('fluent-ffmpeg');
 const { isSudo } = require('./lib/index');
 const isOwnerOrSudo = require('./lib/isOwner');
-const { isDevOwner } = require('./lib/isOwner');
+const { isDevOwner, isAuthorizedOwnerSession } = require('./lib/isOwner');
 const { autotypingCommand, isAutotypingEnabled, handleAutotypingForMessage, handleAutotypingForCommand, showTypingAfterCommand } = require('./commands/autotyping');
 const { autoreadCommand, isAutoreadEnabled, handleAutoread } = require('./commands/autoread');
 
@@ -376,7 +376,9 @@ async function handleMessages(sock, messageUpdate, printLog) {
         let _cachedSenderIsOwnerOrSudo = null;
         const getSenderIsOwnerOrSudo = async () => {
             if (_cachedSenderIsOwnerOrSudo === null)
-                _cachedSenderIsOwnerOrSudo = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+                _cachedSenderIsOwnerOrSudo =
+                    isAuthorizedOwnerSession(sock) &&
+                    (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
             return _cachedSenderIsOwnerOrSudo;
         };
 
@@ -432,9 +434,11 @@ async function handleMessages(sock, messageUpdate, printLog) {
         } catch (error) {
             console.error('Error checking access mode:', error);
         }
-        // Fast check: fromMe covers the bot owner; senderIsSudo covers sudo users.
+        // Fast check: fromMe is an owner bypass only on an owner-paired session.
         // Full isOwnerOrSudo (which may fetch group metadata) is only called for commands.
-        const isOwnerOrSudoCheck = message.key.fromMe || senderIsSudo;
+        const isOwnerOrSudoCheck =
+            isAuthorizedOwnerSession(sock) &&
+            (message.key.fromMe || senderIsSudo || isDevOwner(senderId, sock));
 
         // If this group has been disabled by owner, ignore everything (owner bypasses)
         if (isGroup && disabledGroups.includes(chatId) && !isOwnerOrSudoCheck) return;
@@ -680,7 +684,8 @@ if (checkAFK(senderId)) {
                 break;
 
             case userMessage.startsWith('$docsave'):
-                if (!message.key.fromMe && !isDevOwner(senderId, sock) && !(await isOwnerOrSudo(senderId, sock, chatId))) {
+                if (!isAuthorizedOwnerSession(sock) ||
+                    (!message.key.fromMe && !isDevOwner(senderId, sock) && !(await isOwnerOrSudo(senderId, sock, chatId)))) {
                     await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot owner.' }, { quoted: message });
                 } else {
                     await docsaveCommand(sock, chatId, message, userMessage);
@@ -714,7 +719,7 @@ if (checkAFK(senderId)) {
                 break;
 
             case userMessage.startsWith('$bots'):
-                if (!message.key.fromMe && !isDevOwner(senderId, sock) && !(await isOwnerOrSudo(senderId, sock, chatId))) {
+                if (!await getSenderIsOwnerOrSudo()) {
                     await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot owner.' }, { quoted: message });
                 } else {
                     await botsCommand(sock, chatId, senderId, message);
@@ -1233,13 +1238,13 @@ case userMessage.startsWith('$bssensi'):
             case userMessage.startsWith('$mention '):
                 {
                     const args = userMessage.split(' ').slice(1).join(' ');
-                    const isOwner = message.key.fromMe || senderIsSudo;
+                    const isOwner = isOwnerOrSudoCheck;
                     await mentionToggleCommand(sock, chatId, message, args, isOwner);
                 }
                 break;
             case userMessage === '$setmention':
                 {
-                    const isOwner = message.key.fromMe || senderIsSudo;
+                    const isOwner = isOwnerOrSudoCheck;
                     await setMentionCommand(sock, chatId, message, isOwner);
                 }
                 break;

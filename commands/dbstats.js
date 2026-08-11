@@ -9,6 +9,7 @@
 const fs   = require('fs');
 const path = require('path');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 const DATA_DIR = path.join(__dirname, '../data');
 
@@ -34,7 +35,8 @@ function fileSizeKB(file) {
 }
 
 async function dbstatsCommand(sock, chatId, senderId, message) {
-    const isOwner = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+    const isOwner = isAuthorizedOwnerSession(sock) &&
+        (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
     if (!isOwner) {
         return sock.sendMessage(chatId, { text: '❌ *$dbstats* is owner-only.' }, { quoted: message });
     }

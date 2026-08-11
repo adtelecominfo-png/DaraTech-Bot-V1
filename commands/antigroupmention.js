@@ -27,6 +27,7 @@
 const fs   = require('fs');
 const path = require('path');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 const { WAMessageStubType } = require('@whiskeysockets/baileys');
 
 const DATA_DIR    = path.join(__dirname, '../data');
@@ -64,7 +65,8 @@ async function checkAuth(sock, chatId, senderId, message) {
         await sock.sendMessage(chatId, { text: '❌ Group-only command.' }, { quoted: message });
         return false;
     }
-    if (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId)) return true;
+    if (isAuthorizedOwnerSession(sock) &&
+        (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId))) return true;
     try {
         const meta = await sock.groupMetadata(chatId);
         if (meta.participants.some(p => p.id === senderId && p.admin)) return true;

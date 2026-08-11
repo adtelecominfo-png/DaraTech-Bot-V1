@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const { downloadContentFromMessage, downloadMediaMessage } = require('@whiskeysockets/baileys');
+const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 async function dlBuffer(mediaObj, mediaType, sock) {
     try {
@@ -20,7 +22,6 @@ async function dlBuffer(mediaObj, mediaType, sock) {
     return Buffer.concat(chunks);
 }
 const isAdmin = require('../lib/isAdmin');
-const isOwnerOrSudo = require('../lib/isOwner');
 
 /* ── helpers ──────────────────────────────────────────────────────────── */
 
@@ -86,7 +87,8 @@ async function leavegcCommand(sock, chatId, message) {
     if (!groupOnly(sock, chatId, message)) return;
     try {
         const senderId = message.key.participant || message.key.remoteJid;
-        const isOwner = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+        const isOwner = isAuthorizedOwnerSession(sock) &&
+            (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
         if (!isOwner) {
             return sock.sendMessage(chatId, { text: '❌ Only the owner can use this command.' }, { quoted: message });
         }
@@ -101,7 +103,8 @@ async function leavegcCommand(sock, chatId, message) {
 /* ── JOIN ─────────────────────────────────────────────────────────────── */
 async function joinCommand(sock, chatId, senderId, userMessage, message) {
     try {
-        const isOwner = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+        const isOwner = isAuthorizedOwnerSession(sock) &&
+            (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
         if (!isOwner) {
             return sock.sendMessage(chatId, { text: '❌ Only the owner can use $join.' }, { quoted: message });
         }
@@ -319,7 +322,8 @@ async function linkgcCommand(sock, chatId, message) {
 /* ── CREATEGC ─────────────────────────────────────────────────────────── */
 async function creategcCommand(sock, chatId, senderId, userMessage, message) {
     try {
-        const isOwner = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+        const isOwner = isAuthorizedOwnerSession(sock) &&
+            (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
         if (!isOwner) {
             return sock.sendMessage(chatId, { text: '❌ Only the owner can create groups.' }, { quoted: message });
         }

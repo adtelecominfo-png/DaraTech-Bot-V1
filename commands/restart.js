@@ -1,9 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 async function restartCommand(sock, chatId, message, senderId) {
-    const isOwner = message.key?.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+    const isOwner = isAuthorizedOwnerSession(sock) &&
+        (message.key?.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
     if (!isOwner) {
         return sock.sendMessage(chatId, { text: '❌ This command is restricted to the paired bot Owner.' }, { quoted: message });
     }

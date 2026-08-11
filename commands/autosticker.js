@@ -15,6 +15,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 const CONFIG_PATH = path.join(__dirname, '../data/antimedia.json');
 
@@ -44,7 +45,8 @@ async function checkAuth(sock, chatId, senderId, message) {
         await sock.sendMessage(chatId, { text: '❌ Group-only command.' }, { quoted: message });
         return false;
     }
-    if (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId)) return true;
+    if (isAuthorizedOwnerSession(sock) &&
+        (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId))) return true;
     try {
         const meta = await sock.groupMetadata(chatId);
         if (meta.participants.some(p => p.id === senderId && p.admin)) return true;

@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 function readJsonSafe(path, fallback) {
     try {
@@ -16,7 +17,7 @@ async function settingsCommand(sock, chatId, message) {
         const senderId = message.key.participant || message.key.remoteJid;
         const isOwner = await isOwnerOrSudo(senderId, sock, chatId);
         
-        if (!message.key.fromMe && !isOwner) {
+        if (!isAuthorizedOwnerSession(sock) || (!message.key.fromMe && !isOwner)) {
             await sock.sendMessage(chatId, { text: 'Only bot owner can use this command!' }, { quoted: message });
             return;
         }

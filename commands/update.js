@@ -19,6 +19,7 @@ const fs       = require('fs');
 const path     = require('path');
 const settings = require('../settings');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 // ── Shell helper ─────────────────────────────────────────────────────────────
 
@@ -306,7 +307,8 @@ async function doRestart(sock, chatId, message, text) {
 
 async function updateCommand(sock, chatId, message, zipOverride) {
     const senderId = message.key.participant || message.key.remoteJid;
-    if (!message.key.fromMe && !(await isOwnerOrSudo(senderId, sock, chatId))) {
+    if (!isAuthorizedOwnerSession(sock) ||
+        (!message.key.fromMe && !(await isOwnerOrSudo(senderId, sock, chatId)))) {
         return sock.sendMessage(chatId, { text: '❌ Only the bot owner can use $update' }, { quoted: message });
     }
 

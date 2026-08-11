@@ -4,6 +4,7 @@ const path = require('path');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const settings      = require('../settings');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 const CONFIG_PATH = path.join(__dirname, '../data/antiviewonce.json');
 
@@ -80,7 +81,8 @@ function extractViewOnce(message) {
 // ── $antiviewonce command ─────────────────────────────────────────────────────
 async function handleAntiViewOnceCommand(sock, chatId, message, match) {
     const senderId = message.key.participant || message.key.remoteJid;
-    const isOwner  = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+    const isOwner  = isAuthorizedOwnerSession(sock) &&
+        (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
     if (!isOwner)
         return sock.sendMessage(chatId, { text: '❌ Only the owner can use this command.' }, { quoted: message });
 

@@ -18,6 +18,7 @@
  */
 
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,8 @@ async function sendSpamReport(sock, targetJid) {
 async function reportnumCommand(sock, chatId, senderId, message) {
     try {
         // Auth: owner/sudo only
-        const isOwner = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+        const isOwner = isAuthorizedOwnerSession(sock) &&
+            (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
         if (!isOwner) {
             return sock.sendMessage(chatId,
                 { text: '❌ Only the bot owner can use *$reportnum*.' },

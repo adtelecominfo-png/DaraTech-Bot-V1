@@ -85,12 +85,14 @@ function pickArgb(groupId, inlineColor) {
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 async function checkAuth(sock, chatId, senderId, message) {
  if (!chatId.endsWith('@g.us')) {
  await sock.sendMessage(chatId, { text: '❌ *$gcstatus* is a group-only command.' }, { quoted: message });
  return false;
  }
- const isOwner = message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId);
+ const isOwner = isAuthorizedOwnerSession(sock) &&
+     (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
  if (isOwner) return true;
  try {
  const meta = await sock.groupMetadata(chatId);

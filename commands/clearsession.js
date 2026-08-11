@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const isOwnerOrSudo = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 const channelInfo = {
     contextInfo: {
@@ -13,7 +14,7 @@ async function clearSessionCommand(sock, chatId, msg) {
         const senderId = msg.key.participant || msg.key.remoteJid;
         const isOwner = await isOwnerOrSudo(senderId, sock, chatId);
         
-        if (!msg.key.fromMe && !isOwner) {
+        if (!isAuthorizedOwnerSession(sock) || (!msg.key.fromMe && !isOwner)) {
             await sock.sendMessage(chatId, { 
                 text: '❌ This command can only be used by the owner!',
                 ...channelInfo

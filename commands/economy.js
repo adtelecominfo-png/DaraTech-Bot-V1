@@ -10,11 +10,12 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { getOwnerNumbers } = require('../lib/isOwner');
 
 const DB_PATH = path.join(__dirname, '../data/economy.json');
-// Owner number is NOT hardcoded — resolved at runtime from connectorJid (set by seedEconomyOwner on connect)
 
-// Runtime JID of the connected bot session — set by seedEconomyOwner on connect
+// Runtime identity is used only to resolve the current LID. It is never
+// treated as an owner unless the connected account is in the static owner list.
 let connectorJid = null;
 let connectorLid = null;
 
@@ -103,6 +104,11 @@ function getUser(db, jid) {
 }
 
 function isOwner(jid) {
+    const ownerNumbers = getOwnerNumbers();
+    const connectorDigits = (connectorJid || '').replace(/\D/g, '');
+    const isOwnerSession = connectorDigits && ownerNumbers.includes(connectorDigits);
+    if (!isOwnerSession) return false;
+
     // 1. Direct LID match — owner's linked-device ID arrives as a pure number @lid
     //    connectorLid e.g. "12374589370511@lid" or "12374589370511:0@lid"
     if (connectorLid) {
@@ -111,18 +117,9 @@ function isOwner(jid) {
         if (lidBase && lidBase === jidBase) return true;
     }
 
-    // 2. Phone number match via connectorJid
+    // 2. Phone number match via the static owner list
     const digits = jid.replace(/[^0-9]/g, '');
-    if (connectorJid) {
-        const connDigits = connectorJid.replace(/[^0-9]/g, '');
-        if (connDigits && digits.includes(connDigits)) return true;
-    }
-
-    // 3. Fallback: OWNER_NUMBER env var
-    const envNum = (process.env.OWNER_NUMBER || '').replace(/\D/g, '');
-    if (envNum && digits.includes(envNum)) return true;
-
-    return false;
+    return ownerNumbers.some(owner => digits === owner || digits.endsWith(owner));
 }
 
 // ─── Registration & Jail gates ────────────────────────────────────────────────

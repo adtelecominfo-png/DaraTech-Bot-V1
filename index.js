@@ -133,8 +133,9 @@ const question = (text) => {
     if (rl) {
         return new Promise((resolve) => rl.question(text, resolve))
     } else {
-        // In non-interactive environment, use ownerNumber from settings
-        return Promise.resolve(settings.ownerNumber || phoneNumber)
+        // In non-interactive environments, never use the static owner contact
+        // as the pairer. PAIRING_NUMBER/phoneNumber identifies this deployment.
+        return Promise.resolve(phoneNumber)
     }
 }
 
