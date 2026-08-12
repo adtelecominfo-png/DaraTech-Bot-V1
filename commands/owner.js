@@ -1,23 +1,34 @@
 'use strict';
 const settings = require('../settings');
-const { resolveOwnerNumber } = require('../lib/isOwner');
+const { getOwnerNumbers } = require('../lib/isOwner');
 
 /**
- * $owner — send a contact card for this bot's owner.
+ * $owner — send contact cards for the bot owners.
  *
- * The owner number is resolved at call time from (in priority order):
- *   sock._ownerNumber → OWNER_NUMBER env → sock.user.id (the connected account)
- *
- * This means each session shows its own owner correctly — no hardcoded numbers.
+ * The numbers are loaded at call time from data/owner.json so this command
+ * always reflects the configured owner list and never a deployment's pairing
+ * number or a hardcoded contact.
  */
 async function ownerCommand(sock, chatId) {
-    const ownerNum  = resolveOwnerNumber(sock);
-    const botOwner  = settings.botOwner || 'Daratech';
+    const botOwner = settings.botOwner || 'Daratech';
+    const ownerNumbers = getOwnerNumbers();
+    const contacts = ownerNumbers.map((ownerNumber, index) => {
+        const contactName = ownerNumbers.length === 1
+            ? botOwner
+            : `${botOwner} ${index + 1}`;
+        const vcard = [
+            'BEGIN:VCARD',
+            'VERSION:3.0',
+            `FN:${contactName}`,
+            `TEL;waid=${ownerNumber}:${ownerNumber}`,
+            'END:VCARD',
+        ].join('\n');
 
-    const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${botOwner}\nTEL;waid=${ownerNum}:${ownerNum}\nEND:VCARD`;
+        return { vcard };
+    });
 
     await sock.sendMessage(chatId, {
-        contacts: { displayName: botOwner, contacts: [{ vcard }] },
+        contacts: { displayName: botOwner, contacts },
     });
 }
 
