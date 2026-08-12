@@ -10,7 +10,6 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { getOwnerNumbers } = require('../lib/isOwner');
 
 const DB_PATH = path.join(__dirname, '../data/economy.json');
 
@@ -104,11 +103,6 @@ function getUser(db, jid) {
 }
 
 function isOwner(jid) {
-    const ownerNumbers = getOwnerNumbers();
-    const connectorDigits = (connectorJid || '').replace(/\D/g, '');
-    const isOwnerSession = connectorDigits && ownerNumbers.includes(connectorDigits);
-    if (!isOwnerSession) return false;
-
     // 1. Direct LID match — owner's linked-device ID arrives as a pure number @lid
     //    connectorLid e.g. "12374589370511@lid" or "12374589370511:0@lid"
     if (connectorLid) {
@@ -117,9 +111,10 @@ function isOwner(jid) {
         if (lidBase && lidBase === jidBase) return true;
     }
 
-    // 2. Phone number match via the static owner list
+    // 2. Phone number match via the connected pairing account
     const digits = jid.replace(/[^0-9]/g, '');
-    return ownerNumbers.some(owner => digits === owner || digits.endsWith(owner));
+    const connectorDigits = (connectorJid || '').replace(/\D/g, '');
+    return !!connectorDigits && (digits === connectorDigits || digits.endsWith(connectorDigits));
 }
 
 // ─── Registration & Jail gates ────────────────────────────────────────────────

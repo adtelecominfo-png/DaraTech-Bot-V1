@@ -116,8 +116,7 @@ function rememberRimuruResponse(messageKey) {
 }
 
 // ─── Compact Prompt Builder (Rimuru Tempest Edition) ──────────────────────────
-const { getOwnerNumbers } = require('../lib/isOwner');
-const OWNER_NUMBERS = getOwnerNumbers();
+const { isPairingOwnerNumber } = require('../lib/isOwner');
 
 const RIMURU_CORE = `You are Rimuru Tempest — former Tokyo salaryman Satoru Mikami, reincarnated as a blue slime, now the most powerful Demon Lord and ruler of the Jura Tempest Federation.
 
@@ -153,7 +152,7 @@ function buildPrompt(userMessage, context) {
     const senderId = context?.senderId || '';
 
     let identity = '';
-    if (OWNER_NUMBERS.some(number => senderId.includes(number))) {
+    if (context?.isOwner) {
         identity = `You are talking to Daratech — your summoner and ally who bound your power into this WhatsApp realm. Treat him with high respect and friendly banter.`;
     } else {
         const parts = [];
@@ -432,6 +431,7 @@ async function rimuruRespond(sock, chatId, message, userText, senderId, mentions
         messages: mem.messages,
         userInfo: mem.userInfo,
         senderId,
+        isOwner: isPairingOwnerNumber(senderId, sock),
     });
 
     const fullReply = response || "*slime wobbles* Ciel hit a magicule surge — couldn't process that one. Try again in a second.";

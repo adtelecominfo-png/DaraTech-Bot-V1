@@ -3,14 +3,14 @@ const fs         = require('fs');
 const path       = require('path');
 const settings   = require('../settings');
 const { CATEGORIES, findCategory } = require('../lib/categories');
-const { isStaticOwnerNumber, isAuthorizedOwnerSession } = require('../lib/isOwner');
+const { isAuthorizedOwnerSession, isPairingOwnerNumber } = require('../lib/isOwner');
 
 // Fixed bot picture — loaded once at startup
 const BOT_PIC_PATH = path.join(__dirname, '../assets/botpic.png');
 let BOT_PIC_BUFFER = null;
 try { BOT_PIC_BUFFER = fs.readFileSync(BOT_PIC_PATH); } catch { /* no pic */ }
-function isOwner(jid) {
-    return isStaticOwnerNumber(jid);
+function isOwner(jid, sock) {
+    return isPairingOwnerNumber(jid, sock);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -157,7 +157,7 @@ async function sendCategoryMenu(sock, chatId, message, input) {
 
     const senderJid = message.key?.participant || message.key?.remoteJid || '';
     const ownerSee  = isAuthorizedOwnerSession(sock) &&
-        (isOwner(senderJid) || message.key?.fromMe);
+        (isOwner(senderJid, sock) || message.key?.fromMe);
     const visibleCmds = ownerSee ? cat.cmds : cat.cmds.filter(c => !c.includes('(owner)'));
     const rows = visibleCmds.map(c => `│ ${c.startsWith('$') ? c : '$' + c}`).join('\n');
 

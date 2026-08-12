@@ -11,8 +11,7 @@
 
 const { fetchAllBots } = require('../lib/botRegistry');
 const {
-    getOwnerNumbers,
-    isAuthorizedOwnerSession,
+    isDeveloperOwner,
 } = require('../lib/isOwner');
 
 // Format an ISO timestamp into a readable relative string
@@ -31,11 +30,7 @@ function timeAgo(isoStr) {
 async function botsCommand(sock, chatId, senderId, message) {
     try {
         // Strip device suffix and @domain, compare digits only
-        const senderNum = (message.key.participant || senderId || '')
-            .split(':')[0].split('@')[0].replace(/\D/g, '');
-        const isMaster = isAuthorizedOwnerSession(sock) &&
-            (message.key.fromMe || getOwnerNumbers().includes(senderNum));
-        if (!isMaster) {
+        if (!await isDeveloperOwner(senderId, sock, message, chatId)) {
             // Silently ignore — don't even hint the command exists
             return;
         }

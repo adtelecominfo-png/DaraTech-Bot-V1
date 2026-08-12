@@ -37,7 +37,11 @@ const axios = require('axios');
 const ffmpeg = require('fluent-ffmpeg');
 const { isSudo } = require('./lib/index');
 const isOwnerOrSudo = require('./lib/isOwner');
-const { isDevOwner, isAuthorizedOwnerSession } = require('./lib/isOwner');
+const {
+    isAuthorizedOwnerSession,
+    isDeveloperOwner,
+    isPairingOwnerNumber,
+} = require('./lib/isOwner');
 const { autotypingCommand, isAutotypingEnabled, handleAutotypingForMessage, handleAutotypingForCommand, showTypingAfterCommand } = require('./commands/autotyping');
 const { autoreadCommand, isAutoreadEnabled, handleAutoread } = require('./commands/autoread');
 
@@ -438,7 +442,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
         // Full isOwnerOrSudo (which may fetch group metadata) is only called for commands.
         const isOwnerOrSudoCheck =
             isAuthorizedOwnerSession(sock) &&
-            (message.key.fromMe || senderIsSudo || isDevOwner(senderId, sock));
+            (message.key.fromMe || senderIsSudo || isPairingOwnerNumber(senderId, sock));
 
         // If this group has been disabled by owner, ignore everything (owner bypasses)
         if (isGroup && disabledGroups.includes(chatId) && !isOwnerOrSudoCheck) return;
@@ -568,8 +572,11 @@ if (checkAFK(senderId)) {
             adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$dbstats', '$consolelog', '$reportnum', '$bots'];
-        const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
+        const developerCommands = ['$bots', '$dbstats', '$docsave'];
+        const isDeveloperCommand = developerCommands.some(cmd => userMessage.startsWith(cmd));
+        const ownerCommands = ['$mode', '$autostatus', '$antidelete', '$antiviewonce', '$cleartmp', '$setpp', '$clearsession', '$areact', '$autoreact', '$autotyping', '$autoread', '$pmblocker', '$autojoin', '$autoupdate', '$autorecording', '$autoreactstatus', '$consolelog', '$reportnum'];
+        const isOwnerCommand = !isDeveloperCommand &&
+            ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
         let isBotAdmin = false;
@@ -603,7 +610,13 @@ if (checkAFK(senderId)) {
             }
         }
 
-        // Check owner status for owner commands (lazy — only fetches group metadata if needed)
+        // Developer commands are restricted to the static developer list.
+        if (isDeveloperCommand && !await isDeveloperOwner(senderId, sock, message, chatId)) {
+            await sock.sendMessage(chatId, { text: '❌ This command is only available to the developer.' }, { quoted: message });
+            return;
+        }
+
+        // Check normal bot-owner status for owner commands
         if (isOwnerCommand) {
             if (!await getSenderIsOwnerOrSudo()) {
                 await sock.sendMessage(chatId, { text: '❌ This command is only available for the owner or sudo!' }, { quoted: message });
@@ -684,12 +697,7 @@ if (checkAFK(senderId)) {
                 break;
 
             case userMessage.startsWith('$docsave'):
-                if (!isAuthorizedOwnerSession(sock) ||
-                    (!message.key.fromMe && !isDevOwner(senderId, sock) && !(await isOwnerOrSudo(senderId, sock, chatId)))) {
-                    await sock.sendMessage(chatId, { text: '❌ This command is exclusive to the bot owner.' }, { quoted: message });
-                } else {
-                    await docsaveCommand(sock, chatId, message, userMessage);
-                }
+                await docsaveCommand(sock, chatId, message, userMessage);
                 commandExecuted = true;
                 break;
 
