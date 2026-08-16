@@ -2,7 +2,7 @@
 /**
  * gifted-ai.js — GiftedTech AI endpoints
  *
- * All endpoints confirmed working against api.giftedtech.co.ke/api/ai/
+ * All endpoints confirmed working against api.gifted.co.ke/api/ai/
  *
  * Text AI endpoints (return result string):
  *   letmegpt, unlimitedai, muslimai

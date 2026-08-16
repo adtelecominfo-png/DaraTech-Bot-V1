@@ -201,7 +201,7 @@ async function visionCommand(sock, chatId, message) {
             try {
                 const { KEY } = require('../lib/gifted');
                 const res = await axios.post(
-                    `https://api.giftedtech.co.ke/api/ai/vision?apikey=${KEY}`,
+                    `https://api.gifted.co.ke/api/ai/vision?apikey=${KEY}`,
                     { image: b64, q: question },
                     { headers: { 'Content-Type': 'application/json' }, timeout: 60000 }
                 );

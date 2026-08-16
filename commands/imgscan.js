@@ -112,7 +112,7 @@ async function imgscanCommand(sock, chatId, message) {
         if (!resultText) {
             try {
                 const res = await axios.post(
-                    `https://api.giftedtech.co.ke/api/ai/vision?apikey=${KEY}`,
+                    `https://api.gifted.co.ke/api/ai/vision?apikey=${KEY}`,
                     { image: b64, q: prompt },
                     { headers: { 'Content-Type': 'application/json' }, timeout: 45000 }
                 );
