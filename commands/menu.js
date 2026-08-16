@@ -1,19 +1,43 @@
 'use strict';
-const fs         = require('fs');
-const path       = require('path');
-const settings   = require('../settings');
+const fs = require('fs');
+const path = require('path');
+const settings = require('../settings');
 const { CATEGORIES, findCategory } = require('../lib/categories');
 const { isAuthorizedOwnerSession, isPairingOwnerNumber } = require('../lib/isOwner');
 
-// Fixed bot picture — loaded once at startup
+// ─── Constants ──────────────────────────────────────────────────────────────────
 const BOT_PIC_PATH = path.join(__dirname, '../assets/botpic.png');
 let BOT_PIC_BUFFER = null;
 try { BOT_PIC_BUFFER = fs.readFileSync(BOT_PIC_PATH); } catch { /* no pic */ }
+
+// ─── Emoji / Icon Helpers ──────────────────────────────────────────────────────
+const ICONS = {
+    cmd: '◆',
+    separator: '━',
+    bullet: '▪',
+    arrow: '↳',
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️',
+    star: '⭐',
+    fire: '🔥',
+    sparkle: '✨',
+    rocket: '🚀',
+    crown: '👑',
+    back: '◀',
+    home: '⌂',
+    search: '🔍',
+    details: '📋',
+    help: '📖',
+    time: '⏱',
+    user: '👤',
+    cmdCount: '⚡',
+};
+
 function isOwner(jid, sock) {
     return isPairingOwnerNumber(jid, sock);
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function nowStr() {
     return new Date().toLocaleString('en-NG', {
@@ -22,18 +46,31 @@ function nowStr() {
         hour: '2-digit', minute: '2-digit', hour12: true,
     });
 }
+
 function uptimeStr() {
     const t = process.uptime();
     return `${Math.floor(t / 3600)}h ${Math.floor((t % 3600) / 60)}m ${Math.floor(t % 60)}s`;
 }
 
-// ─── Send helper — fixed bot pic or text fallback ────────────────────────────
+function getRealCmds(cmds) {
+    return cmds.filter(c => c.startsWith('$'));
+}
 
-async function sendWithImage(sock, chatId, message, text) {
+function getTotalCommands() {
+    let total = 0;
+    for (const cat of CATEGORIES) {
+        total += getRealCmds(cat.cmds).length;
+    }
+    return total;
+}
+
+// ─── Send Helper ──────────────────────────────────────────────────────────────
+
+async function sendWithImage(sock, chatId, message, text, imageBuffer = BOT_PIC_BUFFER) {
     try {
-        if (BOT_PIC_BUFFER) {
+        if (imageBuffer) {
             await sock.sendMessage(chatId, {
-                image: BOT_PIC_BUFFER,
+                image: imageBuffer,
                 caption: text,
                 mimetype: 'image/png',
             }, { quoted: message });
@@ -43,163 +80,314 @@ async function sendWithImage(sock, chatId, message, text) {
     await sock.sendMessage(chatId, { text }, { quoted: message });
 }
 
-// ─── Overview (no args) ───────────────────────────────────────────────────────
+// ─── Box Helpers (auto-fit so nothing overflows on WhatsApp) ──────────────────
+
+function padCenter(str, width) {
+    const pad = Math.max(0, width - str.length);
+    const left = Math.floor(pad / 2);
+    const right = pad - left;
+    return `${' '.repeat(left)}${str}${' '.repeat(right)}`;
+}
+
+// Double-lined box (╔═╗ ... ╚═╝) — used for main headers.
+// The top/bottom border stays a short, fixed width; the content lines have
+// no side pipes and are simply centered against their own (wider) text
+// width, so the border stays compact even when the text runs past it.
+function createStylishBox(title, subtitle = '', borderWidth = 19) {
+    const contentWidth = Math.max(title.length, subtitle.length) + 4;
+    const lines = [`╔${'═'.repeat(borderWidth)}╗`];
+    if (title) lines.push(padCenter(title, contentWidth));
+    if (subtitle) lines.push(padCenter(subtitle, contentWidth));
+    lines.push(`╚${'═'.repeat(borderWidth)}╝`);
+    return lines.join('\n');
+}
+
+// Single-lined box (┏━┓ ... ┗━┛) — used for section labels & footers.
+// Same fixed-border, no-side-pipe style as createStylishBox.
+// Accepts a single string or an array of lines.
+function createSectionBox(content, borderWidth = 16) {
+    const lines = Array.isArray(content) ? content : [content];
+    const contentWidth = Math.max(...lines.map(l => l.length)) + 4;
+    const rows = [`┏${'━'.repeat(borderWidth)}┓`];
+    lines.forEach(l => rows.push(padCenter(l, contentWidth)));
+    rows.push(`┗${'━'.repeat(borderWidth)}┛`);
+    return rows.join('\n');
+}
+
+// ─── Overview (Cool & Stylish) ───────────────────────────────────────────────
 
 async function sendOverview(sock, chatId, message) {
     const userName = message.pushName || 'User';
-    const ver      = settings.version || '1.0.0';
+    const ver = settings.version || '1.0.0';
+    const total = getTotalCommands();
+    const categories = CATEGORIES.filter(c => getRealCmds(c.cmds).length > 0);
 
-    const realCmds = cmds => cmds.filter(c => c.startsWith('$'));
-    let total = 0;
-    for (const cat of CATEGORIES) total += realCmds(cat.cmds).length;
+    const header = createStylishBox('⚡  D A R A T E C H  B O T  ⚡', `v${ver}`);
 
-    const lines = [
-        `╔════════════════════════════════════╗`,
-        `║  ⚡  *D A R A  S T U D I O  B O T*  ⚡ ║`,
-        `╚════════════════════════════════════╝`,
+    const body = [
+        header,
         ``,
-        `╭──🌟 *SESSION INFO*`,
-        `│ 👤 *${userName}*   •   🕐 ${nowStr()}`,
-        `│ ⏱ Uptime: *${uptimeStr()}*   •   v${ver}`,
-        `│ 📋 Total: *${total}+ commands*`,
-        `╰${'─'.repeat(34)}`,
+        `${ICONS.user} ${userName}`,
+        `${ICONS.time} ${uptimeStr()}`,
+        `${ICONS.cmdCount} ${total}+ cmds`,
+        `📂 ${categories.length} cats`,
         ``,
-        `*📂 CATEGORIES — tap a name to explore:*`,
+        createSectionBox('📂  C A T E G O R I E S'),
         ``,
-    ];
+        ...categories.map(c => {
+            const count = getRealCmds(c.cmds).length;
+            return `${c.emoji}  *$menu ${c.slug}*  ${ICONS.cmd} ${count} cmds`;
+        }),
+        ``,
+        createSectionBox('💡  Q U I C K  A C T I O N S'),
+        ``,
+        `${ICONS.arrow} *$help <cat>*  •  full descriptions`,
+        `${ICONS.arrow} *$menu search <cmd>*  •  find commands`,
+        `${ICONS.arrow} *$menu details <cmd>*  •  usage info`,
+        ``,
+        createSectionBox('🚀  Q U I C K  A C C E S S'),
+        ``,
+        `  $menu ai  $menu movies  $menu download`,
+        `  $menu manga  $menu sports  $menu tools`,
+        ``,
+        `${ICONS.fire}  Daratech  ⚡`,
+    ].join('\n');
 
-    for (const cat of CATEGORIES) {
-        const cmdCount = realCmds(cat.cmds).length;
-        if (!cmdCount) continue;
-        // If a category has alt slugs, show them alongside the primary slug
-        const slugLabel = cat.altSlugs?.length
-            ? `${cat.slug} / ${cat.altSlugs.join(' / ')}`
-            : cat.slug;
-        lines.push(`${cat.emoji} *$menu ${slugLabel}* — ${cmdCount} cmds`);
+    await sendWithImage(sock, chatId, message, body);
+}
+
+// ─── Search ────────────────────────────────────────────────────────────────────
+
+async function sendSearchMenu(sock, chatId, message, query) {
+    if (!query) {
+        return sock.sendMessage(chatId, {
+            text: `❌ *Usage:* $menu search <cmd>\n\n💡 *Example:* $menu search battle`
+        }, { quoted: message });
     }
 
-    lines.push(``, `─`.repeat(34));
-    lines.push(`💬 *$menu movies*   — movie commands`);
-    lines.push(`💬 *$menu manga*    — manga & manhwa`);
-    lines.push(`💬 *$menu ai*       — AI commands`);
-    lines.push(`💬 *$menu sports*   — sports & scores`);
-    lines.push(`📖 *$help <cat>*    — full descriptions`);
-    lines.push(`─`.repeat(34));
-    lines.push(`🔍 *$menu search <command>*  — find commands`);
-    lines.push(`📋 *$menu details <command>* — command usage`);
+    const q = query.toLowerCase().replace(/^\$/, '');
+    const results = [];
 
-    const text = lines.join('\n');
+    for (const cat of CATEGORIES) {
+        const matches = cat.cmds.filter(c => 
+            c.toLowerCase().replace(/^\$/, '').includes(q)
+        );
+        if (matches.length) {
+            results.push(`\n${cat.emoji}  *${cat.title}*`);
+            matches.forEach(m => {
+                const clean = m.startsWith('$') ? m : `$${m}`;
+                results.push(`  ${ICONS.cmd} ${clean}`);
+            });
+        }
+    }
+
+    const text = results.length
+        ? [
+            `${ICONS.search}  *Search Results*  •  "${query}"`,
+            ``,
+            ...results,
+            ``,
+            `${ICONS.info} Use *$menu details ${query}* for usage`,
+            `${ICONS.back} *$menu*  •  back`,
+        ].join('\n')
+        : [
+            `❌  No commands found for *"${query}"*`,
+            ``,
+            `💡  Try *$menu* to browse categories`,
+        ].join('\n');
 
     await sendWithImage(sock, chatId, message, text);
 }
 
-// ─── Search across all categories ────────────────────────────────────────────
-
-async function sendSearchMenu(sock, chatId, message, query) {
-    if (!query) return sock.sendMessage(chatId, {
-        text: `❌ Usage: *$menu search <command>*\nExample: *$menu search $battle*`
-    }, { quoted: message });
-
-    const q = query.toLowerCase().replace(/^\$/, '');
-    const results = [];
-
-    for (const cat of CATEGORIES) {
-        const matches = cat.cmds.filter(c => c.toLowerCase().replace(/^\$/, '').includes(q));
-        if (matches.length) {
-            results.push(`${cat.emoji} *${cat.title}*`);
-            matches.forEach(m => results.push(`  │ ${m.startsWith('$') ? m : '$' + m}`));
-        }
-    }
-
-    const text = results.length
-        ? `🔍 *Search results for "${query}":*\n\n${results.join('\n')}\n\n_Use *$menu details ${query}* for usage info_`
-        : `❌ No commands found matching *"${query}"*\n\nTry *$menu* to browse categories.`;
-
-    await sock.sendMessage(chatId, { text }, { quoted: message });
-}
-
-// ─── Details for a specific command ──────────────────────────────────────────
+// ─── Command Details ──────────────────────────────────────────────────────────
 
 async function sendDetailsMenu(sock, chatId, message, query) {
-    if (!query) return sock.sendMessage(chatId, {
-        text: `❌ Usage: *$menu details <command>*\nExample: *$menu details $battle*`
-    }, { quoted: message });
+    if (!query) {
+        return sock.sendMessage(chatId, {
+            text: `❌ *Usage:* $menu details <cmd>\n\n💡 *Example:* $menu details $battle`
+        }, { quoted: message });
+    }
 
     const q = query.toLowerCase().replace(/^\$/, '');
     const results = [];
 
     for (const cat of CATEGORIES) {
-        const matches = cat.help.filter(line => line.toLowerCase().replace(/^\$/, '').includes(q));
+        const matches = cat.help.filter(line => 
+            line.toLowerCase().replace(/^\$/, '').includes(q)
+        );
         if (matches.length) {
-            results.push(`${cat.emoji} *${cat.title}*`);
+            results.push(`\n${cat.emoji}  *${cat.title}*`);
             matches.forEach(l => results.push(`  ${l}`));
-            results.push('');
         }
     }
 
     const text = results.length
-        ? `📋 *Details for "${query}":*\n\n${results.join('\n').trimEnd()}`
-        : `❌ No details found for *"${query}"*\n\nTry *$menu search ${query}* to locate it first.`;
+        ? [
+            `${ICONS.details}  *Command Details*  •  "${query}"`,
+            ``,
+            ...results,
+            ``,
+            `${ICONS.info} *$help <cat>*  •  full category`,
+            `${ICONS.search} *$menu search ${query}*  •  find similar`,
+        ].join('\n')
+        : [
+            `❌  No details for *"${query}"*`,
+            ``,
+            `💡  Try *$menu search ${query}* first`,
+        ].join('\n');
 
-    await sock.sendMessage(chatId, { text }, { quoted: message });
+    await sendWithImage(sock, chatId, message, text);
 }
 
-// ─── Category detail (args = slug) ────────────────────────────────────────────
+// ─── Category Menu (Stylish) ──────────────────────────────────────────────────
 
 async function sendCategoryMenu(sock, chatId, message, input) {
     const cat = findCategory(input);
     if (!cat) {
-        const slugList = CATEGORIES.map(c => `*$menu ${c.slug}*`).join('  ');
+        const categories = CATEGORIES
+            .filter(c => getRealCmds(c.cmds).length > 0)
+            .map(c => `  ${c.emoji} *$menu ${c.slug}*`)
+            .join('\n');
+
         return sock.sendMessage(chatId, {
-            text: `❌ Category "*${input}*" not found.\n\nAvailable:\n${slugList}`
+            text: [
+                `❌  Category "*${input}*" not found.`,
+                ``,
+                `📂  *Available Categories:*`,
+                ``,
+                categories,
+                ``,
+                `💡  Use *$menu* to see all`,
+            ].join('\n')
         }, { quoted: message });
     }
 
     const senderJid = message.key?.participant || message.key?.remoteJid || '';
-    const ownerSee  = isAuthorizedOwnerSession(sock) &&
+    const ownerSee = isAuthorizedOwnerSession(sock) &&
         (isOwner(senderJid, sock) || message.key?.fromMe);
-    const visibleCmds = ownerSee ? cat.cmds : cat.cmds.filter(c => !c.includes('(owner)'));
-    const rows = visibleCmds.map(c => `│ ${c.startsWith('$') ? c : '$' + c}`).join('\n');
+    
+    const visibleCmds = ownerSee 
+        ? cat.cmds 
+        : cat.cmds.filter(c => !c.includes('(owner)'));
+    
+    const realCmds = getRealCmds(visibleCmds);
+    const count = realCmds.length;
 
-    // Build alt-slug hint so users know every valid keyword for this category
+    const header = createStylishBox(`${cat.emoji}  ${cat.title}`, `⚡ ${count} commands`);
+
+    const cmdLines = [];
+    
+    for (const cmd of visibleCmds) {
+        if (cmd.startsWith('──')) {
+            const currentSection = cmd.replace(/──/g, '').trim();
+            if (currentSection) {
+                cmdLines.push(``);
+                cmdLines.push(createSectionBox(currentSection));
+            }
+        } else if (cmd.startsWith('$')) {
+            // Menu view is command-only — no purpose/description text.
+            // (Use $help <cat> or $menu details <cmd> for that.)
+            cmdLines.push(`${ICONS.cmd} ${cmd}`);
+        }
+    }
+
     const allSlugs = [cat.slug, ...(cat.altSlugs || [])];
     const slugHint = allSlugs.length > 1
-        ? `\n💡 Also: ${cat.altSlugs.map(s => `*$menu ${s}*`).join('  ')} → same category`
+        ? `\n💡  Aliases: ${cat.altSlugs.map(s => `*$menu ${s}*`).join('  ')}`
         : '';
 
-    const text = [
-        `╭──${cat.emoji} *${cat.title}*`,
-        rows,
-        `╰${'─'.repeat(32)}`,
+    const body = [
+        header,
         ``,
-        `📖 *$help ${cat.slug}* — full descriptions`,
-        `🏠 *$menu* — back to categories`,
+        cmdLines.join('\n'),
+        ``,
+        createSectionBox([
+            `📖  $help ${cat.slug}  •  full descriptions`,
+            `🏠  $menu  •  back`,
+        ]),
         slugHint,
-        `\n_Daratech_ ⚡`,
-    ].filter(l => l !== '').join('\n');
+        ``,
+        `${ICONS.fire}  Daratech  ⚡`,
+    ].join('\n');
 
-    await sendWithImage(sock, chatId, message, text);
+    await sendWithImage(sock, chatId, message, body);
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+// ─── Category Browser ─────────────────────────────────────────────────────────
+
+async function sendCategoryBrowser(sock, chatId, message) {
+    const categories = CATEGORIES.filter(c => getRealCmds(c.cmds).length > 0);
+    
+    const grouped = {
+        '🤖 AI & Tech': ['ai', 'tools', 'search', 'texttools', 'ephoto', 'textpro', 'fonts'],
+        '🎬 Media': ['movies', 'download', 'media', 'stickers', 'anime', 'manga'],
+        '🎮 Fun': ['fun', 'gaming', 'generators', 'crypto', 'economy'],
+        '📊 Social': ['groups', 'stalk', 'owner'],
+        '📚 Reference': ['bible', 'language', 'country', 'animals', 'food', 'space'],
+        '🔧 Utils': ['sports', 'tempgen', 'converters'],
+    };
+
+    const lines = [
+        `📂  *C A T E G O R Y  B R O W S E R*`,
+        ``,
+    ];
+
+    for (const [groupName, slugs] of Object.entries(grouped)) {
+        const available = slugs
+            .map(s => categories.find(c => c.slug === s))
+            .filter(c => c);
+        
+        if (available.length) {
+            lines.push(createSectionBox(groupName));
+            available.forEach(c => {
+                const count = getRealCmds(c.cmds).length;
+                const slugDisplay = c.altSlugs?.length 
+                    ? `${c.slug}/${c.altSlugs[0]}`
+                    : c.slug;
+                lines.push(`  ${c.emoji} *$menu ${slugDisplay}*  ${ICONS.cmd} ${count} cmds`);
+            });
+            lines.push(``);
+        }
+    }
+
+    lines.push(
+        createSectionBox([
+            `📖  $help <cat>  •  descriptions`,
+            `🔍  $menu search <cmd>  •  find`,
+            `🏠  $menu  •  back`,
+        ]),
+        ``,
+        `${ICONS.fire}  Daratech  ⚡`
+    );
+
+    await sendWithImage(sock, chatId, message, lines.join('\n'));
+}
+
+// ─── Main Export ──────────────────────────────────────────────────────────────
 
 async function menuCommand(sock, chatId, message, catArg) {
     if (catArg && catArg.trim()) {
-        const arg   = catArg.trim();
+        const arg = catArg.trim();
         const parts = arg.split(/\s+/);
-        const sub   = parts[0].toLowerCase();
-        const rest  = parts.slice(1).join(' ').trim();
+        const sub = parts[0].toLowerCase();
+        const rest = parts.slice(1).join(' ').trim();
 
-        // 'search' and 'details' are reserved sub-commands only when a query follows.
-        // If no query is given ($menu search  /  $menu details) treat it as a
-        // category lookup so the user sees the Search / Details category listing.
-        if (sub === 'search'  && rest) return sendSearchMenu(sock, chatId, message, rest);
-        if (sub === 'details' && rest) return sendDetailsMenu(sock, chatId, message, rest);
+        if (sub === 'search' && rest) {
+            return sendSearchMenu(sock, chatId, message, rest);
+        }
+        if (sub === 'details' && rest) {
+            return sendDetailsMenu(sock, chatId, message, rest);
+        }
+        if (sub === 'browse' || sub === 'list') {
+            return sendCategoryBrowser(sock, chatId, message);
+        }
+        
         return sendCategoryMenu(sock, chatId, message, arg);
     }
+    
     return sendOverview(sock, chatId, message);
 }
 
 module.exports = menuCommand;
-module.exports.menuCommand     = menuCommand;
+module.exports.menuCommand = menuCommand;
 module.exports.menuFullCommand = menuCommand;

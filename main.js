@@ -201,7 +201,7 @@ const { pmblockerCommand, readState: readPmBlockerState } = require('./commands/
 const settingsCommand = require('./commands/settings');
 const soraCommand = require('./commands/sora');
 const movieCommand = require('./commands/movie');
-const { mangaCommand } = require('./commands/manga');
+const { mangaCommand, mangaHandlePendingReply } = require('./commands/manga');
 // Add these lines with the other command imports (find a spot near other requires)
 const uptimeCommand = require('./commands/uptime');
 // Add these with your other requires
@@ -457,6 +457,15 @@ async function handleMessages(sock, messageUpdate, printLog) {
             }
             return;
         }
+
+        // Manga "$manga dl" ZIP-or-PDF picker: a bare "1"/"2"/"zip"/"pdf" reply
+        // (no "$manga" prefix) resolves a pending format choice for this chat.
+        // Must run before the tic-tac-toe digit check below (which would
+        // otherwise swallow a bare "1"/"2") and before the generic non-"$"
+        // early-return further down (which would otherwise swallow "zip"/"pdf").
+        // No-op (cheap Map lookup) for every other message, since there's
+        // normally nothing pending.
+        if (await mangaHandlePendingReply(sock, chatId, message, userMessage)) return;
 
         // First check if it's a game move
         if (/^[1-9]$/.test(userMessage) || userMessage.toLowerCase() === 'surrender') {
