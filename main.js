@@ -59,6 +59,7 @@ const { demoteCommand } = require('./commands/demote');
 const muteCommand = require('./commands/mute');
 const unmuteCommand = require('./commands/unmute');
 const stickerCommand = require('./commands/sticker');
+const takeallCommand = require('./commands/takeall');
 const isAdmin = require('./lib/isAdmin');
 const warnCommand = require('./commands/warn');
 const warningsCommand = require('./commands/warnings');
@@ -356,6 +357,12 @@ async function handleMessages(sock, messageUpdate, printLog) {
         handleAntiMediaMessage(sock, message).catch(() => {});
         // Auto-sticker conversion
         handleAutostickerMessage(sock, message).catch(() => {});
+        // Keep a dedicated sticker history for $takeall.
+        try {
+            require('./lib/stickerHistory').recordStickerMessage(message);
+        } catch (error) {
+            console.error('[stickerHistory]', error.message);
+        }
         // Store messages for $clean/$purge
         storeForClean(message);
 
@@ -920,6 +927,10 @@ case userMessage.startsWith('$bssensi'):
                 break;
             case userMessage === '$sticker' || userMessage === '$s':
                 await stickerCommand(sock, chatId, message);
+                commandExecuted = true;
+                break;
+            case userMessage === '$takeall' || userMessage.startsWith('$takeall '):
+                await takeallCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
             case userMessage.startsWith('$warnings'):
