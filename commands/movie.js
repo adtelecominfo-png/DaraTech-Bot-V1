@@ -10,7 +10,7 @@ const path = require('path');
 const os = require('os');
 
 const API_BASE = 'https://apimovie.runflix.name.ng/v1';
-const API_KEY = process.env.APIMOVIE_KEY || 'dara_f15c322ef56b466994a37d2b';
+const API_KEY = process.env.APIMOVIE_KEY || '';
 
 const CACHE_FILE = path.join(__dirname, '../data/lastSearches.json');
 const CACHE_MAX = 200;

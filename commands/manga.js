@@ -78,7 +78,7 @@ try {
 
 // Same host/key as the movie command — now pointed at the /mangadex engine
 const MANGA_BASE = 'https://apimovie.runflix.name.ng/v1/mangadex';
-const MANGA_KEY  = process.env.APIMOVIE_KEY || 'dara_f15c322ef56b466994a37d2b';
+const MANGA_KEY  = process.env.APIMOVIE_KEY || '';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
