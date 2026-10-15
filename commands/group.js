@@ -22,6 +22,7 @@ async function dlBuffer(mediaObj, mediaType, sock) {
     return Buffer.concat(chunks);
 }
 const isAdmin = require('../lib/isAdmin');
+const { resolveRealJid } = require('../lib/participantDisplay');
 
 /* ── helpers ──────────────────────────────────────────────────────────── */
 
@@ -69,12 +70,16 @@ async function everyoneCommand(sock, chatId, senderId, userMessage, message) {
         const meta = await sock.groupMetadata(chatId);
         const participants = meta.participants || [];
         const caption = userMessage.slice(9).trim() || '📢 *Attention Everyone!*';
+        const resolved = await Promise.all(
+            participants.map(p => resolveRealJid(sock, chatId, p, meta))
+        );
+        const valid = resolved.filter(r => r.resolved);
         let msg = `${caption}\n\n`;
-        participants.forEach(p => { msg += `@${p.id.split('@')[0]}\n`; });
+        valid.forEach(r => { msg += `@${r.phone}\n`; });
 
         await sock.sendMessage(chatId, {
             text: msg.trim(),
-            mentions: participants.map(p => p.id)
+            mentions: valid.map(r => r.jid)
         });
     } catch (e) {
         console.error('[everyone]', e.message);
@@ -149,9 +154,12 @@ async function inviteCommand(sock, chatId, senderId, message) {
                 text: `👋 You've been invited to join *${meta.subject}*!\n\n🔗 ${link}`
             });
         }
+        const resolvedTargets = await Promise.all(
+            targets.map(jid => resolveRealJid(sock, chatId, jid, meta))
+        );
         await sock.sendMessage(chatId, {
-            text: `✅ Invite sent to ${targets.map(j => '@' + j.split('@')[0]).join(', ')}`,
-            mentions: targets
+            text: `✅ Invite sent to ${resolvedTargets.map(r => r.resolved ? '@' + r.phone : 'the selected member').join(', ')}`,
+            mentions: resolvedTargets.filter(r => r.resolved).map(r => r.jid)
         }, { quoted: message });
     } catch (e) {
         console.error('[invite]', e.message);

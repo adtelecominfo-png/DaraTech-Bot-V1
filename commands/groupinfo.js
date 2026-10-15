@@ -1,28 +1,23 @@
-const { participantDisplayNumber, resolveParticipantDisplayNumber } = require('../lib/participantDisplay');
+const { resolveRealJid } = require('../lib/participantDisplay');
 
 async function groupInfoCommand(sock, chatId, msg) {
     try {
-        // Get group metadata
         const groupMetadata = await sock.groupMetadata(chatId);
-        
-        // Get group profile picture
-        let pp;
-        try {
-            pp = await sock.profilePictureUrl(chatId, 'image');
-        } catch {
-            pp = 'https://i.imgur.com/2wzGhpF.jpeg'; // Default image
-        }
-
-        // Get admins from participants
-        const participants = groupMetadata.participants;
+        const participants = groupMetadata.participants || [];
         const groupAdmins = participants.filter(p => p.admin);
-        const listAdmin = groupAdmins.map((v, i) => `${i + 1}. @${participantDisplayNumber(v)}`).join('\n');
-        
-        // Get group owner
-        const owner = groupMetadata.owner || groupAdmins.find(p => p.admin === 'superadmin')?.id || chatId.split('-')[0] + '@s.whatsapp.net';
-        const ownerDisplayNumber = await resolveParticipantDisplayNumber(sock, chatId, owner, groupMetadata);
 
-        // Create info text
+        const adminResolved = await Promise.all(
+            groupAdmins.map(p => resolveRealJid(sock, chatId, p, groupMetadata))
+        );
+        const listAdmin = adminResolved
+            .filter(r => r.resolved)
+            .map((r, i) => `${i + 1}. @${r.phone}`)
+            .join('\n');
+
+        const owner = groupMetadata.owner || groupAdmins.find(p => p.admin === 'superadmin') ||
+            chatId.split('-')[0] + '@s.whatsapp.net';
+        const ownerResolved = await resolveRealJid(sock, chatId, owner, groupMetadata);
+
         const text = `
 ┌──「 *INFO GROUP* 」
 ▢ *♻️ID:*
@@ -32,25 +27,32 @@ async function groupInfoCommand(sock, chatId, msg) {
 ▢ *👥Members* :
 • ${participants.length}
 ▢ *🤿Group Owner:*
-• @${ownerDisplayNumber}
+• ${ownerResolved.resolved ? `@${ownerResolved.phone}` : 'Unavailable'}
 ▢ *🕵🏻‍♂️Admins:*
-${listAdmin}
+${listAdmin || '• Unavailable'}
 
 ▢ *📌Description* :
    • ${groupMetadata.desc?.toString() || 'No description'}
 `.trim();
 
-        // Send the message with image and mentions
+        const mentions = [...adminResolved, ownerResolved]
+            .filter(r => r.resolved)
+            .map(r => r.jid)
+            .filter((jid, i, list) => list.indexOf(jid) === i);
+
+        let pp;
+        try { pp = await sock.profilePictureUrl(chatId, 'image'); }
+        catch { pp = 'https://i.imgur.com/2wzGhpF.jpeg'; }
+
         await sock.sendMessage(chatId, {
             image: { url: pp },
             caption: text,
-            mentions: [...groupAdmins.map(v => v.id), owner]
+            mentions
         });
-
     } catch (error) {
         console.error('Error in groupinfo command:', error);
         await sock.sendMessage(chatId, { text: 'Failed to get group info!' });
     }
 }
 
-module.exports = groupInfoCommand; 
+module.exports = groupInfoCommand;

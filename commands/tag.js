@@ -1,4 +1,5 @@
 const isAdmin = require('../lib/isAdmin');
+const { resolveRealJid } = require('../lib/participantDisplay');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
@@ -32,8 +33,11 @@ async function tagCommand(sock, chatId, senderId, messageText, replyMessage, mes
     }
 
     const groupMetadata = await sock.groupMetadata(chatId);
-    const participants = groupMetadata.participants;
-    const mentionedJidList = participants.map(p => p.id);
+    const participants = groupMetadata.participants || [];
+    const resolved = await Promise.all(
+        participants.map(p => resolveRealJid(sock, chatId, p, groupMetadata))
+    );
+    const mentionedJidList = resolved.filter(r => r.resolved).map(r => r.jid);
 
     if (replyMessage) {
         let messageContent = {};

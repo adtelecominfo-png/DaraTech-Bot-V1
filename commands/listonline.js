@@ -1,3 +1,5 @@
+const { resolveRealJid } = require('../lib/participantDisplay');
+
 /**
  * $listonline — Lists all members in a group with their status (admin/member).
  * WhatsApp does not expose real-time online presence via the API,
@@ -18,7 +20,14 @@ async function listonlineCommand(sock, chatId, message) {
         const admins      = participants.filter(p => p.admin === 'admin');
         const members     = participants.filter(p => !p.admin);
 
-        const fmt = (p) => `• @${p.id.split('@')[0]}`;
+        const resolved = await Promise.all(
+            participants.map(p => resolveRealJid(sock, chatId, p, meta))
+        );
+        const resolvedByRaw = new Map(participants.map((p, i) => [p, resolved[i]]));
+        const fmt = (p) => {
+            const r = resolvedByRaw.get(p);
+            return r?.resolved ? `• @${r.phone}` : '• Unavailable';
+        };
 
         let msg = `👥 *GROUP MEMBERS*\n📌 ${meta.subject}\n\n`;
         msg += `📊 Total: *${participants.length}*\n`;
@@ -38,7 +47,7 @@ async function listonlineCommand(sock, chatId, message) {
             if (chunks.length > 1) msg += `\n_...and ${members.length - 20} more members_`;
         }
 
-        const mentions = participants.map(p => p.id);
+        const mentions = resolved.filter(r => r.resolved).map(r => r.jid);
 
         await sock.sendMessage(chatId, { text: msg.trim(), mentions }, { quoted: message });
 

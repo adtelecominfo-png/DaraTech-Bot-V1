@@ -1,4 +1,5 @@
 const isAdmin = require('../lib/isAdmin');
+const { resolveRealJid } = require('../lib/participantDisplay');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
@@ -29,7 +30,11 @@ async function hideTagCommand(sock, chatId, senderId, messageText, replyMessage,
 
     const groupMetadata = await sock.groupMetadata(chatId);
     const participants = groupMetadata.participants || [];
-    const nonAdmins = participants.filter(p => !p.admin).map(p => p.id);
+    const nonAdminParticipants = participants.filter(p => !p.admin);
+    const resolved = await Promise.all(
+        nonAdminParticipants.map(p => resolveRealJid(sock, chatId, p, groupMetadata))
+    );
+    const nonAdmins = resolved.filter(r => r.resolved).map(r => r.jid);
 
     if (replyMessage) {
         let content = {};
@@ -55,5 +60,4 @@ async function hideTagCommand(sock, chatId, senderId, messageText, replyMessage,
 }
 
 module.exports = hideTagCommand;
-
 
