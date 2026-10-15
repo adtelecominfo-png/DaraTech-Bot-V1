@@ -10,7 +10,7 @@
  * $gcstatus color random — enable random color for this group
  * $gcstatus color reset — reset to default purple
  *
- * Admin-only, group-only.
+ * Group-only.
  */
 
 const fs = require('fs');
@@ -83,23 +83,13 @@ function pickArgb(groupId, inlineColor) {
  return resolveArgb(saved) ?? DEFAULT_ARGB;
 }
 
-// ── Auth helper ───────────────────────────────────────────────────────────────
-const isOwnerOrSudo = require('../lib/isOwner');
-const { isAuthorizedOwnerSession } = require('../lib/isOwner');
+// ── Group-only guard ──────────────────────────────────────────────────────────
 async function checkAuth(sock, chatId, senderId, message) {
  if (!chatId.endsWith('@g.us')) {
  await sock.sendMessage(chatId, { text: '❌ *$gcstatus* is a group-only command.' }, { quoted: message });
  return false;
  }
- const isOwner = isAuthorizedOwnerSession(sock) &&
-     (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
- if (isOwner) return true;
- try {
- const meta = await sock.groupMetadata(chatId);
- if (meta.participants.some(p => p.id === senderId && p.admin)) return true;
- } catch {}
- await sock.sendMessage(chatId, { text: '❌ Only group admins can use *$gcstatus*.' }, { quoted: message });
- return false;
+ return true;
 }
 
 // ── Core relay ────────────────────────────────────────────────────────────────

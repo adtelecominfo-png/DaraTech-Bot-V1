@@ -583,7 +583,7 @@ if (checkAFK(senderId)) {
         }
 
         // List of admin commands
-        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$gcstatus', '$groupstatus', '$antigroupmention', '$agm', '$autosticker', '$autos', '$asticker', '$clean', '$purge', '$pending', '$accept', '$reject', '$gperm', '$editinfo', '$memberadd', '$invitelink', '$approval', '$msghistory'];
+        const adminCommands = ['$mute', '$unmute', '$ban', '$unban', '$promote', '$demote', '$kick', '$tagall', '$tagnotadmin', '$hidetag', '$antilink', '$antitag', '$setgdesc', '$setgname', '$setgpp', '$antileave', '$antiimage', '$antivideo', '$antisticker', '$antiaudio', '$antidemote', '$antipromote', '$antimention', '$antigroupmention', '$agm', '$autosticker', '$autos', '$asticker', '$clean', '$purge', '$pending', '$accept', '$reject', '$gperm', '$editinfo', '$memberadd', '$invitelink', '$approval', '$msghistory'];
         const isAdminCommand = !userMessage.startsWith('$mutesticker') &&
             adminCommands.some(cmd => userMessage.startsWith(cmd));
 
