@@ -1,137 +1,97 @@
+'use strict';
+
+/**
+ * $demote — Demotes group admin(s) back to normal members.
+ */
+
 const isAdmin = require('../lib/isAdmin');
-const { asJid, resolveParticipantDisplayNumber } = require('../lib/participantDisplay');
+const { invalidateGroupCache } = require('../lib/isAdmin');
+const { resolveRealJid } = require('../lib/participantDisplay');
 
 async function demoteCommand(sock, chatId, mentionedJids, message) {
+    if (!chatId.endsWith('@g.us')) {
+        return sock.sendMessage(chatId, { text: '❌ This command can only be used in groups.' }, { quoted: message });
+    }
+
+    const senderId = message.key.participant || message.key.remoteJid;
+    const isOwner  = message.key.fromMe;
+
     try {
-        // First check if it's a group
-        if (!chatId.endsWith('@g.us')) {
-            await sock.sendMessage(chatId, { 
-                text: 'This command can only be used in groups!'
-            });
-            return;
+        const adminStatus = await isAdmin(sock, chatId, senderId);
+        if (!adminStatus.isBotAdmin) {
+            return sock.sendMessage(chatId, {
+                text: '⚠️ Make me a group *admin* first before using *$demote*.'
+            }, { quoted: message });
         }
-
-        // Check admin status first, before any other operations
-        try {
-            const adminStatus = await isAdmin(sock, chatId, message.key.participant || message.key.remoteJid);
-            
-            if (!adminStatus.isBotAdmin) {
-                await sock.sendMessage(chatId, { 
-                    text: '❌ Error: Please make the bot an admin first to use this command.'
-                });
-                return;
-            }
-
-            if (!adminStatus.isSenderAdmin) {
-                await sock.sendMessage(chatId, { 
-                    text: '❌ Error: Only group admins can use the demote command.'
-                });
-                return;
-            }
-        } catch (adminError) {
-            console.error('Error checking admin status:', adminError);
-            await sock.sendMessage(chatId, { 
-                text: '❌ Error: Please make sure the bot is an admin of this group.'
-            });
-            return;
+        if (!adminStatus.isSenderAdmin && !isOwner) {
+            return sock.sendMessage(chatId, {
+                text: '🚫 Only group *admins* can use *$demote*.'
+            }, { quoted: message });
         }
+    } catch (adminError) {
+        console.error('[demote:isAdmin]', adminError.message);
+        return sock.sendMessage(chatId, { text: '❌ Error checking admin status.' }, { quoted: message });
+    }
 
-        let userToDemote = [];
-        
-        // Check for mentioned users
-        if (mentionedJids && mentionedJids.length > 0) {
-            userToDemote = mentionedJids;
-        }
-        // Check for replied message
-        else if (message.message?.extendedTextMessage?.contextInfo?.participant) {
-            userToDemote = [message.message.extendedTextMessage.contextInfo.participant];
-        }
-        
-        // If no user found through either method
-        if (userToDemote.length === 0) {
-            await sock.sendMessage(chatId, { 
-                text: '❌ Error: Please mention the user or reply to their message to demote!'
-            });
-            return;
-        }
+    let userToDemote = [];
 
-        // Add delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        await sock.groupParticipantsUpdate(chatId, userToDemote, "demote");
-        // Message is sent by the group-participants.update event handler — no duplicate needed here.
-    } catch (error) {
-        console.error('Error in demote command:', error);
-        if (error.data === 429) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            try {
-                await sock.sendMessage(chatId, { 
-                    text: '❌ Rate limit reached. Please try again in a few seconds.'
-                });
-            } catch (retryError) {
-                console.error('Error sending retry message:', retryError);
-            }
-        } else {
-            try {
-                await sock.sendMessage(chatId, { 
-                    text: '❌ Failed to demote user(s). Make sure the bot is admin and has sufficient permissions.'
-                });
-            } catch (sendError) {
-                console.error('Error sending error message:', sendError);
-            }
+    // Check mentioned users
+    if (mentionedJids && mentionedJids.length > 0) {
+        userToDemote = mentionedJids;
+    }
+    // Check replied message
+    else if (message.message?.extendedTextMessage?.contextInfo?.participant) {
+        userToDemote = [message.message.extendedTextMessage.contextInfo.participant];
+    }
+    // Check raw argument text (e.g. $demote 2348100785677)
+    else {
+        const body = (message.message?.conversation || message.message?.extendedTextMessage?.text || '').trim();
+        const arg  = body.replace(/^\$demote\s*/i, '').trim();
+        if (/^\+?\d{7,15}$/.test(arg)) {
+            userToDemote = [arg.replace(/^\+/, '') + '@s.whatsapp.net'];
         }
     }
-}
 
-// Function to handle automatic demotion detection
-async function handleDemotionEvent(sock, groupId, participants, author) {
+    if (userToDemote.length === 0) {
+        return sock.sendMessage(chatId, {
+            text: '⚠️ *Usage:* Reply to an admin or mention a user to demote.\n\n_Example:_ `$demote @user` or `$demote 2348100785677`'
+        }, { quoted: message });
+    }
+
     try {
-        // Safety check for participants
-        if (!Array.isArray(participants) || participants.length === 0) {
-            return;
-        }
+        await sock.groupParticipantsUpdate(chatId, userToDemote, 'demote');
+        invalidateGroupCache(chatId);
 
-        // Add delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        let groupMetadata;
+        try { groupMetadata = await sock.groupMetadata(chatId); }
+        catch { groupMetadata = { participants: [] }; }
 
-        // Get usernames for demoted participants
-        const demotedUsernames = await Promise.all(participants.map(async jid => {
-            // Handle case where jid might be an object or not a string
-            const displayNumber = await resolveParticipantDisplayNumber(sock, groupId, jid);
-            return `@${displayNumber}`;
-        }));
+        const resolved = await Promise.all(
+            userToDemote.map(p => resolveRealJid(sock, chatId, p, groupMetadata))
+        );
 
-        let demotedBy;
-        let mentionList = participants.map(jid => {
-            // Ensure all mentions are proper JID strings
-            return asJid(jid);
-        });
+        const lines = resolved.map(r => `👤 @${r.phone} is no longer an *Admin*.`);
+        const mentionList = resolved.map(r => r.jid);
 
-        if (author && author.length > 0) {
-            // Ensure author has the correct format
-            const authorJid = asJid(author);
-            const authorDisplayNumber = await resolveParticipantDisplayNumber(sock, groupId, authorJid);
-            demotedBy = `@${authorDisplayNumber}`;
-            mentionList.push(authorJid);
-        } else {
-            demotedBy = 'System';
-        }
+        const replyMsg =
+            `👤 *GROUP DEMOTION*\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            lines.join('\n') +
+            `\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+            `_Daratech V2_ ⚡`;
 
-        // Add delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        const demotionMessage = `👤 *Demoted:* ${demotedUsernames.join(', ')}\n👑 *By:* ${demotedBy}`;
-        
-        await sock.sendMessage(groupId, {
-            text: demotionMessage,
+        await sock.sendMessage(chatId, {
+            text: replyMsg,
             mentions: mentionList
-        });
+        }, { quoted: message });
+
     } catch (error) {
-        console.error('Error handling demotion event:', error);
-        if (error.data === 429) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+        console.error('Error in demote command:', error.message);
+        await sock.sendMessage(chatId, { text: '❌ Failed to demote user(s). Make sure bot has sufficient permissions.' }, { quoted: message });
     }
 }
+
+// Function to handle automatic demotion detection (no-op to prevent unprompted spam)
+async function handleDemotionEvent(sock, groupId, participants, author) {}
 
 module.exports = { demoteCommand, handleDemotionEvent };
