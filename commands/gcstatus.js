@@ -401,7 +401,7 @@ async function showGroupsList(sock, chatId, senderId, message) {
         if (!list.length) {
             await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
             return sock.sendMessage(chatId, {
-                text: '❌ No participating groups found for your account.\n\nMake sure the bot has joined the groups!\n\n> *POWERED BY DARATECH V2*'
+                text: '❌ No participating groups found for your account.\n\nMake sure the bot has joined the groups!\n\n_Daratech_ ⚡'
             }, { quoted: message });
         }
 
@@ -427,7 +427,7 @@ async function showGroupsList(sock, chatId, senderId, message) {
             `▸ Original media captions are kept unless overridden`,
             `▸ Add \`-color\` or \`-audience\` to any post`,
             ``,
-            `> *POWERED BY DARATECH V2*`
+            `_Daratech_ ⚡`
         ].join('\n');
 
         return sock.sendMessage(chatId, { text }, { quoted: message });
@@ -435,7 +435,7 @@ async function showGroupsList(sock, chatId, senderId, message) {
         console.error('[gcstatus/-list]', err);
         await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
         return sock.sendMessage(chatId, {
-            text: `❌ Failed to fetch groups list: ${err.message}\n\n> *POWERED BY DARATECH V2*`
+            text: `❌ Failed to fetch groups list: ${err.message}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 }
@@ -778,11 +778,11 @@ async function broadcastStatus(sock, chatId, message, targetJids, getPayload, la
         const r = results[0];
         if (r.success) {
             return sock.sendMessage(chatId, {
-                text: `✅ *${label} group status posted to ${r.groupName}!*\n\n> *POWERED BY DARATECH V2*`
+                text: `✅ *${label} group status posted to ${r.groupName}!*\n\n_Daratech_ ⚡`
             }, { quoted: message });
         }
         return sock.sendMessage(chatId, {
-            text: `❌ *Failed to post ${label.toLowerCase()} status to ${r.groupName}.*\n\n_${r.error || 'Unknown error'}_\n\n> *POWERED BY DARATECH V2*`
+            text: `❌ *Failed to post ${label.toLowerCase()} status to ${r.groupName}.*\n\n_${r.error || 'Unknown error'}_\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 
@@ -798,7 +798,7 @@ async function broadcastStatus(sock, chatId, message, targetJids, getPayload, la
             ``,
             summaryLines,
             ``,
-            `> *POWERED BY DARATECH V2*`,
+            `_Daratech_ ⚡`,
         ].join('\n')
     }, { quoted: message });
 }
@@ -875,23 +875,23 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
                         '',
                         `*Colors:* ${COLOR_NAMES}`,
                         '',
-                        '> *POWERED BY DARATECH V2*',
+                        '_Daratech_ ⚡',
                     ].join('\n')
                 }, { quoted: message });
             }
             if (val === 'reset') {
                 resetGroupColor(targetGroup);
-                return sock.sendMessage(chatId, { text: `🎨 *GC Status color reset* to default *purple* for *${groupName}*.\n\n> *POWERED BY DARATECH V2*` }, { quoted: message });
+                return sock.sendMessage(chatId, { text: `🎨 *GC Status color reset* to default *purple* for *${groupName}*.\n\n_Daratech_ ⚡` }, { quoted: message });
             }
             if (val === 'random') {
                 setGroupColor(targetGroup, 'random');
-                return sock.sendMessage(chatId, { text: `🎲 *GC Status color set to random* for *${groupName}*!\n\nA new color will be picked each time.\n\n> *POWERED BY DARATECH V2*` }, { quoted: message });
+                return sock.sendMessage(chatId, { text: `🎲 *GC Status color set to random* for *${groupName}*!\n\nA new color will be picked each time.\n\n_Daratech_ ⚡` }, { quoted: message });
             }
             if (!resolveColor(val)) {
-                return sock.sendMessage(chatId, { text: `❌ Unknown color *"${val}"*.\n\nAvailable:\n${COLOR_NAMES}\n\n> *POWERED BY DARATECH V2*` }, { quoted: message });
+                return sock.sendMessage(chatId, { text: `❌ Unknown color *"${val}"*.\n\nAvailable:\n${COLOR_NAMES}\n\n_Daratech_ ⚡` }, { quoted: message });
             }
             setGroupColor(targetGroup, val);
-            return sock.sendMessage(chatId, { text: `✅ *GC Status color set to ${val}* for *${groupName}*!\n\n> *POWERED BY DARATECH V2*` }, { quoted: message });
+            return sock.sendMessage(chatId, { text: `✅ *GC Status color set to ${val}* for *${groupName}*!\n\n_Daratech_ ⚡` }, { quoted: message });
         }
     }
 
@@ -940,19 +940,19 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
                         '*From DM:*',
                         '*$gcstatus -audience <close|all|reset> <groupNumber|groupJid>*',
                         '',
-                        '> *POWERED BY DARATECH V2*',
+                        '_Daratech_ ⚡',
                     ].join('\n')
                 }, { quoted: message });
             }
             if (val === 'close' || val === 'closefriends') {
                 setGroupAudience(targetGroup, 'close');
-                return sock.sendMessage(chatId, { text: `🤝 *GC Status audience set to Close Friends* for *${groupName}*.\n\nOnly people on your personal Close Friends list will see statuses posted here from now on.\n\n> *POWERED BY DARATECH V2*` }, { quoted: message });
+                return sock.sendMessage(chatId, { text: `🤝 *GC Status audience set to Close Friends* for *${groupName}*.\n\nOnly people on your personal Close Friends list will see statuses posted here from now on.\n\n_Daratech_ ⚡` }, { quoted: message });
             }
             if (val === 'all' || val === 'reset' || val === 'everyone') {
                 setGroupAudience(targetGroup, 'all');
-                return sock.sendMessage(chatId, { text: `👥 *GC Status audience set to Everyone* for *${groupName}*.\n\n> *POWERED BY DARATECH V2*` }, { quoted: message });
+                return sock.sendMessage(chatId, { text: `👥 *GC Status audience set to Everyone* for *${groupName}*.\n\n_Daratech_ ⚡` }, { quoted: message });
             }
-            return sock.sendMessage(chatId, { text: `❌ Unknown audience *"${val}"*.\n\nUse *close* or *all*.\n\n> *POWERED BY DARATECH V2*` }, { quoted: message });
+            return sock.sendMessage(chatId, { text: `❌ Unknown audience *"${val}"*.\n\nUse *close* or *all*.\n\n_Daratech_ ⚡` }, { quoted: message });
         }
     }
 
@@ -964,7 +964,7 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
 
     if (missingIndices.length > 0 && !targetJids.length) {
         return sock.sendMessage(chatId, {
-            text: `❌ Group #${missingIndices.join(', #')} not found.\n\nYou have *${totalGroups}* participating groups (1 to ${totalGroups}).\n\n💡 Use \`$gcstatus -list\` to see your group numbers.\n\n> *POWERED BY DARATECH V2*`
+            text: `❌ Group #${missingIndices.join(', #')} not found.\n\nYou have *${totalGroups}* participating groups (1 to ${totalGroups}).\n\n💡 Use \`$gcstatus -list\` to see your group numbers.\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 
@@ -1007,7 +1007,7 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
                 ``,
                 `🔍 Tip: Use \`$jidp\` inside a group to get its JID.`,
                 ``,
-                `> *POWERED BY DARATECH V2*`,
+                `_Daratech_ ⚡`,
             ].join('\n')
         }, { quoted: message });
     }
@@ -1052,7 +1052,7 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
                     ``,
                     `*Colors:* ${COLOR_NAMES}`,
                     ``,
-                    `> *POWERED BY DARATECH V2*`,
+                    `_Daratech_ ⚡`,
                 ].join('\n')
             }, { quoted: message });
         }
@@ -1115,7 +1115,7 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
         }
 
         return sock.sendMessage(chatId, {
-            text: '❌ Unsupported message type. Reply to a *text*, *image*, *video*, *sticker*, or *audio* message.\n\n> *POWERED BY DARATECH V2*'
+            text: '❌ Unsupported message type. Reply to a *text*, *image*, *video*, *sticker*, or *audio* message.\n\n_Daratech_ ⚡'
         }, { quoted: message });
     }
 
@@ -1184,7 +1184,7 @@ async function gcstatusCommand(sock, chatId, senderId, message) {
         console.error(`[gcstatus/${mediaType}]`, err);
         await sock.sendMessage(chatId, { react: { text: '❌', key: message.key } });
         return sock.sendMessage(chatId, {
-            text: `❌ Failed to process ${mediaType} status: ${err.message}\n\n> *POWERED BY DARATECH V2*`
+            text: `❌ Failed to process ${mediaType} status: ${err.message}\n\n_Daratech_ ⚡`
         }, { quoted: message });
     }
 }
