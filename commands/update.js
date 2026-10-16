@@ -236,7 +236,7 @@ async function updateViaZip(zipOverride) {
     const zipUrl = (zipOverride || settings.updateZipUrl || process.env.UPDATE_ZIP_URL || '').trim();
     if (!zipUrl) throw new Error('No ZIP URL set. Add settings.updateZipUrl or UPDATE_ZIP_URL env var.');
 
-    const backedUp = backupSession();
+    const backedUp = snapshotEnvAndSession();
     try {
         const tmpDir = path.join(process.cwd(), 'tmp');
         if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
@@ -275,7 +275,7 @@ async function updateViaZip(zipOverride) {
         try { fs.rmSync(extractTo, { recursive: true, force: true }); } catch {}
         try { fs.rmSync(zipPath,   { force: true }); }               catch {}
     } finally {
-        if (backedUp) restoreSession();
+        if (backedUp) restoreEnvAndSession(backedUp);
     }
 }
 
@@ -307,8 +307,10 @@ async function doRestart(sock, chatId, message, text) {
 
 async function updateCommand(sock, chatId, message, zipOverride) {
     const senderId = message.key.participant || message.key.remoteJid;
-    if (!isAuthorizedOwnerSession(sock) ||
-        (!message.key.fromMe && !(await isOwnerOrSudo(senderId, sock, chatId)))) {
+    const authorized =
+        (message.key.fromMe && isAuthorizedOwnerSession(sock)) ||
+        await isOwnerOrSudo(senderId, sock, chatId);
+    if (!authorized) {
         return sock.sendMessage(chatId, { text: '❌ Only the bot owner can use $update' }, { quoted: message });
     }
 
