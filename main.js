@@ -2,6 +2,7 @@
 // 🧹 Fix for ENOSPC / temp overflow in hosted panels
 const fs = require('fs');
 const path = require('path');
+const store = require('./lib/lightweight_store');
 
 // Redirect temp storage away from system /tmp
 const customTemp = path.join(process.cwd(), 'temp');
@@ -386,10 +387,10 @@ async function handleMessages(sock, messageUpdate, printLog) {
         // so non-command messages (the vast majority) skip the expensive group-metadata fetch.
         let _cachedSenderIsOwnerOrSudo = null;
         const getSenderIsOwnerOrSudo = async () => {
-            if (_cachedSenderIsOwnerOrSudo === null)
-                _cachedSenderIsOwnerOrSudo =
-                    isAuthorizedOwnerSession(sock) &&
-                    (message.key.fromMe || await isOwnerOrSudo(senderId, sock, chatId));
+            if (_cachedSenderIsOwnerOrSudo === null) {
+                const pairedSelf = message.key.fromMe && isAuthorizedOwnerSession(sock);
+                _cachedSenderIsOwnerOrSudo = pairedSelf || await isOwnerOrSudo(senderId, sock, chatId);
+            }
             return _cachedSenderIsOwnerOrSudo;
         };
 
@@ -448,8 +449,9 @@ async function handleMessages(sock, messageUpdate, printLog) {
         // Fast check: fromMe is an owner bypass only on an owner-paired session.
         // Full isOwnerOrSudo (which may fetch group metadata) is only called for commands.
         const isOwnerOrSudoCheck =
-            isAuthorizedOwnerSession(sock) &&
-            (message.key.fromMe || senderIsSudo || isPairingOwnerNumber(senderId, sock));
+            (message.key.fromMe && isAuthorizedOwnerSession(sock)) ||
+            senderIsSudo ||
+            isPairingOwnerNumber(senderId, sock);
 
         // If this group has been disabled by owner, ignore everything (owner bypasses)
         if (isGroup && disabledGroups.includes(chatId) && !isOwnerOrSudoCheck) return;
@@ -978,11 +980,13 @@ case userMessage.startsWith('$bssensi'):
                 // If no argument provided, show current status
                 if (!action) {
                     const currentMode = data.isPublic ? 'public' : 'private';
+                    const modeMeaning = data.isPublic ? 'everyone can use the bot' : 'only the paired owner and sudo users can use group commands';
+                    const sessionName = sock._sessionName || settings.sessionName || settings.botName || 'Daratech';
                     const grpStatus = isGroup
                         ? ((data.disabledGroups || []).includes(chatId) ? '❌ disabled' : '✅ enabled')
                         : 'N/A (not a group)';
                     await sock.sendMessage(chatId, {
-                        text: `🤖 *BOT MODE*\n\n🌐 Global: *${currentMode}*\n👥 This group: *${grpStatus}*\n\nUsage:\n*$mode public* — allow everyone\n*$mode private* — owner only\n*$mode group off* — disable bot in this group\n*$mode group on* — re-enable bot in this group\n*$mode g off/on* — short alias`,
+                        text: `🤖 *${sessionName} MODE*\n\n🌐 Global: *${currentMode}*\n📌 Meaning: ${modeMeaning}\n👥 This group: *${grpStatus}*\n\nUsage:\n*$mode public* — allow everyone\n*$mode private* — paired owner/sudo only in groups\n*$mode group off* — disable bot in this group\n*$mode group on* — re-enable bot in this group\n*$mode g off/on* — short alias`,
                         ...channelInfo
                     }, { quoted: message });
                     return;
@@ -1013,13 +1017,25 @@ case userMessage.startsWith('$bssensi'):
                     const dGroups = Array.isArray(data.disabledGroups) ? data.disabledGroups : [];
                     try {
                         if (subAction === 'off') {
-                            if (!dGroups.includes(chatId)) dGroups.push(chatId);
+                            if (dGroups.includes(chatId)) {
+                                await sock.sendMessage(chatId, {
+                                    text: 'ℹ️ Bot is already *disabled* in this group. No change made.',
+                                }, { quoted: message });
+                                return;
+                            }
+                            dGroups.push(chatId);
                             data.disabledGroups = dGroups;
                             fs.writeFileSync('./data/messageCount.json', JSON.stringify(data, null, 2));
                             await sock.sendMessage(chatId, {
-                                text: '🔕 Bot has been *disabled* for this group.\n\n_Only the bot owner can re-enable it with_ *$mode group on*',
-                            });
+                                text: '🔕 Bot has been *disabled* for this group.\n\n_Only the paired owner or sudo user can re-enable it with_ *$mode group on*',
+                            }, { quoted: message });
                         } else {
+                            if (!dGroups.includes(chatId)) {
+                                await sock.sendMessage(chatId, {
+                                    text: 'ℹ️ Bot is already *enabled* in this group. No change made.',
+                                }, { quoted: message });
+                                return;
+                            }
                             data.disabledGroups = dGroups.filter(g => g !== chatId);
                             fs.writeFileSync('./data/messageCount.json', JSON.stringify(data, null, 2));
                             await sock.sendMessage(chatId, {
@@ -1043,11 +1059,21 @@ case userMessage.startsWith('$bssensi'):
                 }
 
                 try {
-                    data.isPublic = action === 'public';
+                    const requestedPublic = action === 'public';
+                    if (Boolean(data.isPublic) === requestedPublic) {
+                        const sessionName = sock._sessionName || settings.sessionName || settings.botName || 'Daratech';
+                        await sock.sendMessage(chatId, {
+                            text: `ℹ️ *${sessionName}* is already in *${action}* mode. No change made.`,
+                            ...channelInfo
+                        }, { quoted: message });
+                        return;
+                    }
+                    data.isPublic = requestedPublic;
                     fs.writeFileSync('./data/messageCount.json', JSON.stringify(data, null, 2));
                     // Keep sock.public in sync so the index.js layer never disagrees
                     sock.public = data.isPublic;
-                    await sock.sendMessage(chatId, { text: `✅ Bot is now in *${action}* mode`, ...channelInfo });
+                    const sessionName = sock._sessionName || settings.sessionName || settings.botName || 'Daratech';
+                    await sock.sendMessage(chatId, { text: `✅ *${sessionName}* is now in *${action}* mode`, ...channelInfo }, { quoted: message });
                 } catch (error) {
                     console.error('Error updating access mode:', error);
                     await sock.sendMessage(chatId, { text: 'Failed to update bot access mode', ...channelInfo });
@@ -3415,7 +3441,9 @@ async function handleVv2Reaction(sock, event) {
     for (const item of reactions) {
         const reaction = item?.reaction || item;
         if (reaction?.text !== '👀') continue;
-        const targetKey = reaction?.key;
+        // Baileys emits the target message key on the outer event; some versions
+        // also copy it onto reaction.key. Support both shapes.
+        const targetKey = reaction?.key || item?.key;
         if (!targetKey?.remoteJid || !targetKey?.id) continue;
 
         const original = await store.loadMessage(targetKey.remoteJid, targetKey.id);
