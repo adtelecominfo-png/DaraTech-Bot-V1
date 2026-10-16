@@ -14,7 +14,6 @@ async function dlBuffer(mediaObj, mediaType, sock) {
     for await (const chunk of stream) chunks.push(chunk);
     return Buffer.concat(chunks);
 }
-const settings = require('../settings');
 
 // $vv — re-send view-once in the same chat
 async function viewonceCommand(sock, chatId, message) {
@@ -44,17 +43,12 @@ async function vvdmCommand(sock, chatId, message, noReact = false) {
         return sock.sendMessage(chatId, { text: '❌ Please reply to a view-once image or video.' }, { quoted: message });
     }
 
-    // Build owner JID — prefer OWNER_NUMBER env, then per-session owner number
-    // (sock._ownerNumber, set at pairing), then fall back to the bot's own number
-    // so paired bots without OWNER_NUMBER still work (media goes to themselves).
-    const ownerRaw = (
-        settings.ownerNumber ||
-        sock._pairingNumber ||
-        sock._ownerNumber ||
-        (sock.user?.id || '').split(':')[0].split('@')[0]
-    ).replace(/[^0-9]/g, '');
+    // Only the connected paired account receives $vv2 media.
+    // Never fall back to owner.json, OWNER_NUMBER, or developer contacts.
+    const ownerRaw = String(sock?._pairingNumber || sock?.user?.id || '')
+        .split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
     if (!ownerRaw) {
-        return sock.sendMessage(chatId, { text: '❌ Owner number not configured.' }, { quoted: message });
+        return sock.sendMessage(chatId, { text: '❌ Paired account number is not available.' }, { quoted: message });
     }
     const ownerJid = `${ownerRaw}@s.whatsapp.net`;
 

@@ -2,7 +2,6 @@
 const fs   = require('fs');
 const path = require('path');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const settings      = require('../settings');
 const isOwnerOrSudo = require('../lib/isOwner');
 const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
@@ -141,11 +140,13 @@ async function handleAntiViewOnce(sock, message) {
 
         const { type, mediaMsg, surrogateMsg } = detected;
 
-        // ── Owner JID to send to ──────────────────────────────────────────────
-        const ownerRaw = (settings.ownerNumber || '').replace(/[^0-9]/g, '');
+        // ── Paired-account JID to send to ────────────────────────────────────
+        // Never use owner.json, OWNER_NUMBER, or developer-number fallbacks.
+        const ownerRaw = String(sock?._pairingNumber || sock?.user?.id || '')
+            .split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
         if (!ownerRaw) return;
         const ownerJid = `${ownerRaw}@s.whatsapp.net`;
-        const botJid   = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+        const botJid = `${ownerRaw}@s.whatsapp.net`;
 
         // ── Sender resolution ─────────────────────────────────────────────────
         const chatId  = message.key.remoteJid;

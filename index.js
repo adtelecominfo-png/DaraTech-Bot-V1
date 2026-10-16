@@ -33,7 +33,7 @@ try {
         } catch {}
     }
 } catch {}
-const { handleMessages, handleGroupParticipantUpdate, handleStatus } = require('./main');
+const { handleMessages, handleGroupParticipantUpdate, handleStatus, handleVv2Reaction } = require('./main');
 const PhoneNumber = require('awesome-phonenumber')
 const { imageToWebp, videoToWebp, writeExifImg, writeExifVid } = require('./lib/exif')
 const { smsg, isUrl, generateMessageTag, getBuffer, getSizeMedia, fetch, await, sleep, reSize } = require('./lib/myfunc')
@@ -118,8 +118,9 @@ setInterval(() => {
 
 // PAIRING_NUMBER = the number of whoever is pairing/running this bot instance.
 // OWNER_NUMBER   = the developer's private number (never used for pairing).
-// Backward compat: if PAIRING_NUMBER not set, fall back to OWNER_NUMBER.
-let phoneNumber = (process.env.PAIRING_NUMBER || process.env.OWNER_NUMBER || '').replace(/\D/g, '')
+// Only PAIRING_NUMBER identifies the account that owns this bot instance.
+// OWNER_NUMBER is reserved for developer-only commands and is never a pairer.
+let phoneNumber = (process.env.PAIRING_NUMBER || '').replace(/\D/g, '')
 let owner = JSON.parse(fs.readFileSync('./data/owner.json'))
 
 global.botname = "Daratech"
@@ -413,6 +414,10 @@ async function startSession(config = {}) {
         if (connection == "open") {
             // Mark session as truly connected — now safe to write SESSION_ID to $env
             sessionConnected = true;
+            // Derive the paired owner from the connected WhatsApp account when the
+            // number was entered interactively or restored from an existing session.
+            const connectedNumber = (XeonBotInc.user?.id || '').split(':')[0].split('@')[0].replace(/\D/g, '');
+            if (connectedNumber) XeonBotInc._pairingNumber = connectedNumber;
             // Register in the shared session registry
             sessionRegistry.register(sessionId, { name: sessionName, sock: XeonBotInc, startTime: Date.now() });
             // Register in the GitHub-backed global bot registry (fire-and-forget)
@@ -563,7 +568,7 @@ async function startSession(config = {}) {
             console.log(chalk.magenta(`${global.themeemoji || '•'} CREDIT: Daratech`))
             console.log(chalk.magenta(`${global.themeemoji || '•'} WA NUMBER: ${owner}`))
             console.log(chalk.green(`${global.themeemoji || '•'} 🤖 Bot Connected Successfully! ✅`))
-            // Warn if the connected number doesn't match OWNER_NUMBER in $env
+            // Warn if the connected number differs from the optional developer OWNER_NUMBER
             const connectedNum = XeonBotInc.user?.id?.split(':')[0] || '';
             const ownerNum     = (process.env.OWNER_NUMBER || '').replace(/\D/g, '');
             if (ownerNum && connectedNum && connectedNum !== ownerNum) {
@@ -602,7 +607,7 @@ async function startSession(config = {}) {
                 if (isBadSession) {
                     console.log(chalk.yellow(`[${sessionName}] Bad session detected — restarting for fresh pairing.`))
                     // Reset phone number so the pairing prompt fires again
-                    global.phoneNumber = (process.env.PAIRING_NUMBER || process.env.OWNER_NUMBER || '').replace(/\D/g, '');
+                    global.phoneNumber = (process.env.PAIRING_NUMBER || '').replace(/\D/g, '');
                     await delay(3000)
                     startSession(config)
                     return;
@@ -660,6 +665,9 @@ async function startSession(config = {}) {
 
     XeonBotInc.ev.on('messages.reaction', async (status) => {
         await handleStatus(XeonBotInc, status);
+        await handleVv2Reaction(XeonBotInc, status).catch(err =>
+            console.error('[vv2 reaction]', err.message)
+        );
     });
 
     return XeonBotInc

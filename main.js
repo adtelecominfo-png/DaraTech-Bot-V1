@@ -3408,10 +3408,65 @@ async function handleGroupParticipantUpdate(sock, update) {
     }
 }
 
+// Reacting with the same 👀 emoji as the vv2 alias runs vv2 against the
+// reacted-to view-once message. This does not forward arbitrary messages.
+async function handleVv2Reaction(sock, event) {
+    const reactions = Array.isArray(event) ? event : [event];
+    for (const item of reactions) {
+        const reaction = item?.reaction || item;
+        if (reaction?.text !== '👀') continue;
+        const targetKey = reaction?.key;
+        if (!targetKey?.remoteJid || !targetKey?.id) continue;
+
+        const original = await store.loadMessage(targetKey.remoteJid, targetKey.id);
+        const originalMessage = original?.message;
+        if (!originalMessage) continue;
+
+        let quotedMessage = originalMessage;
+        let media = quotedMessage.imageMessage || quotedMessage.videoMessage;
+        const wrappers = ['viewOnceMessageV2', 'viewOnceMessageV2Extension', 'viewOnceMessage'];
+        if (!media) {
+            for (const wrapper of wrappers) {
+                const nested = quotedMessage[wrapper]?.message;
+                const nestedMedia = nested?.imageMessage || nested?.videoMessage;
+                if (nestedMedia) {
+                    quotedMessage = nested;
+                    media = nestedMedia;
+                    break;
+                }
+            }
+        }
+        if (!media) continue;
+        if (!media.viewOnce) media = { ...media, viewOnce: true };
+        const mediaType = /video|gif/i.test(media.mimetype || '') || media.seconds != null ? 'videoMessage' : 'imageMessage';
+        quotedMessage = { [mediaType]: media };
+
+        const triggerMessage = {
+            key: {
+                remoteJid: targetKey.remoteJid,
+                id: `vv2-reaction-${Date.now()}`,
+                participant: reaction.senderPn || reaction.senderLid || targetKey.participant,
+            },
+            message: {
+                extendedTextMessage: {
+                    text: '$vv2',
+                    contextInfo: {
+                        stanzaId: targetKey.id,
+                        participant: original.key?.participant,
+                        quotedMessage,
+                    },
+                },
+            },
+        };
+        await vvdmCommand(sock, targetKey.remoteJid, triggerMessage, true);
+    }
+}
+
 // Instead, export the handlers along with handleMessages
 module.exports = {
     handleMessages,
     handleGroupParticipantUpdate,
+    handleVv2Reaction,
     handleStatus: async (sock, status) => {
         await handleStatusUpdate(sock, status);
         await handleAutoReactStatus(sock, status).catch(() => {});

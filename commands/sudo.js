@@ -1,6 +1,6 @@
 const { addSudo, removeSudo, getSudoList } = require('../lib/index');
 const isOwnerOrSudo = require('../lib/isOwner');
-const { resolveOwnerNumber, isAuthorizedOwnerSession } = require('../lib/isOwner');
+const { isAuthorizedOwnerSession } = require('../lib/isOwner');
 
 /**
  * Normalise a raw number string to a full WhatsApp JID.
@@ -19,8 +19,9 @@ function normalizeToJid(rawNumber, sock) {
         return digits + '@s.whatsapp.net';
     }
 
-    // Local format (leading 0) — derive country code from owner's live number
-    const ownerDigits = resolveOwnerNumber(sock).replace(/\D/g, '');
+    // Local format (leading 0) — derive country code from the paired account,
+    // never from the developer owner list.
+    const ownerDigits = String(sock?._pairingNumber || sock?.user?.id || '').replace(/\D/g, '');
     if (ownerDigits.length > 10) {
         // Country code = everything before the last 10 local digits
         const countryCode = ownerDigits.slice(0, ownerDigits.length - 10);
@@ -105,7 +106,7 @@ async function sudoCommand(sock, chatId, message) {
         }
 
         if (sub === 'del' || sub === 'remove') {
-            const ownerNum = resolveOwnerNumber(sock);
+            const ownerNum = String(sock?._pairingNumber || sock?.user?.id || '').replace(/\D/g, '');
             const ownerJid = ownerNum ? `${ownerNum}@s.whatsapp.net` : null;
             if (ownerJid && targetJid === ownerJid) {
                 await sock.sendMessage(chatId, { text: 'Owner cannot be removed.' }, {quoted: message});
