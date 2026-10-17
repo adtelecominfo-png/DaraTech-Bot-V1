@@ -1,10 +1,10 @@
 const { downloadContentFromMessage, downloadMediaMessage } = require('@whiskeysockets/baileys');
 
 // rc14 helper — prefer downloadMediaMessage (handles re-upload/rekey), fall back to stream
-async function dlBuffer(mediaObj, mediaType, sock) {
+async function dlBuffer(mediaObj, mediaType, sock, sourceMessage = null) {
     try {
-        const fakeMsg = { message: { [`${mediaType}Message`]: mediaObj } };
-        const buf = await downloadMediaMessage(fakeMsg, 'buffer', {}, {
+        const source = sourceMessage || { message: { [`${mediaType}Message`]: mediaObj } };
+        const buf = await downloadMediaMessage(source, 'buffer', {}, {
             reuploadRequest: sock?.updateMediaMessage,
         });
         if (buf && buf.length) return buf;
@@ -34,7 +34,7 @@ async function viewonceCommand(sock, chatId, message) {
 
 // $vv2 / $vvdm — download view-once and send to bot owner's DM privately
 // noReact=true: skip the ✅ reaction (used when triggered by 👀 emoji)
-async function vvdmCommand(sock, chatId, message, noReact = false) {
+async function vvdmCommand(sock, chatId, message, noReact = false, sourceMessage = null) {
     const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const quotedImage = quoted?.imageMessage;
     const quotedVideo = quoted?.videoMessage;
@@ -89,13 +89,13 @@ async function vvdmCommand(sock, chatId, message, noReact = false) {
 
     try {
         if (quotedImage && quotedImage.viewOnce) {
-            const buffer = await dlBuffer(quotedImage, 'image', sock);
+            const buffer = await dlBuffer(quotedImage, 'image', sock, sourceMessage);
             await sock.sendMessage(ownerJid, {
                 image: buffer,
                 caption: `📥 *View-once image*\nFrom: ${senderDisplay}\nChat: ${chatLabel}`,
             });
         } else {
-            const buffer = await dlBuffer(quotedVideo, 'video', sock);
+            const buffer = await dlBuffer(quotedVideo, 'video', sock, sourceMessage);
             await sock.sendMessage(ownerJid, {
                 video: buffer,
                 caption: `📥 *View-once video*\nFrom: ${senderDisplay}\nChat: ${chatLabel}`,

@@ -128,14 +128,15 @@ async function ytaudioCommand(sock, chatId, message) {
             { text: '🎵 Usage: $ytaudio <song name or YouTube URL>' }, { quoted: message });
         const meta = await ytSearch(input);
         await sendBanner(sock, chatId, message, meta, 'Downloading audio…');
-        const { dl, title } = await resolveAudioUrl(meta.url);
+        const { dl } = await resolveAudioUrl(meta.url);
         const mp3Buf = await toBuffer(dl);
         const oggBuf = await toOgg(mp3Buf);
-        if (oggBuf) {
-            await sock.sendMessage(chatId, { audio: oggBuf, mimetype: 'audio/ogg; codecs=opus', ptt: false }, { quoted: message });
-        } else {
-            await sock.sendMessage(chatId, { document: mp3Buf, mimetype: 'audio/mpeg', fileName: `${title}.mp3` }, { quoted: message });
-        }
+        if (!oggBuf || !oggBuf.length) throw new Error('Could not convert audio to Opus voice-note format');
+        await sock.sendMessage(chatId, {
+            audio: oggBuf,
+            mimetype: 'audio/ogg; codecs=opus',
+            ptt: true,
+        }, { quoted: message });
     } catch (err) {
         console.error('[ytaudio]', err.message);
         await sock.sendMessage(chatId, { text: '❌ Audio download failed. Try again.' }, { quoted: message });

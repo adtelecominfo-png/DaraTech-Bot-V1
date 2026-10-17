@@ -2,6 +2,7 @@
 const axios             = require('axios');
 const yts               = require('yt-search');
 const { get }           = require('../lib/gifted');
+const { toBuffer, toMp4 } = require('../lib/media');
 
 // Lazy-load ruhend-scraper (installed on the user's server, not every dev env)
 let _scraper;
@@ -65,9 +66,16 @@ async function omegaVideo(ytUrl) {
         maxRedirects: 10,
     });
     const body = response.data;
-    const dl = findDownloadUrl(body);
+    const data = body?.data || body;
+    // OmegaTech's selected 720p URL can be a video-only GoogleVideo stream
+    // (itag 136). Prefer the combined itag 18 stream when available so
+    // WhatsApp receives a playable video with audio instead of a raw upload.
+    const combined = Array.isArray(data?.allMedias)
+        ? data.allMedias.find(media => /itag=18(?:&|$)/i.test(media?.url || ''))
+        : null;
+    const dl = combined?.url || data?.downloadUrl || findDownloadUrl(body);
     if (!dl) throw new Error('OmegaTech returned no video URL');
-    const selectedQuality = body?.data?.selectedQuality || body?.selectedQuality || '1080p';
+    const selectedQuality = combined?.quality || data?.selectedQuality || '1080p';
     return { dl, title: getTitle(body, ytUrl), quality: selectedQuality };
 }
 
@@ -102,9 +110,15 @@ async function ytvideoCommand(sock, chatId, message) {
         const { url, title } = await ytSearch(input);
         await sock.sendMessage(chatId, { text: `🎬 *Downloading:* ${title}…` }, { quoted: message });
         const { dl, title: vtitle, quality } = await resolveVideoUrl(url);
+        const source = await toBuffer(dl, 120000, {
+            Referer: 'https://www.youtube.com/',
+            Origin: 'https://www.youtube.com',
+        });
+        const normalized = await toMp4(source);
+        const video = normalized && normalized.length ? normalized : source;
 
         await sock.sendMessage(chatId, {
-            video: { url: dl },
+            video,
             mimetype: 'video/mp4',
             caption: `🎬 *${vtitle}*\n📊 ${quality}\n\n_Daratech_ ⚡`,
         }, { quoted: message });

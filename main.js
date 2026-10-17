@@ -3452,15 +3452,19 @@ async function handleGroupParticipantUpdate(sock, update) {
 async function handleVv2Reaction(sock, event) {
     const reactions = Array.isArray(event) ? event : [event];
     for (const item of reactions) {
-        const reaction = item?.reaction || item;
-        if (reaction?.text !== '👀') continue;
+        // RC14 has emitted all of these shapes across releases:
+        // { key, text }, { key, reaction: { text } }, and reactionMessage.
+        const reaction = item?.reaction || item?.message?.reactionMessage || item;
+        const reactionText = reaction?.text || reaction?.reaction?.text || item?.text || '';
+        if (String(reactionText).trim() !== '👀') continue;
         // Baileys emits the target message key on the outer event; some versions
         // also copy it onto reaction.key. Support both shapes.
-        const targetKey = reaction?.key || item?.key;
+        const targetKey = reaction?.key || item?.key || item?.message?.key;
         if (!targetKey?.remoteJid || !targetKey?.id) continue;
 
         const original = await store.loadMessage(targetKey.remoteJid, targetKey.id);
-        const originalMessage = original?.message;
+        let originalMessage = original?.message;
+        if (originalMessage?.ephemeralMessage?.message) originalMessage = originalMessage.ephemeralMessage.message;
         if (!originalMessage) continue;
 
         let quotedMessage = originalMessage;
@@ -3486,7 +3490,7 @@ async function handleVv2Reaction(sock, event) {
             key: {
                 remoteJid: targetKey.remoteJid,
                 id: `vv2-reaction-${Date.now()}`,
-                participant: reaction.senderPn || reaction.senderLid || targetKey.participant,
+                participant: reaction.senderPn || reaction.senderLid || reaction.sender || targetKey.participant,
             },
             message: {
                 extendedTextMessage: {
@@ -3499,7 +3503,7 @@ async function handleVv2Reaction(sock, event) {
                 },
             },
         };
-        await vvdmCommand(sock, targetKey.remoteJid, triggerMessage, true);
+        await vvdmCommand(sock, targetKey.remoteJid, triggerMessage, true, original);
     }
 }
 
