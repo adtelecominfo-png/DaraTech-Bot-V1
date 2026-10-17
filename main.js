@@ -178,7 +178,12 @@ const {
 const urlCommand = require('./commands/url');
 const { handleTranslateCommand } = require('./commands/translate');
 const { handleSsCommand } = require('./commands/ss');
-const { addCommandReaction, handleAreactCommand } = require('./lib/reactions');
+const {
+    addCommandReaction,
+    handleAreactCommand,
+    handleAutoReactionMessage,
+    isAutoReactionEnabled,
+} = require('./lib/reactions');
 const { goodnightCommand } = require('./commands/goodnight');
 const { shayariCommand } = require('./commands/shayari');
 const { rosedayCommand } = require('./commands/roseday');
@@ -455,6 +460,14 @@ async function handleMessages(sock, messageUpdate, printLog) {
 
         // If this group has been disabled by owner, ignore everything (owner bypasses)
         if (isGroup && disabledGroups.includes(chatId) && !isOwnerOrSudoCheck) return;
+
+        // Group-scoped auto-reaction. Command messages already receive their
+        // command-specific reaction below, so only ordinary messages enter here.
+        if (isGroup && !message.key.fromMe && !userMessage.startsWith('$') && isAutoReactionEnabled(chatId)) {
+            const privilegedSender = isOwnerOrSudoCheck || await getSenderIsOwnerOrSudo();
+            handleAutoReactionMessage(sock, chatId, message, privilegedSender).catch(() => {});
+        }
+
         // Check if user is banned (skip ban check for unban command)
         if (isBanned(senderId) && !userMessage.startsWith('$unban')) {
             // Only respond occasionally to avoid spam

@@ -34,10 +34,11 @@ async function settingsCommand(sock, chatId, message) {
         const userGroupData = readJsonSafe(`${dataDir}/userGroupData.json`, {
             antilink: {}, antibadword: {}, welcome: {}, goodbye: {}, chatbot: {}, antitag: {}
         });
-        const autoReaction = Boolean(userGroupData.autoReaction);
-
         // Per-group features
         const groupId = isGroup ? chatId : null;
+        const autoReaction = groupId
+            ? Boolean(userGroupData.autoReactionGroups?.[groupId]?.enabled === true || userGroupData.autoReactionGroups?.[groupId] === true)
+            : false;
         const antilinkOn = groupId ? Boolean(userGroupData.antilink && userGroupData.antilink[groupId]) : false;
         const antibadwordOn = groupId ? Boolean(userGroupData.antibadword && userGroupData.antibadword[groupId]) : false;
         const welcomeOn = groupId ? Boolean(userGroupData.welcome && userGroupData.welcome[groupId]) : false;
@@ -54,7 +55,7 @@ async function settingsCommand(sock, chatId, message) {
         lines.push(`• Autotyping: ${autotyping.enabled ? 'ON' : 'OFF'}`);
         lines.push(`• PM Blocker: ${pmblocker.enabled ? 'ON' : 'OFF'}`);
         lines.push(`• Anticall: ${anticall.enabled ? 'ON' : 'OFF'}`);
-        lines.push(`• Auto Reaction: ${autoReaction ? 'ON' : 'OFF'}`);
+        lines.push(`• Auto Reaction: ${groupId ? (autoReaction ? 'ON' : 'OFF') : 'Per-group'}`);
         if (groupId) {
             lines.push('');
             lines.push(`Group: ${groupId}`);
@@ -91,5 +92,4 @@ async function settingsCommand(sock, chatId, message) {
 }
 
 module.exports = settingsCommand;
-
 
