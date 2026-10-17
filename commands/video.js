@@ -14,6 +14,7 @@ const OMEGA_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
     'Accept': 'application/json, text/plain, */*',
     'Referer': 'https://api.omegatech.app/',
+    'Origin': 'https://api.omegatech.app',
 };
 
 async function ytSearch(input) {
@@ -66,7 +67,8 @@ async function omegaVideo(ytUrl) {
     const body = response.data;
     const dl = findDownloadUrl(body);
     if (!dl) throw new Error('OmegaTech returned no video URL');
-    return { dl, title: getTitle(body, ytUrl), quality: '1080p' };
+    const selectedQuality = body?.data?.selectedQuality || body?.selectedQuality || '1080p';
+    return { dl, title: getTitle(body, ytUrl), quality: selectedQuality };
 }
 
 async function resolveVideoUrl(ytUrl) {
